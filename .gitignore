@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+.venv/
+*.egg-info/
+dist/
+src/rigbook/static/
+node_modules/
+uv.lock
