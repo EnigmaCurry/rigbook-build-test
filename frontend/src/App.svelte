@@ -86,6 +86,24 @@
   $: stripPota = () => { pota_park = pota_park.replace(/[^A-Za-z0-9\-]/g, ""); };
   $: stripSkcc = () => { skcc = skcc.replace(/[^0-9]/g, ""); };
 
+  function clearForm() {
+    call = "";
+    freq = "";
+    mode = "";
+    rst_sent = "599";
+    rst_recv = "599";
+    pota_park = "";
+    name = "";
+    qth = "";
+    state = "";
+    country = "United States";
+    grid = "";
+    skcc = "";
+    comments = "";
+    notes = "";
+    fetchSubdivisions("US");
+  }
+
   async function submitContact() {
     if (!call.trim() || !freq.trim() || !mode.trim()) return;
     submitting = true;
@@ -248,6 +266,7 @@
       <button type="submit" disabled={submitting || !call.trim() || !freq.trim() || !mode.trim()}>
         {submitting ? "Logging..." : "Log QSO"}
       </button>
+      <button type="button" class="btn-clear" on:click={clearForm}>Clear</button>
     </div>
   </form>
 
@@ -408,6 +427,15 @@
   button:disabled {
     opacity: 0.5;
     cursor: not-allowed;
+  }
+
+  .btn-clear {
+    background: #6e7080;
+    color: #eaeaea;
+  }
+
+  .btn-clear:hover {
+    background: #5a5c6a;
   }
 
   .log h2 {
