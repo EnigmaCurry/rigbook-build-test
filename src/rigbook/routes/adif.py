@@ -1,0 +1,133 @@
+from datetime import datetime, timezone
+from io import StringIO
+
+from adif_file import adi
+from fastapi import APIRouter, Depends, UploadFile
+from fastapi.responses import StreamingResponse
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from rigbook.db import Contact, get_session
+
+router = APIRouter(prefix="/api/adif", tags=["adif"])
+
+
+def contact_to_adif_record(c: Contact) -> dict:
+    ts = c.timestamp or datetime.now(timezone.utc)
+    record = {
+        "QSO_DATE": ts.strftime("%Y%m%d"),
+        "TIME_ON": ts.strftime("%H%M%S"),
+        "CALL": c.call or "",
+        "FREQ": str(float(c.freq) / 1000) if c.freq else "",
+        "MODE": c.mode or "",
+    }
+    if c.rst_sent:
+        record["RST_SENT"] = c.rst_sent
+    if c.rst_recv:
+        record["RST_RCVD"] = c.rst_recv
+    if c.name:
+        record["NAME"] = c.name
+    if c.qth:
+        record["QTH"] = c.qth
+    if c.state:
+        record["STATE"] = c.state
+    if c.country:
+        record["COUNTRY"] = c.country
+    if c.grid:
+        record["GRIDSQUARE"] = c.grid
+    if c.pota_park:
+        record["POTA_REF"] = c.pota_park
+    if c.skcc is not None:
+        record["SKCC"] = str(c.skcc)
+    if c.comments:
+        record["COMMENT"] = c.comments
+    if c.notes:
+        record["NOTES"] = c.notes
+    return record
+
+
+def adif_record_to_contact_dict(record: dict) -> dict:
+    data = {}
+    data["call"] = record.get("CALL", "")
+    freq_mhz = record.get("FREQ", "")
+    if freq_mhz:
+        try:
+            data["freq"] = str(float(freq_mhz) * 1000)
+        except ValueError:
+            data["freq"] = freq_mhz
+    data["mode"] = record.get("MODE", "")
+    data["rst_sent"] = record.get("RST_SENT")
+    data["rst_recv"] = record.get("RST_RCVD")
+    data["name"] = record.get("NAME")
+    data["qth"] = record.get("QTH")
+    data["state"] = record.get("STATE")
+    data["country"] = record.get("COUNTRY")
+    data["grid"] = record.get("GRIDSQUARE")
+    data["pota_park"] = record.get("POTA_REF")
+    skcc = record.get("SKCC")
+    if skcc:
+        try:
+            data["skcc"] = int(skcc)
+        except ValueError:
+            pass
+    data["comments"] = record.get("COMMENT")
+    data["notes"] = record.get("NOTES")
+
+    qso_date = record.get("QSO_DATE", "")
+    time_on = record.get("TIME_ON", "")
+    if qso_date:
+        time_str = time_on.ljust(6, "0") if time_on else "000000"
+        try:
+            data["timestamp"] = datetime.strptime(
+                f"{qso_date}{time_str}", "%Y%m%d%H%M%S"
+            ).replace(tzinfo=timezone.utc)
+        except ValueError:
+            pass
+
+    return {k: v for k, v in data.items() if v is not None and v != ""}
+
+
+@router.get("/export")
+async def export_adif(session: AsyncSession = Depends(get_session)):
+    result = await session.execute(
+        select(Contact).order_by(Contact.timestamp.asc())
+    )
+    contacts = result.scalars().all()
+
+    doc = {
+        "HEADER": {
+            "ADIF_VER": "3.1.4",
+            "PROGRAMID": "Rigbook",
+            "PROGRAMVERSION": "0.1.0",
+        },
+        "RECORDS": [contact_to_adif_record(c) for c in contacts],
+    }
+
+    output = adi.dumps(doc)
+
+    return StreamingResponse(
+        StringIO(output),
+        media_type="application/octet-stream",
+        headers={"Content-Disposition": "attachment; filename=rigbook.adi"},
+    )
+
+
+@router.post("/import")
+async def import_adif(file: UploadFile, session: AsyncSession = Depends(get_session)):
+    content = (await file.read()).decode("utf-8", errors="replace")
+    doc = adi.loads(content)
+    records = doc.get("RECORDS", [])
+
+    imported = 0
+    skipped = 0
+    for record in records:
+        data = adif_record_to_contact_dict(record)
+        if not data.get("call"):
+            skipped += 1
+            continue
+        contact = Contact(**data)
+        session.add(contact)
+        imported += 1
+
+    await session.commit()
+    return {"imported": imported, "skipped": skipped}

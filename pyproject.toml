@@ -9,6 +9,7 @@ dependencies = [
     "sqlalchemy",
     "aiosqlite",
     "pycountry>=26.2.16",
+    "pyadif-file>=1.4",
 ]
 
 [project.scripts]

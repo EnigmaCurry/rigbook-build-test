@@ -8,6 +8,7 @@ from fastapi.staticfiles import StaticFiles
 
 from rigbook.db import init_db
 from rigbook.flrig import router as flrig_router
+from rigbook.routes.adif import router as adif_router
 from rigbook.routes.contacts import router as contacts_router
 from rigbook.routes.geo import router as geo_router
 from rigbook.routes.settings import router as settings_router
@@ -42,6 +43,7 @@ app.include_router(contacts_router)
 app.include_router(settings_router)
 app.include_router(flrig_router)
 app.include_router(geo_router)
+app.include_router(adif_router)
 
 static_dir = Path(__file__).parent / "static"
 if static_dir.is_dir():
