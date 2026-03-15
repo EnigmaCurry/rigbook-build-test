@@ -17,6 +17,7 @@
   let myCallsign = "";
   let vfoFreq = "";
   let vfoMode = "";
+  let vfoConnected = false;
   let vfoEditing = false;
   let vfoEditFreq = "";
   let vfoEditMode = "";
@@ -29,10 +30,12 @@
         const data = await res.json();
         vfoFreq = data.freq || "";
         vfoMode = data.mode || "";
+        vfoConnected = data.connected;
       }
     } catch {
       vfoFreq = "";
       vfoMode = "";
+      vfoConnected = false;
     }
   }
 
@@ -117,10 +120,12 @@
           <button class="vfo-btn save" on:click={saveVfo}>Set</button>
           <button class="vfo-btn cancel" on:click={cancelVfoEdit}>X</button>
         </span>
-      {:else if vfoFreq}
+      {:else if vfoConnected}
         <!-- svelte-ignore a11y-click-events-have-key-events -->
         <!-- svelte-ignore a11y-no-static-element-interactions -->
-        <span class="vfo" on:click={startVfoEdit} title="Click to change VFO">{formatFreq(vfoFreq)}</span>
+        <span class="vfo" on:click={startVfoEdit} title="Click to change VFO">📻 {formatFreq(vfoFreq)}</span>
+      {:else}
+        <span class="vfo disconnected" title="Radio not connected">📻 ❌</span>
       {/if}
     </div>
     <div class="hamburger-wrap">
@@ -207,8 +212,13 @@
     cursor: pointer;
   }
 
-  .vfo:hover {
+  .vfo:not(.disconnected):hover {
     text-decoration: underline;
+  }
+
+  .vfo.disconnected {
+    cursor: default;
+    opacity: 0.6;
   }
 
   .vfo-edit {
