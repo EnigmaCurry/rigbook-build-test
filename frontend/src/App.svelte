@@ -203,11 +203,11 @@
         <input id="qth" type="text" bind:value={qth} />
       </div>
       <div class="field">
-        <label for="country">Country</label>
+        <label for="rb-country">Country</label>
         <Autocomplete id="country" bind:value={country} items={countryNames} on:pick={onCountryChange} on:input={onCountryChange} />
       </div>
       <div class="field">
-        <label for="state">State</label>
+        <label for="rb-state">State</label>
         <Autocomplete id="state" bind:value={state} items={subdivisionNames} />
       </div>
       <div class="field">

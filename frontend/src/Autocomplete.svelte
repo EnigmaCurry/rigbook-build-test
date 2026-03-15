@@ -56,7 +56,7 @@
 
 <div class="autocomplete">
   <input
-    {id}
+    id="rb-{id}"
     type="text"
     bind:value
     {placeholder}
@@ -64,8 +64,10 @@
     on:focus={onFocus}
     on:blur={onBlur}
     on:keydown={onKeydown}
-    autocomplete="nope"
-    name="ac-{id}-{Math.random().toString(36).slice(2)}"
+    autocomplete="off"
+    data-1p-ignore
+    data-lpignore="true"
+    data-form-type="other"
   />
   {#if open && filtered.length > 0}
     <ul class="dropdown">
