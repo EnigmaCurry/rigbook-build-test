@@ -266,10 +266,15 @@
     } catch {}
   }
 
-  $: if (editId && contacts.length > 0) {
+  let handledEditId = null;
+
+  $: if (editId && editId !== handledEditId && contacts.length > 0) {
+    handledEditId = editId;
     const c = contacts.find(x => x.id === editId);
-    if (c && editingId !== editId) editContact(c);
-    else if (!c) loadEditFromId(editId);
+    if (c) editContact(c);
+    else loadEditFromId(editId);
+  } else if (!editId) {
+    handledEditId = null;
   }
 
   onMount(() => {
