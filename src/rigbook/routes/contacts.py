@@ -22,7 +22,7 @@ class ContactCreate(BaseModel):
     state: str | None = None
     country: str | None = None
     grid: str | None = None
-    skcc: int | None = None
+    skcc: str | None = None
     comments: str | None = None
     notes: str | None = None
     timestamp: datetime | None = None
@@ -68,7 +68,7 @@ class ContactUpdate(BaseModel):
     state: str | None = None
     country: str | None = None
     grid: str | None = None
-    skcc: int | None = None
+    skcc: str | None = None
     comments: str | None = None
     notes: str | None = None
     timestamp: datetime | None = None
@@ -87,7 +87,7 @@ class ContactResponse(BaseModel):
     state: str | None
     country: str | None
     grid: str | None
-    skcc: int | None
+    skcc: str | None
     comments: str | None
     notes: str | None
     timestamp: datetime

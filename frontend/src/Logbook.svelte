@@ -171,10 +171,7 @@
         const res = await fetch(`/api/skcc/lookup/${callsign}`);
         if (res.ok) {
           const data = await res.json();
-          if (data.skcc) {
-            const num = parseInt(data.skcc, 10);
-            if (!isNaN(num)) skcc = String(num);
-          }
+          if (data.skcc) skcc = data.skcc;
         }
       } catch {}
     }
@@ -209,7 +206,7 @@
   $: stripCall = () => { call = call.replace(/\s/g, ""); };
   $: stripGrid = () => { grid = grid.replace(/[^A-Za-z0-9]/g, ""); };
   $: stripPota = () => { pota_park = pota_park.replace(/[^A-Za-z0-9\-]/g, ""); };
-  $: stripSkcc = () => { skcc = skcc.replace(/[^0-9]/g, ""); };
+  $: stripSkcc = () => { skcc = skcc.replace(/[^A-Za-z0-9]/g, ""); };
 
   function editContact(c) {
     editingId = c.id;
@@ -226,7 +223,7 @@
     state = c.state || "";
     country = c.country || "";
     grid = c.grid || "";
-    skcc = c.skcc != null ? String(c.skcc) : "";
+    skcc = c.skcc || "";
     comments = c.comments || "";
     notes = c.notes || "";
     if (c.timestamp) {
@@ -286,7 +283,7 @@
         state: state.trim() || null,
         country: country.trim() || null,
         grid: grid.trim().toUpperCase() || null,
-        skcc: skcc ? parseInt(skcc, 10) : null,
+        skcc: skcc.trim().toUpperCase() || null,
         comments: comments || null,
         notes: notes || null,
         timestamp: `${datePart}T${timePart || "00:00:00"}Z`,
@@ -355,7 +352,7 @@
         state: state.trim() || null,
         country: country.trim() || null,
         grid: grid.trim().toUpperCase() || null,
-        skcc: skcc ? parseInt(skcc, 10) : null,
+        skcc: skcc.trim().toUpperCase() || null,
         comments: comments || null,
         notes: notes || null,
         timestamp: `${datePart}T${timePart || "00:00:00"}Z`,
@@ -499,7 +496,7 @@
     </div>
     <div class="field">
       <label for="skcc">SKCC</label>
-      <input id="skcc" type="text" bind:value={skcc} on:input={stripSkcc} inputmode="numeric" />
+      <input id="skcc" type="text" bind:value={skcc} on:input={stripSkcc} style="text-transform: uppercase" />
     </div>
     <div class="field wide">
       <label for="comments">Comments (public)</label>

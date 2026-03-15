@@ -66,10 +66,7 @@ def adif_record_to_contact_dict(record: dict) -> dict:
     data["pota_park"] = record.get("POTA_REF")
     skcc = record.get("SKCC")
     if skcc:
-        try:
-            data["skcc"] = int(skcc)
-        except ValueError:
-            pass
+        data["skcc"] = skcc
     data["comments"] = record.get("COMMENT")
     data["notes"] = record.get("NOTES")
 
