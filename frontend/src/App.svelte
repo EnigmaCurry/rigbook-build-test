@@ -38,23 +38,24 @@
 
   function formatFreq(f) {
     if (!f) return "";
-    const n = parseFloat(f);
+    const n = parseFloat(f) / 1000;
     if (isNaN(n)) return f;
-    return parseFloat(n.toFixed(4)).toString() + " KHz";
+    return parseFloat(n.toFixed(1)).toString() + " KHz";
   }
 
   function startVfoEdit() {
-    vfoEditFreq = vfoFreq;
+    vfoEditFreq = vfoFreq ? String(parseFloat(vfoFreq) / 1000) : "";
     vfoEditMode = vfoMode;
     vfoEditing = true;
   }
 
   async function saveVfo() {
+    const freqHz = vfoEditFreq ? String(parseFloat(vfoEditFreq) * 1000) : null;
     try {
       await fetch("/api/flrig/vfo", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ freq: vfoEditFreq || null, mode: vfoEditMode.toUpperCase() || null }),
+        body: JSON.stringify({ freq: freqHz, mode: vfoEditMode.toUpperCase() || null }),
       });
     } catch {}
     vfoEditing = false;

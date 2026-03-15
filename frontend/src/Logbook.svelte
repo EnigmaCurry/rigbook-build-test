@@ -116,7 +116,7 @@
       const res = await fetch("/api/flrig/status");
       if (res.ok) {
         const data = await res.json();
-        if (data.freq) freq = data.freq;
+        if (data.freq) freq = String(parseFloat(data.freq) / 1000);
         if (data.mode) mode = data.mode;
       }
     } catch {}
@@ -339,7 +339,7 @@
     if (!f) return "--";
     const n = parseFloat(f);
     if (isNaN(n)) return f;
-    return parseFloat(n.toFixed(4)).toString() + " KHz";
+    return parseFloat(n.toFixed(1)).toString() + " KHz";
   }
 
   function formatTimestamp(ts) {
