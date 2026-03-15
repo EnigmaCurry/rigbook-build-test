@@ -110,7 +110,9 @@
 <main>
   <header>
     <div class="header-left">
-      <h1>Rigbook</h1>
+      <!-- svelte-ignore a11y-click-events-have-key-events -->
+      <!-- svelte-ignore a11y-no-noninteractive-element-interactions -->
+      <h1 on:click={() => navigate("log")} style="cursor: pointer">Rigbook</h1>
       {#if myCallsign}
         <span class="callsign">{myCallsign}</span>
       {/if}
