@@ -5,8 +5,15 @@
   let my_grid = "";
   let flrig_host = "localhost";
   let flrig_port = "12345";
+  let theme = localStorage.getItem("rigbook-theme") || "dark";
   let saving = false;
   let message = "";
+
+  function toggleTheme() {
+    theme = theme === "dark" ? "light" : "dark";
+    localStorage.setItem("rigbook-theme", theme);
+    document.documentElement.classList.toggle("light", theme === "light");
+  }
 
   $: stripCallsign = () => { my_callsign = my_callsign.replace(/\s/g, ""); };
   $: stripGrid = () => { my_grid = my_grid.replace(/[^A-Za-z0-9]/g, ""); };
@@ -73,6 +80,15 @@
     <input id="my_grid" type="text" bind:value={my_grid} on:input={stripGrid} autocomplete="off" style="text-transform: uppercase" />
   </div>
 
+  <h3>Appearance</h3>
+
+  <div class="setting-row toggle-row">
+    <label>Theme</label>
+    <button class="theme-toggle" on:click={toggleTheme}>
+      {theme === "dark" ? "Dark" : "Light"}
+    </button>
+  </div>
+
   <h3>flrig Connection</h3>
 
   <div class="setting-row">
@@ -101,13 +117,13 @@
   }
 
   h2 {
-    color: #00ff88;
+    color: var(--accent);
     font-size: 1.2rem;
     margin: 0 0 1rem 0;
   }
 
   h3 {
-    color: #b0b2be;
+    color: var(--text-muted);
     font-size: 0.95rem;
     margin: 1rem 0 0.5rem 0;
   }
@@ -126,13 +142,13 @@
 
   label {
     font-size: 0.8rem;
-    color: #b0b2be;
+    color: var(--text-muted);
   }
 
   input {
-    background: #5a5c6a;
-    border: 1px solid #6e7080;
-    color: #f0f0f0;
+    background: var(--bg-input);
+    border: 1px solid var(--border-input);
+    color: var(--text);
     padding: 0.4rem 0.5rem;
     font-family: inherit;
     font-size: 0.9rem;
@@ -142,12 +158,12 @@
 
   input:focus {
     outline: none;
-    border-color: #00ff88;
+    border-color: var(--accent);
   }
 
   button {
-    background: #00ff88;
-    color: #1a1a2e;
+    background: var(--accent);
+    color: var(--bg);
     border: none;
     padding: 0.5rem 1.5rem;
     font-family: inherit;
@@ -158,7 +174,7 @@
   }
 
   button:hover:not(:disabled) {
-    background: #00cc6a;
+    background: var(--accent-hover);
   }
 
   button:disabled {
@@ -167,8 +183,25 @@
   }
 
   .message {
-    color: #00ff88;
+    color: var(--accent);
     font-size: 0.85rem;
     margin-left: 0.5rem;
+  }
+
+  .toggle-row {
+    flex-direction: row;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  .theme-toggle {
+    background: var(--btn-secondary);
+    color: var(--text);
+    padding: 0.3rem 1rem;
+    font-size: 0.85rem;
+  }
+
+  .theme-toggle:hover {
+    background: var(--btn-secondary-hover);
   }
 </style>

@@ -122,9 +122,9 @@
 
   input {
     width: 100%;
-    background: #5a5c6a;
-    border: 1px solid #6e7080;
-    color: #f0f0f0;
+    background: var(--bg-input);
+    border: 1px solid var(--border-input);
+    color: var(--text);
     padding: 0.35rem 0.5rem;
     font-family: inherit;
     font-size: 0.9rem;
@@ -140,7 +140,7 @@
 
   input:focus {
     outline: none;
-    border-color: #00ff88;
+    border-color: var(--accent);
   }
 
   .dropdown {
@@ -150,8 +150,8 @@
     right: 0;
     max-height: 200px;
     overflow-y: auto;
-    background: #4a4c5a;
-    border: 1px solid #6e7080;
+    background: var(--bg-card);
+    border: 1px solid var(--border-input);
     border-top: none;
     border-radius: 0 0 3px 3px;
     margin: 0;
@@ -163,13 +163,13 @@
   li {
     padding: 0.3rem 0.5rem;
     cursor: pointer;
-    color: #f0f0f0;
+    color: var(--text);
     font-size: 0.85rem;
   }
 
   li:hover,
   li.highlighted {
-    background: #00ff88;
-    color: #1a1a2e;
+    background: var(--accent);
+    color: var(--bg);
   }
 </style>

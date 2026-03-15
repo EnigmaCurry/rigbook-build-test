@@ -18,28 +18,28 @@
   }
 
   h2 {
-    color: #00ff88;
+    color: var(--accent);
     font-size: 1.4rem;
     margin: 0 0 0.75rem 0;
   }
 
   p {
-    color: #b0b2be;
+    color: var(--text-muted);
     font-size: 0.9rem;
     margin: 0 0 0.5rem 0;
   }
 
   a {
-    color: #00ccff;
+    color: var(--accent-vfo);
   }
 
   a:hover {
-    color: #00ff88;
+    color: var(--accent);
   }
 
   .license {
     margin-top: 1rem;
     font-size: 0.8rem;
-    color: #6e7080;
+    color: var(--text-dimmer);
   }
 </style>

@@ -1,5 +1,5 @@
 <script>
-  import { onMount } from "svelte";
+  import { onMount, onDestroy } from "svelte";
   import Logbook from "./Logbook.svelte";
   import ExportImport from "./ExportImport.svelte";
   import Hunting from "./Hunting.svelte";
@@ -101,15 +101,25 @@
     fetchCallsign();
   }
 
+  // Apply theme from localStorage on load
+  function applyTheme() {
+    const theme = localStorage.getItem("rigbook-theme") || "dark";
+    document.documentElement.classList.toggle("light", theme === "light");
+  }
+
   onMount(() => {
+    applyTheme();
+    window.addEventListener("storage", applyTheme);
     fetchCallsign();
     pollFlrig();
     flrigInterval = setInterval(pollFlrig, 2000);
     window.addEventListener("hashchange", onHashChange);
-    return () => {
-      clearInterval(flrigInterval);
-      window.removeEventListener("hashchange", onHashChange);
-    };
+  });
+
+  onDestroy(() => {
+    clearInterval(flrigInterval);
+    window.removeEventListener("hashchange", onHashChange);
+    window.removeEventListener("storage", applyTheme);
   });
 </script>
 
@@ -186,6 +196,60 @@
 </main>
 
 <style>
+  :global(:root) {
+    --bg: #3b3d4a;
+    --bg-card: #4a4c5a;
+    --bg-input: #5a5c6a;
+    --bg-deep: #11111b;
+    --border: #5a5c6a;
+    --border-input: #6e7080;
+    --text: #eaeaea;
+    --text-muted: #b0b2be;
+    --text-dim: #8a8c98;
+    --text-dimmer: #6e7080;
+    --accent: #00ff88;
+    --accent-hover: #00cc6a;
+    --accent-callsign: #ffcc00;
+    --accent-vfo: #00ccff;
+    --accent-delete: #cc3333;
+    --accent-delete-hover: #aa2222;
+    --accent-error: #ff6b6b;
+    --btn-secondary: #6e7080;
+    --btn-secondary-hover: #5a5c6a;
+    --row-hover: #44465a;
+    --row-editing: #3a5a3a;
+    --bar-color: #eaeaea;
+    --menu-bg: #4a4c5a;
+    --menu-hover: #5a5c6a;
+  }
+
+  :global(:root.light) {
+    --bg: #e8e8ec;
+    --bg-card: #f4f4f6;
+    --bg-input: #ffffff;
+    --bg-deep: #f0f0f2;
+    --border: #c8c8d0;
+    --border-input: #b0b0b8;
+    --text: #1a1a2e;
+    --text-muted: #555566;
+    --text-dim: #777788;
+    --text-dimmer: #999aaa;
+    --accent: #00994d;
+    --accent-hover: #007a3d;
+    --accent-callsign: #b8860b;
+    --accent-vfo: #0077aa;
+    --accent-delete: #cc3333;
+    --accent-delete-hover: #aa2222;
+    --accent-error: #cc2222;
+    --btn-secondary: #aaaabc;
+    --btn-secondary-hover: #9999ab;
+    --row-hover: #dddde4;
+    --row-editing: #c8ecc8;
+    --bar-color: #333344;
+    --menu-bg: #f4f4f6;
+    --menu-hover: #e0e0e8;
+  }
+
   :global(*, *::before, *::after) {
     box-sizing: border-box;
   }
@@ -193,8 +257,8 @@
   :global(body) {
     margin: 0;
     padding: 0;
-    background: #3b3d4a;
-    color: #eaeaea;
+    background: var(--bg);
+    color: var(--text);
     font-family: "Courier New", Courier, monospace;
     font-size: 14px;
   }
@@ -209,7 +273,7 @@
     display: flex;
     align-items: baseline;
     justify-content: space-between;
-    border-bottom: 1px solid #5a5c6a;
+    border-bottom: 1px solid var(--border);
     padding-bottom: 0.5rem;
     margin-bottom: 1rem;
   }
@@ -222,18 +286,18 @@
 
   h1 {
     margin: 0;
-    color: #00ff88;
+    color: var(--accent);
     font-size: 1.6rem;
   }
 
   .callsign {
-    color: #ffcc00;
+    color: var(--accent-callsign);
     font-size: 1.2rem;
     font-weight: bold;
   }
 
   .vfo {
-    color: #00ccff;
+    color: var(--accent-vfo);
     font-size: 1rem;
     cursor: pointer;
   }
@@ -254,9 +318,9 @@
   }
 
   .vfo-input {
-    background: #5a5c6a;
-    border: 1px solid #6e7080;
-    color: #00ccff;
+    background: var(--bg-input);
+    border: 1px solid var(--border-input);
+    color: var(--accent-vfo);
     padding: 0.15rem 0.4rem;
     font-family: inherit;
     font-size: 0.85rem;
@@ -273,7 +337,7 @@
   }
 
   .vfo-input:focus {
-    border-color: #00ccff;
+    border-color: var(--accent-vfo);
   }
 
   .vfo-btn {
@@ -287,13 +351,13 @@
   }
 
   .vfo-btn.save {
-    background: #00ccff;
-    color: #1a1a2e;
+    background: var(--accent-vfo);
+    color: var(--bg);
   }
 
   .vfo-btn.cancel {
-    background: #6e7080;
-    color: #eaeaea;
+    background: var(--btn-secondary);
+    color: var(--text);
   }
 
   .log-header {
@@ -301,8 +365,8 @@
   }
 
   .btn-add {
-    background: #00ff88;
-    color: #1a1a2e;
+    background: var(--accent);
+    color: var(--bg);
     border: none;
     padding: 0.6rem 2rem;
     font-family: inherit;
@@ -313,7 +377,7 @@
   }
 
   .btn-add:hover {
-    background: #00cc6a;
+    background: var(--accent-hover);
   }
 
   .hamburger-wrap {
@@ -338,7 +402,7 @@
     display: block;
     width: 22px;
     height: 2px;
-    background: #eaeaea;
+    background: var(--bar-color);
     border-radius: 1px;
   }
 
@@ -355,8 +419,8 @@
     position: absolute;
     top: 100%;
     right: 0;
-    background: #4a4c5a;
-    border: 1px solid #5a5c6a;
+    background: var(--menu-bg);
+    border: 1px solid var(--border);
     border-radius: 4px;
     min-width: 150px;
     z-index: 100;
@@ -368,7 +432,7 @@
   .menu-item {
     background: none;
     border: none;
-    color: #eaeaea;
+    color: var(--text);
     padding: 0.6rem 1rem;
     font-family: inherit;
     font-size: 0.9rem;
@@ -379,11 +443,11 @@
   }
 
   .menu-item:hover {
-    background: #5a5c6a;
+    background: var(--menu-hover);
   }
 
   .menu-item.active {
-    color: #00ff88;
+    color: var(--accent);
     font-weight: bold;
   }
 </style>

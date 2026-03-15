@@ -499,8 +499,8 @@
 
 <style>
   form {
-    background: #4a4c5a;
-    border: 1px solid #5a5c6a;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
     border-radius: 4px;
     padding: 0.75rem;
     margin-bottom: 1rem;
@@ -527,15 +527,15 @@
 
   .field label {
     font-size: 0.75rem;
-    color: #b0b2be;
+    color: var(--text-muted);
     margin-bottom: 2px;
   }
 
   input,
   textarea {
-    background: #5a5c6a;
-    border: 1px solid #6e7080;
-    color: #f0f0f0;
+    background: var(--bg-input);
+    border: 1px solid var(--border-input);
+    color: var(--text);
     padding: 0.35rem 0.5rem;
     font-family: inherit;
     font-size: 0.9rem;
@@ -545,7 +545,7 @@
   input:focus,
   textarea:focus {
     outline: none;
-    border-color: #00ff88;
+    border-color: var(--accent);
   }
 
   textarea {
@@ -553,8 +553,8 @@
   }
 
   button {
-    background: #00ff88;
-    color: #1a1a2e;
+    background: var(--accent);
+    color: var(--bg);
     border: none;
     padding: 0.5rem 1.5rem;
     font-family: inherit;
@@ -565,7 +565,7 @@
   }
 
   button:hover:not(:disabled):not(.btn-clear):not(.btn-delete) {
-    background: #00cc6a;
+    background: var(--accent-hover);
   }
 
   button:disabled {
@@ -574,37 +574,37 @@
   }
 
   .btn-clear {
-    background: #6e7080;
-    color: #eaeaea;
+    background: var(--btn-secondary);
+    color: var(--text);
   }
 
   .btn-clear:hover {
-    background: #5a5c6a;
+    background: var(--btn-secondary-hover);
   }
 
   .btn-delete {
-    background: #cc3333;
+    background: var(--accent-delete);
     color: #fff;
   }
 
   .btn-delete:hover {
-    background: #aa2222;
+    background: var(--accent-delete-hover);
   }
 
   .error {
-    color: #ff6b6b;
+    color: var(--accent-error);
     font-size: 0.85rem;
     margin-left: 0.5rem;
   }
 
   .log h2 {
-    color: #00ff88;
+    color: var(--accent);
     font-size: 1.1rem;
     margin: 0 0 0.5rem 0;
   }
 
   .empty {
-    color: #8a8c98;
+    color: var(--text-dim);
     font-style: italic;
   }
 
@@ -620,8 +620,8 @@
 
   th {
     text-align: left;
-    color: #b0b2be;
-    border-bottom: 1px solid #5a5c6a;
+    color: var(--text-muted);
+    border-bottom: 1px solid var(--border);
     padding: 0.3rem 0.5rem;
     white-space: nowrap;
   }
@@ -632,17 +632,17 @@
   }
 
   th.sortable:hover {
-    color: #00ff88;
+    color: var(--accent);
   }
 
   td {
     padding: 0.3rem 0.5rem;
-    border-bottom: 1px solid #4a4c5a;
+    border-bottom: 1px solid var(--bg-card);
     white-space: nowrap;
   }
 
   td.call {
-    color: #ffcc00;
+    color: var(--accent-callsign);
     font-weight: bold;
   }
 
@@ -651,10 +651,10 @@
   }
 
   tbody tr:hover {
-    background: #44465a;
+    background: var(--row-hover);
   }
 
   tr.editing {
-    background: #3a5a3a;
+    background: var(--row-editing);
   }
 </style>

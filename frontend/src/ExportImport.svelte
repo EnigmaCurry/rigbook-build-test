@@ -60,7 +60,7 @@
   }
 
   h2 {
-    color: #00ff88;
+    color: var(--accent);
     font-size: 1.2rem;
     margin: 1.5rem 0 0.5rem 0;
   }
@@ -70,14 +70,14 @@
   }
 
   p {
-    color: #b0b2be;
+    color: var(--text-muted);
     font-size: 0.9rem;
     margin: 0 0 0.75rem 0;
   }
 
   button {
-    background: #00ff88;
-    color: #1a1a2e;
+    background: var(--accent);
+    color: var(--bg);
     border: none;
     padding: 0.5rem 1.5rem;
     font-family: inherit;
@@ -88,13 +88,13 @@
   }
 
   button:hover {
-    background: #00cc6a;
+    background: var(--accent-hover);
   }
 
   .file-label {
     display: inline-block;
-    background: #00ff88;
-    color: #1a1a2e;
+    background: var(--accent);
+    color: var(--bg);
     padding: 0.5rem 1.5rem;
     font-family: inherit;
     font-size: 0.9rem;
@@ -104,7 +104,7 @@
   }
 
   .file-label:hover {
-    background: #00cc6a;
+    background: var(--accent-hover);
   }
 
   .file-label input[type="file"] {
@@ -112,12 +112,12 @@
   }
 
   .message {
-    color: #00ff88;
+    color: var(--accent);
     font-weight: bold;
     margin-top: 1rem;
   }
 
   .message.error {
-    color: #ff6b6b;
+    color: var(--accent-error);
   }
 </style>

@@ -163,7 +163,7 @@
   }
 
   h2 {
-    color: #00ff88;
+    color: var(--accent);
     font-size: 1.2rem;
     margin: 0;
   }
@@ -175,9 +175,9 @@
   }
 
   select {
-    background: #5a5c6a;
-    border: 1px solid #6e7080;
-    color: #f0f0f0;
+    background: var(--bg-input);
+    border: 1px solid var(--border-input);
+    color: var(--text);
     padding: 0.3rem 0.5rem;
     font-family: inherit;
     font-size: 0.8rem;
@@ -186,12 +186,12 @@
 
   select:focus {
     outline: none;
-    border-color: #00ff88;
+    border-color: var(--accent);
   }
 
   .btn-refresh {
-    background: #6e7080;
-    color: #eaeaea;
+    background: var(--btn-secondary);
+    color: var(--text);
     border: none;
     padding: 0.3rem 0.75rem;
     font-family: inherit;
@@ -202,16 +202,16 @@
   }
 
   .btn-refresh:hover {
-    background: #5a5c6a;
+    background: var(--btn-secondary-hover);
   }
 
   .status {
-    color: #b0b2be;
+    color: var(--text-muted);
     font-style: italic;
   }
 
   .status.error {
-    color: #ff6b6b;
+    color: var(--accent-error);
   }
 
   .grid {
@@ -221,8 +221,8 @@
   }
 
   .card {
-    background: #4a4c5a;
-    border: 1px solid #5a5c6a;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
     border-radius: 6px;
     padding: 0.75rem;
     cursor: pointer;
@@ -230,12 +230,12 @@
   }
 
   .card:hover {
-    border-color: #00ff88;
+    border-color: var(--accent);
   }
 
   .card:focus {
     outline: none;
-    border-color: #00ff88;
+    border-color: var(--accent);
   }
 
   .card-header {
@@ -246,7 +246,7 @@
   }
 
   .activator {
-    color: #ffcc00;
+    color: var(--accent-callsign);
     font-weight: bold;
     font-size: 1rem;
   }
@@ -260,16 +260,16 @@
 
   .badge.mode {
     background: #00ccff;
-    color: #1a1a2e;
+    color: var(--bg);
   }
 
   .badge.band {
     background: #a6e3a1;
-    color: #1a1a2e;
+    color: var(--bg);
   }
 
   .park-name {
-    color: #eaeaea;
+    color: var(--text);
     font-size: 0.85rem;
     font-weight: bold;
     margin-bottom: 0.15rem;
@@ -279,7 +279,7 @@
   }
 
   .park-ref {
-    color: #b0b2be;
+    color: var(--text-muted);
     font-size: 0.75rem;
     margin-bottom: 0.4rem;
   }
@@ -292,21 +292,21 @@
   }
 
   .freq {
-    color: #00ccff;
+    color: var(--accent-vfo);
     font-weight: bold;
   }
 
   .grid {
-    color: #b0b2be;
+    color: var(--text-muted);
   }
 
   .time {
-    color: #b0b2be;
+    color: var(--text-muted);
     margin-left: auto;
   }
 
   .comments {
-    color: #8a8c98;
+    color: var(--text-dim);
     font-size: 0.75rem;
     font-style: italic;
     overflow: hidden;
@@ -319,7 +319,7 @@
     display: flex;
     justify-content: space-between;
     font-size: 0.7rem;
-    color: #6e7080;
+    color: var(--text-dimmer);
   }
 
   .count {
