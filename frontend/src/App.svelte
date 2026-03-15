@@ -241,7 +241,8 @@
     if (!f) return "--";
     const n = parseFloat(f);
     if (isNaN(n)) return f;
-    return n.toFixed(4) + " MHz";
+    // Strip trailing zeros after decimal
+    return parseFloat(n.toFixed(4)).toString() + " MHz";
   }
 
   function formatTimestamp(ts) {
