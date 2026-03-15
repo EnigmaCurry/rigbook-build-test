@@ -175,7 +175,6 @@
       if (res.ok) {
         editingId = null;
         dispatch("editchange", null);
-        dispatch("navigate", "log");
         clearForm();
         await fetchContacts();
       } else {
@@ -241,7 +240,6 @@
         body: JSON.stringify(body),
       });
       if (res.ok) {
-        dispatch("navigate", "log");
         call = "";
         pota_park = "";
         name = "";
@@ -250,6 +248,8 @@
         skcc = "";
         comments = "";
         notes = "";
+        datePart = utcNowDate();
+        timePart = utcNowTime();
         await fetchContacts();
       } else {
         const data = await res.json().catch(() => null);
