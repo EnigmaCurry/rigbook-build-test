@@ -19,6 +19,7 @@
   }
 
   let { page, editId } = parseHash();
+  let prefill = null;
   let menuOpen = false;
   let myCallsign = "";
   let vfoFreq = "";
@@ -175,17 +176,31 @@
     </div>
     <Logbook showForm={false} {vfoFreq} {vfoMode} on:editchange={e => { editId = e.detail; navigate("add"); window.location.hash = `/log/${e.detail}`; }} on:navigate={e => navigate(e.detail)} />
   {:else if page === "add"}
-    <Logbook showForm={true} {editId} {vfoFreq} {vfoMode} on:editchange={e => { editId = e.detail; window.location.hash = e.detail ? `/log/${e.detail}` : "/add"; }} on:navigate={e => navigate(e.detail)} />
+    <Logbook showForm={true} {editId} {prefill} {vfoFreq} {vfoMode} on:editchange={e => { editId = e.detail; window.location.hash = e.detail ? `/log/${e.detail}` : "/add"; }} on:navigate={e => navigate(e.detail)} on:prefillconsumed={() => prefill = null} />
   {:else if page === "hunting"}
     <Hunting on:tune={async e => {
+      const spot = e.detail;
       try {
         await fetch("/api/flrig/vfo", {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ freq: String(parseFloat(e.detail.freq) * 1000), mode: e.detail.mode }),
+          body: JSON.stringify({ freq: String(parseFloat(spot.frequency) * 1000), mode: spot.mode }),
         });
         pollFlrig();
       } catch {}
+      prefill = {
+        freq: spot.frequency || "",
+        mode: spot.mode || "",
+        pota_park: spot.reference || "",
+        grid: spot.grid4 || "",
+        country: "",
+        state: "",
+      };
+      const loc = spot.locationDesc || "";
+      if (loc.startsWith("US-")) {
+        prefill.country = "United States";
+      }
+      navigate("add");
     }} />
   {:else if page === "export"}
     <ExportImport />

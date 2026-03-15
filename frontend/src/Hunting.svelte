@@ -80,7 +80,7 @@
   }
 
   function tuneToSpot(spot) {
-    dispatch("tune", { freq: spot.frequency, mode: spot.mode });
+    dispatch("tune", spot);
   }
 
   onMount(() => {
