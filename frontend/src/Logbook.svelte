@@ -1,14 +1,14 @@
 <script>
-  import { onMount, onDestroy, createEventDispatcher } from "svelte";
+  import { onMount, createEventDispatcher } from "svelte";
   import Autocomplete from "./Autocomplete.svelte";
 
   export let editId = null;
+  export let vfoFreq = "";
+  export let vfoMode = "";
 
   const dispatch = createEventDispatcher();
 
   let contacts = [];
-
-  let flrigInterval;
 
   // Form fields
   let call = "";
@@ -118,16 +118,12 @@
     fetchSubdivisions(match ? match.code : "");
   }
 
-  async function pollFlrig() {
-    if (editingId) return;
-    try {
-      const res = await fetch("/api/flrig/status");
-      if (res.ok) {
-        const data = await res.json();
-        if (data.freq) freq = String(parseFloat(data.freq) / 1000);
-        if (data.mode) mode = data.mode;
-      }
-    } catch {}
+  // Auto-fill freq/mode from VFO when not editing
+  $: if (!editingId && vfoFreq) {
+    freq = String(parseFloat(vfoFreq) / 1000);
+  }
+  $: if (!editingId && vfoMode) {
+    mode = vfoMode;
   }
 
   $: stripCall = () => { call = call.replace(/\s/g, ""); };
@@ -336,12 +332,6 @@
     fetchCountries();
     fetchModes();
     fetchSubdivisions("US");
-    pollFlrig();
-    flrigInterval = setInterval(pollFlrig, 2000);
-  });
-
-  onDestroy(() => {
-    if (flrigInterval) clearInterval(flrigInterval);
   });
 
   function formatFreq(f) {
