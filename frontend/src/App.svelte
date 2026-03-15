@@ -29,6 +29,7 @@
   $: subdivisionNames = subdivisions.map(s => s.name);
   let submitting = false;
   let errorMsg = "";
+  let editingId = null;
 
   async function fetchCallsign() {
     try {
@@ -86,6 +87,72 @@
   $: stripGrid = () => { grid = grid.replace(/[^A-Za-z0-9]/g, ""); };
   $: stripPota = () => { pota_park = pota_park.replace(/[^A-Za-z0-9\-]/g, ""); };
   $: stripSkcc = () => { skcc = skcc.replace(/[^0-9]/g, ""); };
+
+  function editContact(c) {
+    editingId = c.id;
+    call = c.call || "";
+    freq = c.freq || "";
+    mode = c.mode || "";
+    rst_sent = c.rst_sent || "";
+    rst_recv = c.rst_recv || "";
+    pota_park = c.pota_park || "";
+    name = c.name || "";
+    qth = c.qth || "";
+    state = c.state || "";
+    country = c.country || "";
+    grid = c.grid || "";
+    skcc = c.skcc != null ? String(c.skcc) : "";
+    comments = c.comments || "";
+    notes = c.notes || "";
+    errorMsg = "";
+    onCountryChange();
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function cancelEdit() {
+    editingId = null;
+    clearForm();
+  }
+
+  async function saveEdit() {
+    if (!editingId) return;
+    submitting = true;
+    errorMsg = "";
+    try {
+      const body = {
+        call: call.trim().toUpperCase(),
+        freq: freq.trim(),
+        mode: mode.trim().toUpperCase(),
+        rst_sent: rst_sent.trim(),
+        rst_recv: rst_recv.trim(),
+        pota_park: pota_park.trim().toUpperCase(),
+        name: name || null,
+        qth: qth.trim(),
+        state: state.trim(),
+        country: country.trim(),
+        grid: grid.trim().toUpperCase(),
+        skcc: parseInt(skcc, 10),
+        comments: comments || null,
+        notes: notes || null,
+      };
+      const res = await fetch(`/api/contacts/${editingId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (res.ok) {
+        editingId = null;
+        clearForm();
+        await fetchContacts();
+      } else {
+        const data = await res.json().catch(() => null);
+        errorMsg = data?.detail || `Error: ${res.status} ${res.statusText}`;
+      }
+    } catch (e) {
+      errorMsg = `Network error: ${e.message}`;
+    }
+    submitting = false;
+  }
 
   function clearForm() {
     call = "";
@@ -196,7 +263,7 @@
     {/if}
   </header>
 
-  <form on:submit|preventDefault={submitContact}>
+  <form on:submit|preventDefault={editingId ? saveEdit : submitContact}>
     <div class="form-row">
       <div class="field">
         <label for="call">Call *</label>
@@ -276,9 +343,17 @@
 
     <div class="form-row">
       <button type="submit" disabled={submitting || !call.trim() || !freq.trim() || !mode.trim() || !rst_sent.trim() || !rst_recv.trim() || !qth.trim() || !country.trim() || !state.trim() || !grid.trim() || !pota_park.trim() || !skcc.trim()}>
-        {submitting ? "Logging..." : "Log QSO"}
+        {#if editingId}
+          {submitting ? "Saving..." : "Save Edit"}
+        {:else}
+          {submitting ? "Logging..." : "Log QSO"}
+        {/if}
       </button>
-      <button type="button" class="btn-clear" on:click={clearForm}>Clear</button>
+      {#if editingId}
+        <button type="button" class="btn-clear" on:click={cancelEdit}>Cancel</button>
+      {:else}
+        <button type="button" class="btn-clear" on:click={clearForm}>Clear</button>
+      {/if}
       {#if errorMsg}
         <span class="error">{errorMsg}</span>
       {/if}
@@ -308,7 +383,7 @@
           </thead>
           <tbody>
             {#each contacts as c}
-              <tr>
+              <tr class="clickable" class:editing={editingId === c.id} on:click={() => editContact(c)}>
                 <td>{formatTimestamp(c.timestamp)}</td>
                 <td class="call">{c.call}</td>
                 <td>{formatFreq(c.freq)}</td>
@@ -499,7 +574,15 @@
     font-weight: bold;
   }
 
+  tr.clickable {
+    cursor: pointer;
+  }
+
   tbody tr:hover {
     background: #44465a;
+  }
+
+  tr.editing {
+    background: #3a5a3a;
   }
 </style>
