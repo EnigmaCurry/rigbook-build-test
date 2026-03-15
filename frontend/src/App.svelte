@@ -4,9 +4,11 @@
   import ExportImport from "./ExportImport.svelte";
   import Hunting from "./Hunting.svelte";
   import Settings from "./Settings.svelte";
+  import About from "./About.svelte";
 
   function parseHash() {
     const hash = window.location.hash.slice(1) || "/";
+    if (hash === "/about") return { page: "about", editId: null };
     if (hash === "/settings") return { page: "settings", editId: null };
     if (hash === "/pota-spots") return { page: "pota-spots", editId: null };
     if (hash === "/export") return { page: "export", editId: null };
@@ -87,7 +89,7 @@
     page = p;
     editId = null;
     menuOpen = false;
-    const paths = { log: "/", add: "/add", hunting: "/pota-spots", export: "/export", settings: "/settings" };
+    const paths = { log: "/", add: "/add", "pota-spots": "/pota-spots", export: "/export", settings: "/settings", about: "/about" };
     window.location.hash = paths[p] || "/";
     fetchCallsign();
   }
@@ -150,6 +152,7 @@
           <button class="menu-item" class:active={page === "pota-spots"} on:click={() => navigate("pota-spots")}>POTA Spots</button>
           <button class="menu-item" class:active={page === "export"} on:click={() => navigate("export")}>Export / Import</button>
           <button class="menu-item" class:active={page === "settings"} on:click={() => navigate("settings")}>Settings</button>
+          <button class="menu-item" class:active={page === "about"} on:click={() => navigate("about")}>About</button>
         </nav>
       {/if}
     </div>
@@ -177,6 +180,8 @@
     <ExportImport />
   {:else if page === "settings"}
     <Settings />
+  {:else if page === "about"}
+    <About />
   {/if}
 </main>
 
