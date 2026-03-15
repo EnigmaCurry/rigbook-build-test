@@ -242,7 +242,7 @@
     const n = parseFloat(f);
     if (isNaN(n)) return f;
     // Strip trailing zeros after decimal
-    return parseFloat(n.toFixed(4)).toString() + " MHz";
+    return parseFloat(n.toFixed(4)).toString() + " KHz";
   }
 
   function formatTimestamp(ts) {
@@ -280,7 +280,7 @@
         />
       </div>
       <div class="field">
-        <label for="freq">Freq (MHz) *</label>
+        <label for="freq">Freq (KHz) *</label>
         <input id="freq" type="text" bind:value={freq} required />
       </div>
       <div class="field">
