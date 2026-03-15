@@ -67,6 +67,7 @@ def run() -> None:
 
     log_level = "DEBUG" if args.verbose else "INFO"
     logging.basicConfig(level=log_level, format="%(levelname)s: %(name)s: %(message)s")
+    logging.getLogger("aiosqlite").setLevel(logging.WARNING)
 
     uvicorn.run(
         "rigbook.main:app", host="0.0.0.0", port=8073, access_log=False
