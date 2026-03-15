@@ -105,7 +105,9 @@
     comments = c.comments || "";
     notes = c.notes || "";
     errorMsg = "";
-    onCountryChange();
+    // Load subdivisions for the contact's country without clearing state
+    const match = countries.find(co => co.name === country);
+    fetchSubdivisions(match ? match.code : "");
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
