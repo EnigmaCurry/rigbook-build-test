@@ -3,7 +3,6 @@
 
   export let value = "";
   export let items = [];
-  export let id = "";
   export let placeholder = "";
 
   const dispatch = createEventDispatcher();
@@ -55,20 +54,18 @@
 </script>
 
 <div class="autocomplete">
-  <input
-    id="rb-{id}"
-    type="text"
-    bind:value
-    {placeholder}
-    on:input={onInput}
-    on:focus={onFocus}
-    on:blur={onBlur}
-    on:keydown={onKeydown}
-    autocomplete="off"
-    data-1p-ignore
-    data-lpignore="true"
-    data-form-type="other"
-  />
+  <!-- svelte-ignore a11y-no-noninteractive-element-interactions -->
+  <form autocomplete="off" on:submit|preventDefault on:keydown={onKeydown}>
+    <input
+      type="search"
+      bind:value
+      {placeholder}
+      on:input={onInput}
+      on:focus={onFocus}
+      on:blur={onBlur}
+      autocomplete="off"
+    />
+  </form>
   {#if open && filtered.length > 0}
     <ul class="dropdown">
       {#each filtered as item, i}
@@ -88,6 +85,11 @@
     position: relative;
   }
 
+  form {
+    margin: 0;
+    padding: 0;
+  }
+
   input {
     width: 100%;
     background: #5a5c6a;
@@ -97,6 +99,13 @@
     font-family: inherit;
     font-size: 0.9rem;
     border-radius: 3px;
+    -webkit-appearance: none;
+    appearance: none;
+  }
+
+  input::-webkit-search-cancel-button,
+  input::-webkit-search-decoration {
+    display: none;
   }
 
   input:focus {
