@@ -268,8 +268,8 @@
   :global(body) {
     margin: 0;
     padding: 0;
-    background: #1a1a2e;
-    color: #e0e0e0;
+    background: #3b3d4a;
+    color: #eaeaea;
     font-family: "Courier New", Courier, monospace;
     font-size: 14px;
   }
@@ -284,26 +284,26 @@
     display: flex;
     align-items: baseline;
     gap: 1rem;
-    border-bottom: 1px solid #444;
+    border-bottom: 1px solid #5a5c6a;
     padding-bottom: 0.5rem;
     margin-bottom: 1rem;
   }
 
   h1 {
     margin: 0;
-    color: #00ff88;
+    color: #7ecfa0;
     font-size: 1.6rem;
   }
 
   .callsign {
-    color: #ffcc00;
+    color: #d4a843;
     font-size: 1.2rem;
     font-weight: bold;
   }
 
   form {
-    background: #16213e;
-    border: 1px solid #333;
+    background: #4a4c5a;
+    border: 1px solid #5a5c6a;
     border-radius: 4px;
     padding: 0.75rem;
     margin-bottom: 1rem;
@@ -330,15 +330,15 @@
 
   .field label {
     font-size: 0.75rem;
-    color: #888;
+    color: #b0b2be;
     margin-bottom: 2px;
   }
 
   input,
   textarea {
-    background: #0f0f23;
-    border: 1px solid #444;
-    color: #e0e0e0;
+    background: #5a5c6a;
+    border: 1px solid #6e7080;
+    color: #f0f0f0;
     padding: 0.35rem 0.5rem;
     font-family: inherit;
     font-size: 0.9rem;
@@ -348,7 +348,7 @@
   input:focus,
   textarea:focus {
     outline: none;
-    border-color: #00ff88;
+    border-color: #7ecfa0;
   }
 
   textarea {
@@ -356,8 +356,8 @@
   }
 
   button {
-    background: #00ff88;
-    color: #1a1a2e;
+    background: #7ecfa0;
+    color: #2a2c38;
     border: none;
     padding: 0.5rem 1.5rem;
     font-family: inherit;
@@ -368,7 +368,7 @@
   }
 
   button:hover:not(:disabled) {
-    background: #00cc6a;
+    background: #6ab889;
   }
 
   button:disabled {
@@ -377,13 +377,13 @@
   }
 
   .log h2 {
-    color: #00ff88;
+    color: #7ecfa0;
     font-size: 1.1rem;
     margin: 0 0 0.5rem 0;
   }
 
   .empty {
-    color: #666;
+    color: #8a8c98;
     font-style: italic;
   }
 
@@ -399,24 +399,24 @@
 
   th {
     text-align: left;
-    color: #888;
-    border-bottom: 1px solid #444;
+    color: #b0b2be;
+    border-bottom: 1px solid #5a5c6a;
     padding: 0.3rem 0.5rem;
     white-space: nowrap;
   }
 
   td {
     padding: 0.3rem 0.5rem;
-    border-bottom: 1px solid #222;
+    border-bottom: 1px solid #4a4c5a;
     white-space: nowrap;
   }
 
   td.call {
-    color: #ffcc00;
+    color: #d4a843;
     font-weight: bold;
   }
 
   tbody tr:hover {
-    background: #1f2b4d;
+    background: #44465a;
   }
 </style>
