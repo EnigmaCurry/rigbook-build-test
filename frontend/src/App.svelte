@@ -291,12 +291,12 @@
 
   h1 {
     margin: 0;
-    color: #7ecfa0;
+    color: #00ff88;
     font-size: 1.6rem;
   }
 
   .callsign {
-    color: #d4a843;
+    color: #ffcc00;
     font-size: 1.2rem;
     font-weight: bold;
   }
@@ -348,7 +348,7 @@
   input:focus,
   textarea:focus {
     outline: none;
-    border-color: #7ecfa0;
+    border-color: #00ff88;
   }
 
   textarea {
@@ -356,8 +356,8 @@
   }
 
   button {
-    background: #7ecfa0;
-    color: #2a2c38;
+    background: #00ff88;
+    color: #1a1a2e;
     border: none;
     padding: 0.5rem 1.5rem;
     font-family: inherit;
@@ -368,7 +368,7 @@
   }
 
   button:hover:not(:disabled) {
-    background: #6ab889;
+    background: #00cc6a;
   }
 
   button:disabled {
@@ -377,7 +377,7 @@
   }
 
   .log h2 {
-    color: #7ecfa0;
+    color: #00ff88;
     font-size: 1.1rem;
     margin: 0 0 0.5rem 0;
   }
@@ -412,7 +412,7 @@
   }
 
   td.call {
-    color: #d4a843;
+    color: #ffcc00;
     font-weight: bold;
   }
 
