@@ -40,6 +40,16 @@ class FlrigClient:
         except Exception:
             return False
 
+    def get_modes(self) -> list[str]:
+        try:
+            server = xmlrpc.client.ServerProxy(self.url)
+            modes = server.rig.get_modes()
+            if isinstance(modes, str):
+                return [m.strip() for m in modes.split("|") if m.strip()]
+            return list(modes)
+        except Exception:
+            return []
+
     def set_mode(self, mode: str) -> bool:
         try:
             server = xmlrpc.client.ServerProxy(self.url)
@@ -61,6 +71,12 @@ async def flrig_status():
     mode = client.get_mode()
     connected = freq is not None
     return FlrigStatus(freq=freq, mode=mode, connected=connected)
+
+
+@router.get("/modes")
+async def flrig_modes():
+    client = FlrigClient()
+    return client.get_modes()
 
 
 @router.put("/vfo")

@@ -32,6 +32,7 @@
 
   let countries = [];
   let subdivisions = [];
+  let availableModes = [];
   $: countryItems = countries.map(c => ({ name: c.name, aliases: c.aliases || [] }));
   $: subdivisionNames = subdivisions.map(s => s.name);
   let submitting = false;
@@ -92,6 +93,13 @@
     try {
       const res = await fetch("/api/geo/countries");
       if (res.ok) countries = await res.json();
+    } catch {}
+  }
+
+  async function fetchModes() {
+    try {
+      const res = await fetch("/api/flrig/modes");
+      if (res.ok) availableModes = await res.json();
     } catch {}
   }
 
@@ -326,6 +334,7 @@
   onMount(() => {
     fetchContacts();
     fetchCountries();
+    fetchModes();
     fetchSubdivisions("US");
     pollFlrig();
     flrigInterval = setInterval(pollFlrig, 2000);
@@ -374,8 +383,8 @@
       <input id="freq" type="text" bind:value={freq} required />
     </div>
     <div class="field">
-      <label for="mode">Mode *</label>
-      <input id="mode" type="text" bind:value={mode} required style="text-transform: uppercase" />
+      <label>Mode *</label>
+      <Autocomplete bind:value={mode} items={availableModes} />
     </div>
     <div class="field">
       <label for="rst_sent">RST Sent</label>
