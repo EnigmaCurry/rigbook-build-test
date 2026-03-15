@@ -1,5 +1,6 @@
 <script>
   import { onMount, onDestroy } from "svelte";
+  import Autocomplete from "./Autocomplete.svelte";
 
   let myCallsign = "";
   let contacts = [];
@@ -24,6 +25,8 @@
 
   let countries = [];
   let subdivisions = [];
+  $: countryNames = countries.map(c => c.name);
+  $: subdivisionNames = subdivisions.map(s => s.name);
   let submitting = false;
 
   async function fetchCallsign() {
@@ -201,21 +204,11 @@
       </div>
       <div class="field">
         <label for="country">Country</label>
-        <input id="country" type="text" bind:value={country} on:input={onCountryChange} list="country-list" />
-        <datalist id="country-list">
-          {#each countries as c}
-            <option value={c.name}>{c.name}</option>
-          {/each}
-        </datalist>
+        <Autocomplete id="country" bind:value={country} items={countryNames} on:pick={onCountryChange} on:input={onCountryChange} />
       </div>
       <div class="field">
         <label for="state">State</label>
-        <input id="state" type="text" bind:value={state} list="state-list" />
-        <datalist id="state-list">
-          {#each subdivisions as s}
-            <option value={s.name}>{s.name}</option>
-          {/each}
-        </datalist>
+        <Autocomplete id="state" bind:value={state} items={subdivisionNames} />
       </div>
       <div class="field">
         <label for="grid">Grid</label>
