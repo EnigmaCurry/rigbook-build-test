@@ -6,6 +6,9 @@
   let saving = false;
   let message = "";
 
+  $: stripCallsign = () => { my_callsign = my_callsign.replace(/\s/g, ""); };
+  $: stripGrid = () => { my_grid = my_grid.replace(/[^A-Za-z0-9]/g, ""); };
+
   async function fetchSettings() {
     try {
       const res = await fetch("/api/settings/");
@@ -48,12 +51,12 @@
 
   <div class="setting-row">
     <label for="my_callsign">My Callsign</label>
-    <input id="my_callsign" type="text" bind:value={my_callsign} style="text-transform: uppercase" />
+    <input id="my_callsign" type="text" bind:value={my_callsign} on:input={stripCallsign} maxlength="10" autocomplete="off" style="text-transform: uppercase" />
   </div>
 
   <div class="setting-row">
     <label for="my_grid">My Grid Square</label>
-    <input id="my_grid" type="text" bind:value={my_grid} style="text-transform: uppercase" />
+    <input id="my_grid" type="text" bind:value={my_grid} on:input={stripGrid} autocomplete="off" style="text-transform: uppercase" />
   </div>
 
   <div class="setting-row">
