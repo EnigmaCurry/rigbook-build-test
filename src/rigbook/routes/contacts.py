@@ -1,7 +1,7 @@
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -13,6 +13,14 @@ router = APIRouter(prefix="/api/contacts", tags=["contacts"])
 class ContactCreate(BaseModel):
     call: str
     freq: str
+
+    @field_validator("call")
+    @classmethod
+    def validate_call(cls, v: str) -> str:
+        v = v.strip()
+        if not v or " " in v or len(v) > 10:
+            raise ValueError("callsign must be non-whitespace and at most 10 characters")
+        return v.upper()
     mode: str
     rst_sent: str | None = None
     rst_recv: str | None = None

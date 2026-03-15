@@ -170,6 +170,8 @@
           type="text"
           bind:value={call}
           required
+          maxlength="10"
+          pattern="\S+"
           autocomplete="off"
           style="text-transform: uppercase"
         />
