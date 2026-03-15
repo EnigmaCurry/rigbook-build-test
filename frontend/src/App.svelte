@@ -22,6 +22,8 @@
   let comments = "";
   let notes = "";
 
+  let countries = [];
+  let subdivisions = [];
   let submitting = false;
 
   async function fetchCallsign() {
@@ -41,6 +43,28 @@
         contacts = await res.json();
       }
     } catch {}
+  }
+
+  async function fetchCountries() {
+    try {
+      const res = await fetch("/api/geo/countries");
+      if (res.ok) countries = await res.json();
+    } catch {}
+  }
+
+  async function fetchSubdivisions(code) {
+    if (!code) { subdivisions = []; return; }
+    try {
+      const res = await fetch(`/api/geo/subdivisions/${code}`);
+      if (res.ok) subdivisions = await res.json();
+      else subdivisions = [];
+    } catch { subdivisions = []; }
+  }
+
+  function onCountryChange() {
+    state = "";
+    const match = countries.find(c => c.name === country);
+    fetchSubdivisions(match ? match.code : "");
   }
 
   async function pollFlrig() {
@@ -100,6 +124,7 @@
   onMount(() => {
     fetchCallsign();
     fetchContacts();
+    fetchCountries();
     pollFlrig();
     flrigInterval = setInterval(pollFlrig, 2000);
   });
@@ -175,12 +200,22 @@
         <input id="qth" type="text" bind:value={qth} />
       </div>
       <div class="field">
-        <label for="state">State</label>
-        <input id="state" type="text" bind:value={state} />
+        <label for="country">Country</label>
+        <input id="country" type="text" bind:value={country} list="country-list" on:change={onCountryChange} autocomplete="off" />
+        <datalist id="country-list">
+          {#each countries as c}
+            <option value={c.name} />
+          {/each}
+        </datalist>
       </div>
       <div class="field">
-        <label for="country">Country</label>
-        <input id="country" type="text" bind:value={country} />
+        <label for="state">State</label>
+        <input id="state" type="text" bind:value={state} list="state-list" autocomplete="off" />
+        <datalist id="state-list">
+          {#each subdivisions as s}
+            <option value={s.name} />
+          {/each}
+        </datalist>
       </div>
       <div class="field">
         <label for="grid">Grid</label>

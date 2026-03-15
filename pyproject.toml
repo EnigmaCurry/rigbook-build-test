@@ -8,6 +8,7 @@ dependencies = [
     "uvicorn[standard]",
     "sqlalchemy",
     "aiosqlite",
+    "pycountry>=26.2.16",
 ]
 
 [project.scripts]
