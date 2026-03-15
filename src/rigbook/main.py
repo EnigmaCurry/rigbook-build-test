@@ -20,6 +20,7 @@ class _SuccessFilter(logging.Filter):
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    logging.getLogger("uvicorn.access").addFilter(_SuccessFilter())
     await init_db()
     yield
 
@@ -36,5 +37,4 @@ if static_dir.is_dir():
 
 
 def run() -> None:
-    logging.getLogger("uvicorn.access").addFilter(_SuccessFilter())
     uvicorn.run("rigbook.main:app", host="0.0.0.0", port=8073)
