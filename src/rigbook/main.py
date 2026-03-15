@@ -3,7 +3,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 import uvicorn
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, Response
 from fastapi.staticfiles import StaticFiles
 
 from rigbook.db import init_db
@@ -11,21 +11,31 @@ from rigbook.flrig import router as flrig_router
 from rigbook.routes.contacts import router as contacts_router
 from rigbook.routes.settings import router as settings_router
 
-
-class _SuccessFilter(logging.Filter):
-    def filter(self, record: logging.LogRecord) -> bool:
-        msg = record.getMessage()
-        return '" 200 ' not in msg and '" 304 ' not in msg
+logger = logging.getLogger("rigbook")
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    logging.getLogger("uvicorn.access").addFilter(_SuccessFilter())
     await init_db()
     yield
 
 
 app = FastAPI(title="Rigbook", lifespan=lifespan)
+
+
+@app.middleware("http")
+async def log_errors(request: Request, call_next):
+    response: Response = await call_next(request)
+    if response.status_code >= 400:
+        logger.warning(
+            '%s - "%s %s" %s',
+            request.client.host,
+            request.method,
+            request.url.path,
+            response.status_code,
+        )
+    return response
+
 
 app.include_router(contacts_router)
 app.include_router(settings_router)
@@ -37,4 +47,6 @@ if static_dir.is_dir():
 
 
 def run() -> None:
-    uvicorn.run("rigbook.main:app", host="0.0.0.0", port=8073)
+    uvicorn.run(
+        "rigbook.main:app", host="0.0.0.0", port=8073, access_log=False
+    )
