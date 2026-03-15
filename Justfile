@@ -1,5 +1,9 @@
 # Rigbook - Ham Radio Logbook
 
+# Show available recipes
+@default:
+    just --list
+
 _check-uv:
     @command -v uv >/dev/null 2>&1 || { echo "Error: uv is not installed. Install it from https://docs.astral.sh/uv/getting-started/installation/"; exit 1; }
 
