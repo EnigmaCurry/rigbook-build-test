@@ -387,11 +387,11 @@
       <Autocomplete bind:value={mode} items={availableModes} />
     </div>
     <div class="field">
-      <label for="rst_sent">RST Sent</label>
+      <label for="rst_sent">RST Sent *</label>
       <input id="rst_sent" type="text" bind:value={rst_sent} />
     </div>
     <div class="field">
-      <label for="rst_recv">RST Recv</label>
+      <label for="rst_recv">RST Recv *</label>
       <input id="rst_recv" type="text" bind:value={rst_recv} />
     </div>
     <div class="field">
@@ -402,30 +402,30 @@
 
   <div class="form-row">
     <div class="field">
-      <label for="qth">QTH</label>
+      <label for="qth">QTH *</label>
       <input id="qth" type="text" bind:value={qth} />
     </div>
     <div class="field">
-      <label>Country</label>
+      <label>Country *</label>
       <Autocomplete bind:value={country} items={countryItems} on:pick={onCountryChange} on:input={onCountryChange} />
     </div>
     <div class="field">
-      <label>State</label>
+      <label>State *</label>
       <Autocomplete bind:value={state} items={subdivisionNames} />
     </div>
     <div class="field">
-      <label for="grid">Grid</label>
+      <label for="grid">Grid *</label>
       <input id="grid" type="text" bind:value={grid} on:input={stripGrid} style="text-transform: uppercase" />
     </div>
   </div>
 
   <div class="form-row">
     <div class="field">
-      <label for="pota_park">POTA Park</label>
+      <label for="pota_park">POTA Park *</label>
       <input id="pota_park" type="text" bind:value={pota_park} on:input={stripPota} style="text-transform: uppercase" />
     </div>
     <div class="field">
-      <label for="skcc">SKCC</label>
+      <label for="skcc">SKCC *</label>
       <input id="skcc" type="text" bind:value={skcc} on:input={stripSkcc} inputmode="numeric" />
     </div>
     <div class="field wide">
