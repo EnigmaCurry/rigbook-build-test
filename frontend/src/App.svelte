@@ -106,7 +106,12 @@
   }
 
   async function submitContact() {
-    if (!call.trim() || !freq.trim() || !mode.trim()) return;
+    const required = { call, freq, mode, rst_sent, rst_recv, qth, country, state, grid, pota_park, skcc };
+    const missing = Object.entries(required).filter(([, v]) => !v || !String(v).trim());
+    if (missing.length) {
+      errorMsg = `Required: ${missing.map(([k]) => k).join(", ")}`;
+      return;
+    }
     submitting = true;
     errorMsg = "";
     try {
@@ -114,15 +119,15 @@
         call: call.trim().toUpperCase(),
         freq: freq.trim(),
         mode: mode.trim().toUpperCase(),
-        rst_sent: rst_sent || null,
-        rst_recv: rst_recv || null,
-        pota_park: pota_park || null,
+        rst_sent: rst_sent.trim(),
+        rst_recv: rst_recv.trim(),
+        pota_park: pota_park.trim().toUpperCase(),
         name: name || null,
-        qth: qth || null,
-        state: state || null,
-        country: country || null,
-        grid: grid || null,
-        skcc: skcc ? parseInt(skcc, 10) : null,
+        qth: qth.trim(),
+        state: state.trim(),
+        country: country.trim(),
+        grid: grid.trim().toUpperCase(),
+        skcc: parseInt(skcc, 10),
         comments: comments || null,
         notes: notes || null,
       };
@@ -270,7 +275,7 @@
     </div>
 
     <div class="form-row">
-      <button type="submit" disabled={submitting || !call.trim() || !freq.trim() || !mode.trim()}>
+      <button type="submit" disabled={submitting || !call.trim() || !freq.trim() || !mode.trim() || !rst_sent.trim() || !rst_recv.trim() || !qth.trim() || !country.trim() || !state.trim() || !grid.trim() || !pota_park.trim() || !skcc.trim()}>
         {submitting ? "Logging..." : "Log QSO"}
       </button>
       <button type="button" class="btn-clear" on:click={clearForm}>Clear</button>

@@ -14,15 +14,15 @@ class ContactCreate(BaseModel):
     call: str
     freq: str
     mode: str
-    rst_sent: str | None = None
-    rst_recv: str | None = None
-    pota_park: str | None = None
+    rst_sent: str
+    rst_recv: str
+    pota_park: str
+    qth: str
+    state: str
+    country: str
+    grid: str
+    skcc: int
     name: str | None = None
-    qth: str | None = None
-    state: str | None = None
-    country: str | None = None
-    grid: str | None = None
-    skcc: int | None = None
     comments: str | None = None
     notes: str | None = None
     timestamp: datetime | None = None
