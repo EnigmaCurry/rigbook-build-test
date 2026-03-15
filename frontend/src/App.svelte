@@ -10,7 +10,7 @@
     const hash = window.location.hash.slice(1) || "/";
     if (hash === "/about") return { page: "about", editId: null };
     if (hash === "/settings") return { page: "settings", editId: null };
-    if (hash === "/pota-spots") return { page: "pota-spots", editId: null };
+    if (hash === "/hunting") return { page: "hunting", editId: null };
     if (hash === "/export") return { page: "export", editId: null };
     if (hash === "/add") return { page: "add", editId: null };
     const match = hash.match(/^\/log\/(\d+)$/);
@@ -89,7 +89,7 @@
     page = p;
     editId = null;
     menuOpen = false;
-    const paths = { log: "/", add: "/add", "pota-spots": "/pota-spots", export: "/export", settings: "/settings", about: "/about" };
+    const paths = { log: "/", add: "/add", "hunting": "/hunting", export: "/export", settings: "/settings", about: "/about" };
     window.location.hash = paths[p] || "/";
     fetchCallsign();
   }
@@ -160,7 +160,7 @@
         <nav class="menu">
           <button class="menu-item" class:active={page === "log"} on:click={() => navigate("log")}>Logbook</button>
           <button class="menu-item" class:active={page === "add"} on:click={() => navigate("add")}>Add QSO</button>
-          <button class="menu-item" class:active={page === "pota-spots"} on:click={() => navigate("pota-spots")}>POTA Spots</button>
+          <button class="menu-item" class:active={page === "hunting"} on:click={() => navigate("hunting")}>Hunting</button>
           <button class="menu-item" class:active={page === "export"} on:click={() => navigate("export")}>Export / Import</button>
           <button class="menu-item" class:active={page === "settings"} on:click={() => navigate("settings")}>Settings</button>
           <button class="menu-item" class:active={page === "about"} on:click={() => navigate("about")}>About</button>
@@ -176,7 +176,7 @@
     <Logbook showForm={false} {vfoFreq} {vfoMode} on:editchange={e => { editId = e.detail; navigate("add"); window.location.hash = `/log/${e.detail}`; }} on:navigate={e => navigate(e.detail)} />
   {:else if page === "add"}
     <Logbook showForm={true} {editId} {vfoFreq} {vfoMode} on:editchange={e => { editId = e.detail; window.location.hash = e.detail ? `/log/${e.detail}` : "/add"; }} on:navigate={e => navigate(e.detail)} />
-  {:else if page === "pota-spots"}
+  {:else if page === "hunting"}
     <Hunting on:tune={async e => {
       try {
         await fetch("/api/flrig/vfo", {
