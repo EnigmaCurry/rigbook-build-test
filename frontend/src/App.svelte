@@ -28,6 +28,7 @@
   $: countryItems = countries.map(c => ({ name: c.name, aliases: c.aliases || [] }));
   $: subdivisionNames = subdivisions.map(s => s.name);
   let submitting = false;
+  let errorMsg = "";
 
   async function fetchCallsign() {
     try {
@@ -41,7 +42,7 @@
 
   async function fetchContacts() {
     try {
-      const res = await fetch("/api/contacts");
+      const res = await fetch("/api/contacts/");
       if (res.ok) {
         contacts = await res.json();
       }
@@ -107,6 +108,7 @@
   async function submitContact() {
     if (!call.trim() || !freq.trim() || !mode.trim()) return;
     submitting = true;
+    errorMsg = "";
     try {
       const body = {
         call: call.trim().toUpperCase(),
@@ -124,7 +126,7 @@
         comments: comments || null,
         notes: notes || null,
       };
-      const res = await fetch("/api/contacts", {
+      const res = await fetch("/api/contacts/", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
@@ -140,8 +142,13 @@
         comments = "";
         notes = "";
         await fetchContacts();
+      } else {
+        const data = await res.json().catch(() => null);
+        errorMsg = data?.detail || `Error: ${res.status} ${res.statusText}`;
       }
-    } catch {}
+    } catch (e) {
+      errorMsg = `Network error: ${e.message}`;
+    }
     submitting = false;
   }
 
@@ -267,6 +274,9 @@
         {submitting ? "Logging..." : "Log QSO"}
       </button>
       <button type="button" class="btn-clear" on:click={clearForm}>Clear</button>
+      {#if errorMsg}
+        <span class="error">{errorMsg}</span>
+      {/if}
     </div>
   </form>
 
@@ -436,6 +446,12 @@
 
   .btn-clear:hover {
     background: #5a5c6a;
+  }
+
+  .error {
+    color: #ff6b6b;
+    font-size: 0.85rem;
+    margin-left: 0.5rem;
   }
 
   .log h2 {
