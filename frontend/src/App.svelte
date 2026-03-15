@@ -17,7 +17,7 @@
   let name = "";
   let qth = "";
   let state = "";
-  let country = "";
+  let country = "United States";
   let grid = "";
   let skcc = "";
   let comments = "";
@@ -25,7 +25,7 @@
 
   let countries = [];
   let subdivisions = [];
-  $: countryNames = countries.map(c => c.name);
+  $: countryItems = countries.map(c => ({ name: c.name, aliases: c.aliases || [] }));
   $: subdivisionNames = subdivisions.map(s => s.name);
   let submitting = false;
 
@@ -107,13 +107,11 @@
         body: JSON.stringify(body),
       });
       if (res.ok) {
-        // Reset form (freq/mode kept — likely same for next QSO)
+        // Reset form (freq/mode/country/state kept — likely same for next QSO)
         call = "";
         pota_park = "";
         name = "";
         qth = "";
-        state = "";
-        country = "";
         grid = "";
         skcc = "";
         comments = "";
@@ -128,6 +126,7 @@
     fetchCallsign();
     fetchContacts();
     fetchCountries();
+    fetchSubdivisions("US");
     pollFlrig();
     flrigInterval = setInterval(pollFlrig, 2000);
   });
@@ -204,7 +203,7 @@
       </div>
       <div class="field">
         <label>Country</label>
-        <Autocomplete bind:value={country} items={countryNames} on:pick={onCountryChange} on:input={onCountryChange} />
+        <Autocomplete bind:value={country} items={countryItems} on:pick={onCountryChange} on:input={onCountryChange} />
       </div>
       <div class="field">
         <label>State</label>

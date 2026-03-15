@@ -10,8 +10,19 @@
   let open = false;
   let highlightIndex = -1;
 
+  function matches(item, query) {
+    const q = query.toLowerCase();
+    if (typeof item === "string") return item.toLowerCase().includes(q);
+    const { name = "", aliases = [] } = item;
+    return name.toLowerCase().includes(q) || aliases.some(a => a.toLowerCase().includes(q));
+  }
+
+  function label(item) {
+    return typeof item === "string" ? item : item.name;
+  }
+
   $: filtered = value
-    ? items.filter(i => i.toLowerCase().includes(value.toLowerCase())).slice(0, 20)
+    ? items.filter(i => matches(i, value)).slice(0, 20)
     : items.slice(0, 20);
 
   function onInput() {
@@ -30,7 +41,7 @@
   }
 
   function pick(item) {
-    value = item;
+    value = label(item);
     open = false;
     dispatch("input");
     dispatch("pick", item);
@@ -46,6 +57,8 @@
       highlightIndex = highlightIndex <= 0 ? filtered.length - 1 : highlightIndex - 1;
     } else if (e.key === "Enter" && highlightIndex >= 0) {
       e.preventDefault();
+      pick(filtered[highlightIndex]);
+    } else if (e.key === "Tab" && highlightIndex >= 0) {
       pick(filtered[highlightIndex]);
     } else if (e.key === "Escape") {
       open = false;
@@ -73,7 +86,7 @@
           class:highlighted={i === highlightIndex}
           on:mousedown|preventDefault={() => pick(item)}
         >
-          {item}
+          {label(item)}
         </li>
       {/each}
     </ul>

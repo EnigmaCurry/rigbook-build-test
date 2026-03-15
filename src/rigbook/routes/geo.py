@@ -3,13 +3,25 @@ from fastapi import APIRouter
 
 router = APIRouter(prefix="/api/geo", tags=["geo"])
 
+COUNTRY_ALIASES: dict[str, list[str]] = {
+    "US": ["US", "USA"],
+    "GB": ["UK"],
+    "KR": ["South Korea"],
+    "KP": ["North Korea"],
+    "RU": ["Russia"],
+    "TW": ["Taiwan"],
+}
+
 
 @router.get("/countries")
 async def list_countries():
-    return [
-        {"code": c.alpha_2, "name": c.name}
-        for c in sorted(pycountry.countries, key=lambda c: c.name)
-    ]
+    results = []
+    for c in sorted(pycountry.countries, key=lambda c: c.name):
+        aliases = [c.alpha_2]
+        if c.alpha_2 in COUNTRY_ALIASES:
+            aliases = COUNTRY_ALIASES[c.alpha_2]
+        results.append({"code": c.alpha_2, "name": c.name, "aliases": aliases})
+    return results
 
 
 @router.get("/subdivisions/{country_code}")
