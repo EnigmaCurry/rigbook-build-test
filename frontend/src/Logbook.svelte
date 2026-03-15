@@ -353,7 +353,7 @@
 </script>
 
 {#if showForm}
-<form on:submit|preventDefault={editingId ? saveEdit : submitContact}>
+<form on:submit|preventDefault={editingId ? saveEdit : submitContact} on:keydown={e => e.key === "Enter" && e.target.tagName !== "TEXTAREA" && e.preventDefault()}>
   <div class="form-row">
     <div class="field">
       <label for="call">Call *</label>
