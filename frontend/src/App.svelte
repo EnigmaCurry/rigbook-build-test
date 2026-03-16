@@ -304,7 +304,7 @@
       {#if myCallsign}
         <!-- svelte-ignore a11y-click-events-have-key-events -->
         <!-- svelte-ignore a11y-no-static-element-interactions -->
-        <span class="callsign" on:click={() => navigate("settings")} style="cursor: pointer">{myCallsign}</span>
+        <span class="callsign" on:click={() => navigate("log")} style="cursor: pointer">{myCallsign}</span>
       {/if}
       {#if vfoEditing}
         <span class="vfo-edit">
