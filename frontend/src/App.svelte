@@ -4,12 +4,14 @@
   import ExportImport from "./ExportImport.svelte";
   import Hunting from "./Hunting.svelte";
   import BandPlan from "./BandPlan.svelte";
+  import GridMap from "./GridMap.svelte";
   import Search from "./Search.svelte";
   import Settings from "./Settings.svelte";
   import About from "./About.svelte";
 
   function parseHash() {
     const hash = window.location.hash.slice(1) || "/";
+    if (hash === "/grid") return { page: "grid", editId: null };
     if (hash === "/about") return { page: "about", editId: null };
     if (hash === "/settings") return { page: "settings", editId: null };
     if (hash === "/logbook") return { page: "log", editId: null };
@@ -23,6 +25,7 @@
   let { page, editId } = parseHash();
   let previousPage = "hunting";
   let prefill = null;
+  let gridMapValue = "";
   let menuOpen = false;
   let myCallsign = "";
   let vfoFreq = "";
@@ -123,7 +126,7 @@
     page = p;
     editId = null;
     menuOpen = false;
-    const paths = { hunting: "/", log: "/logbook", add: "/add", export: "/export", settings: "/settings", about: "/about" };
+    const paths = { hunting: "/", log: "/logbook", add: "/add", grid: "/grid", export: "/export", settings: "/settings", about: "/about" };
     window.location.hash = paths[p] || "/";
     fetchCallsign();
   }
@@ -302,6 +305,7 @@
           <button class="menu-item" class:active={page === "log"} on:click={() => navigate("log")}>Logbook</button>
           <button class="menu-item" class:active={page === "add"} on:click={() => navigate("add")}>Add QSO</button>
           <button class="menu-item" class:active={page === "hunting"} on:click={() => navigate("hunting")}>Hunting</button>
+          <button class="menu-item" class:active={page === "grid"} on:click={() => navigate("grid")}>Grid Map</button>
           <button class="menu-item" class:active={page === "export"} on:click={() => navigate("export")}>Export / Import</button>
           <button class="menu-item" class:active={page === "settings"} on:click={() => navigate("settings")}>Settings</button>
           <button class="menu-item" class:active={page === "about"} on:click={() => navigate("about")}>About</button>
@@ -319,6 +323,8 @@
     <Logbook showForm={true} {editId} {prefill} {vfoFreq} {vfoMode} on:editchange={e => { editId = e.detail; window.location.hash = e.detail ? `/log/${e.detail}` : "/add"; }} on:navigate={e => navigate(e.detail)} on:prefillconsumed={() => prefill = null} />
   {:else if page === "hunting"}
     <Hunting on:tune={e => tuneAndPrefill(e.detail)} />
+  {:else if page === "grid"}
+    <GridMap bind:value={gridMapValue} on:select={e => { gridMapValue = e.detail; }} />
   {:else if page === "export"}
     <ExportImport />
   {:else if page === "settings"}
