@@ -178,16 +178,14 @@
     if (!callsign || callsign.length < 3 || callsign === lastQrzCall) return;
     lastQrzCall = callsign;
 
-    // SKCC lookup (always, if not already set)
-    if (!skcc) {
-      try {
-        const res = await fetch(`/api/skcc/lookup/${callsign}`);
-        if (res.ok) {
-          const data = await res.json();
-          if (data.skcc) skcc = data.skcc;
-        }
-      } catch {}
-    }
+    // SKCC lookup
+    try {
+      const res = await fetch(`/api/skcc/lookup/${callsign}`);
+      if (res.ok) {
+        const data = await res.json();
+        skcc = data.skcc || "";
+      }
+    } catch {}
 
     // QRZ lookup
     try {
