@@ -97,13 +97,13 @@
   const columns = [
     { key: "timestamp", label: "UTC" },
     { key: "call", label: "Call" },
+    { key: "name", label: "Name" },
     { key: "freq", label: "Freq" },
     { key: "mode", label: "Mode" },
+    { key: "pota_park", label: "POTA" },
+    { key: "qth", label: "QTH" },
     { key: "rst_sent", label: "RST S" },
     { key: "rst_recv", label: "RST R" },
-    { key: "name", label: "Name" },
-    { key: "qth", label: "QTH" },
-    { key: "pota_park", label: "POTA" },
     { key: "comments", label: "Comments" },
   ];
 
@@ -853,13 +853,13 @@
             <tr class="clickable" class:editing={editingId === c.id} title={relativeTime(c.timestamp)} on:click={() => editContact(c)}>
               <td>{formatTimestamp(c.timestamp)}</td>
               <td class="call">{c.call}</td>
+              <td>{c.name || ""}</td>
               <td>{formatFreq(c.freq)} {#if freqToBand(c.freq)}<span class="band-tag" style="background: {bandColor(freqToBand(c.freq))}; color: {bandTextColor(freqToBand(c.freq))}">{freqToBand(c.freq)}</span>{/if}</td>
               <td>{c.mode || ""}</td>
+              <td>{c.pota_park || ""}</td>
+              <td>{c.qth || ""}</td>
               <td>{c.rst_sent || ""}</td>
               <td>{c.rst_recv || ""}</td>
-              <td>{c.name || ""}</td>
-              <td>{c.qth || ""}</td>
-              <td>{c.pota_park || ""}</td>
               <td>{c.comments || ""}</td>
             </tr>
           {/each}
