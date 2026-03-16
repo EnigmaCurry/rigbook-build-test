@@ -30,10 +30,21 @@
   $: parsedField = value.length >= 2 ? value.substring(0, 2).toUpperCase() : "";
   $: parsedSquare = value.length >= 4 ? value.substring(0, 4).toUpperCase() : "";
 
+  let fieldLonIdx = 0;
+  let fieldLatIdx = 0;
+
   function selectField(lonIdx, latIdx) {
+    fieldLonIdx = lonIdx;
+    fieldLatIdx = latIdx;
     selectedField = LETTERS[lonIdx] + LETTERS[latIdx];
     level = "square";
   }
+
+  // SVG coordinates for the selected field (used for zoomed view)
+  $: fieldX = (fieldLonIdx / 18) * 100;
+  $: fieldY = ((17 - fieldLatIdx) / 18) * 100;
+  $: fieldW = 100 / 18;
+  $: fieldH = 100 / 18;
 
   function selectSquare(sqLon, sqLat) {
     const grid = selectedField + sqLon + sqLat;
@@ -67,7 +78,7 @@
     <svg viewBox="0 0 100 100" class="map-svg">
       <!-- World map background from Natural Earth / Wikimedia -->
       <image
-        href="https://upload.wikimedia.org/wikipedia/commons/thumb/e/ea/Equirectangular-projection.jpg/1280px-Equirectangular-projection.jpg"
+        href="/world-map.jpg"
         x="0" y="0" width="100" height="100"
         preserveAspectRatio="none"
         opacity="0.4"
@@ -103,22 +114,37 @@
         <span class="current">Current: {value}</span>
       {/if}
     </div>
-    <div class="square-grid">
-      {#each Array(10) as _, latIdx}
-        <div class="square-row">
-          {#each Array(10) as _, lonIdx}
-            {@const code = selectedField + lonIdx + (9 - latIdx)}
-            <button
-              class="sq-cell"
-              class:selected={code === parsedSquare}
-              on:click={() => selectSquare(lonIdx, 9 - latIdx)}
-            >
-              {lonIdx}{9 - latIdx}
-            </button>
-          {/each}
-        </div>
+    <svg viewBox="{fieldX} {fieldY} {fieldW} {fieldH}" class="map-svg zoomed">
+      <!-- Same world map, zoomed to field -->
+      <image
+        href="/world-map.jpg"
+        x="0" y="0" width="100" height="100"
+        preserveAspectRatio="none"
+        opacity="0.4"
+      />
+      <!-- 10x10 square grid -->
+      {#each Array(10) as _, lonIdx}
+        {#each Array(10) as _, latIdx}
+          {@const code = selectedField + lonIdx + (9 - latIdx)}
+          {@const sx = fieldX + (lonIdx / 10) * fieldW}
+          {@const sy = fieldY + (latIdx / 10) * fieldH}
+          {@const sw = fieldW / 10}
+          {@const sh = fieldH / 10}
+          <rect
+            x={sx} y={sy} width={sw} height={sh}
+            class="cell"
+            class:selected={code === parsedSquare}
+            on:click={() => selectSquare(lonIdx, 9 - latIdx)}
+          />
+          <text
+            x={sx + sw / 2}
+            y={sy + sh / 2}
+            class="sq-label"
+            class:selected-text={code === parsedSquare}
+          >{lonIdx}{9 - latIdx}</text>
+        {/each}
       {/each}
-    </div>
+    </svg>
   {/if}
 </div>
 
@@ -201,47 +227,18 @@
     font-weight: bold;
   }
 
-  .square-grid {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    background: var(--bg-deep);
-    border: 1px solid var(--border);
-    border-radius: 4px;
-    padding: 0.5rem;
-  }
-
-  .square-row {
-    display: flex;
-    gap: 2px;
-  }
-
-  .sq-cell {
-    flex: 1;
-    aspect-ratio: 1;
-    background: var(--bg-card);
-    border: 1px solid var(--border);
-    color: var(--text-muted);
+  .sq-label {
+    font-size: 0.25px;
+    fill: var(--text-muted);
+    text-anchor: middle;
+    dominant-baseline: central;
+    pointer-events: none;
     font-family: inherit;
-    font-size: 0.7rem;
-    cursor: pointer;
-    border-radius: 2px;
-    padding: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
   }
 
-  .sq-cell:hover {
-    background: var(--accent);
-    color: var(--bg);
-    border-color: var(--accent);
-  }
-
-  .sq-cell.selected {
-    background: var(--accent);
-    color: var(--bg);
-    border-color: var(--accent);
+  .sq-label.selected-text {
+    fill: var(--accent);
     font-weight: bold;
   }
+
 </style>
