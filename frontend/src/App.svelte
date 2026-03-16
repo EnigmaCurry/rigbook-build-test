@@ -438,6 +438,8 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 0.5rem;
     border-bottom: 1px solid var(--border);
     padding-bottom: 0.5rem;
     margin-bottom: 1rem;
