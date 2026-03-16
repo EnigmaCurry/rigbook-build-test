@@ -644,8 +644,8 @@
         </thead>
         <tbody>
           {#each displayedContacts as c}
-            <tr class="clickable" class:editing={editingId === c.id} on:click={() => editContact(c)}>
-              <td title={relativeTime(c.timestamp)}>{formatTimestamp(c.timestamp)}</td>
+            <tr class="clickable" class:editing={editingId === c.id} title={relativeTime(c.timestamp)} on:click={() => editContact(c)}>
+              <td>{formatTimestamp(c.timestamp)}</td>
               <td class="call">{c.call}</td>
               <td>{formatFreq(c.freq)} {#if freqToBand(c.freq)}<span class="band-tag" style="background: {bandColor(freqToBand(c.freq))}; color: {bandTextColor(freqToBand(c.freq))}">{freqToBand(c.freq)}</span>{/if}</td>
               <td>{c.mode || ""}</td>
