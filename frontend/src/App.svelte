@@ -64,6 +64,15 @@
   let flrigInterval;
   let utcNow = new Date().toISOString().slice(0, 19).replace("T", " ") + "z";
   let clockInterval;
+  let clockCopied = false;
+
+  async function copyUtcTimestamp() {
+    try {
+      await navigator.clipboard.writeText(utcNow);
+      clockCopied = true;
+      setTimeout(() => { clockCopied = false; }, 1500);
+    } catch {}
+  }
 
   async function pollFlrig() {
     try {
@@ -338,7 +347,9 @@
       {/if}
     </div>
     <Search bind:this={searchComponent} {freqUnit} on:action={handleSearchAction} />
-    <span class="utc-clock">{utcNow}</span>
+    <!-- svelte-ignore a11y-click-events-have-key-events -->
+    <!-- svelte-ignore a11y-no-static-element-interactions -->
+    <span class="utc-clock" on:click={copyUtcTimestamp} title="Click to copy">{clockCopied ? "Copied!" : utcNow}</span>
     <div class="hamburger-wrap">
       <button class="add-btn" on:click={() => navigate("add")} title="Add QSO">+</button>
       <button class="hamburger" on:click={() => menuOpen = !menuOpen} aria-label="Menu">
@@ -592,7 +603,7 @@
     font-size: 0.75rem;
     color: var(--text-dim);
     font-family: monospace;
-    user-select: text;
+    cursor: pointer;
     white-space: nowrap;
   }
 
