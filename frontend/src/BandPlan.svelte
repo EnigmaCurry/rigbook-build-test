@@ -2,16 +2,40 @@
   import { createEventDispatcher } from "svelte";
 
   export let currentFreq = "";
+  export let currentMode = "";
 
   const dispatch = createEventDispatcher();
 
+  // Map radio modes to band plan segment labels
+  const MODE_MAP = {
+    "CW": "CW", "CW-R": "CW", "CWR": "CW",
+    "LSB": "SSB", "USB": "SSB", "SSB": "SSB", "AM": "SSB",
+    "FM": "FM",
+    "FT8": "Digi", "FT4": "Digi", "RTTY": "Digi", "RTTY-R": "Digi",
+    "PSK31": "Digi", "PSK": "Digi", "DIGI": "Digi", "DATA": "Digi",
+    "JS8": "Digi", "OLIVIA": "Digi",
+  };
+
   $: freq = parseFloat(currentFreq) || 0;
+  $: segLabel = MODE_MAP[currentMode?.toUpperCase()] || "";
   $: activeBandObj = BANDS.find(b => freq >= b.lo && freq <= b.hi);
   $: activeBand = activeBandObj?.name || "";
+
+  // Find the segment matching the current mode within the active band
+  $: activeSeg = activeBandObj?.segments.find(s => s.label === segLabel) || null;
+
+  // Use mode segment boundaries for Lo/Mid/Hi, fall back to full band
+  function segFor(band) {
+    if (band.name !== activeBand || !segLabel) return { lo: band.lo, hi: band.hi };
+    const seg = band.segments.find(s => s.label === segLabel);
+    return seg || { lo: band.lo, hi: band.hi };
+  }
+
   $: activeThird = activeBandObj ? (() => {
-    const third = (activeBandObj.hi - activeBandObj.lo) / 3;
-    if (freq < activeBandObj.lo + third) return "lo";
-    if (freq > activeBandObj.hi - third) return "hi";
+    const s = activeSeg || activeBandObj;
+    const third = (s.hi - s.lo) / 3;
+    if (freq < s.lo + third) return "lo";
+    if (freq > s.hi - third) return "hi";
     return "mid";
   })() : "";
 
@@ -97,9 +121,9 @@
     <div class="band-row" class:active={activeBand === band.name}>
       <span class="band-name">{band.name}</span>
       <div class="band-buttons">
-        <button class="bp-btn" class:bp-active={activeBand === band.name && activeThird === "lo"} on:mousedown|preventDefault={() => tune(band.lo)} title="{band.lo} KHz">Lo</button>
-        <button class="bp-btn" class:bp-active={activeBand === band.name && activeThird === "mid"} on:mousedown|preventDefault={() => tune(mid(band.lo, band.hi))} title="{mid(band.lo, band.hi)} KHz">Mid</button>
-        <button class="bp-btn" class:bp-active={activeBand === band.name && activeThird === "hi"} on:mousedown|preventDefault={() => tune(band.hi)} title="{band.hi} KHz">Hi</button>
+        <button class="bp-btn" class:bp-active={activeBand === band.name && activeThird === "lo"} on:mousedown|preventDefault={() => tune(segFor(band).lo)} title="{segFor(band).lo} KHz">Lo</button>
+        <button class="bp-btn" class:bp-active={activeBand === band.name && activeThird === "mid"} on:mousedown|preventDefault={() => tune(mid(segFor(band).lo, segFor(band).hi))} title="{mid(segFor(band).lo, segFor(band).hi)} KHz">Mid</button>
+        <button class="bp-btn" class:bp-active={activeBand === band.name && activeThird === "hi"} on:mousedown|preventDefault={() => tune(segFor(band).hi)} title="{segFor(band).hi} KHz">Hi</button>
       </div>
       <div class="segments">
         {#each band.segments as seg}
