@@ -38,6 +38,19 @@
   let availableModes = [];
   $: countryItems = countries.map(c => ({ name: c.name, aliases: c.aliases || [] }));
   $: subdivisionNames = subdivisions.map(s => s.name);
+
+  function normalizeState() {
+    if (!state || !subdivisions.length) return;
+    const upper = state.toUpperCase().trim();
+    // Already a full name match
+    if (subdivisions.some(s => s.name === state)) return;
+    // Match by code suffix (e.g. "UT" matches "US-UT")
+    const byCode = subdivisions.find(s => s.code.split("-").pop() === upper);
+    if (byCode) { state = byCode.name; return; }
+    // Match by code (e.g. "US-UT")
+    const byFull = subdivisions.find(s => s.code.toUpperCase() === upper);
+    if (byFull) { state = byFull.name; return; }
+  }
   let submitting = false;
   let errorMsg = "";
   let editingId = null;
@@ -197,8 +210,12 @@
       } else {
         if (!name && data.name) name = data.name;
         if (!qth && data.qth) qth = data.qth;
-        if (!state && data.state) state = data.state;
-        if (!country && data.country) country = data.country;
+        if (!country && data.country) {
+          country = data.country;
+          const match = countries.find(c => c.name === country);
+          if (match) await fetchSubdivisions(match.code);
+        }
+        if (!state && data.state) { state = data.state; normalizeState(); }
         if (!grid && data.grid) grid = data.grid;
       }
     } catch {}
@@ -602,7 +619,7 @@
     </div>
     <div class="field">
       <label>State</label>
-      <Autocomplete bind:value={state} items={subdivisionNames} />
+      <Autocomplete bind:value={state} items={subdivisionNames} on:blur={normalizeState} />
     </div>
     <div class="field">
       <label for="grid">Grid</label>

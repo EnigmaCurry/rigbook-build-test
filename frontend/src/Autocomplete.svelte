@@ -54,7 +54,7 @@
 
   function onBlur() {
     // delay so click on option registers
-    setTimeout(() => { open = false; }, 150);
+    setTimeout(() => { open = false; dispatch("blur"); }, 150);
   }
 
   function pick(item) {
