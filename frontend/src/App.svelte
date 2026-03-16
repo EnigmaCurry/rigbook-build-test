@@ -370,7 +370,7 @@
 <style>
   :global(:root) {
     --bg: #24252b;
-    --bg-card: #4a4c5a;
+    --bg-card: #2a2d3e;
     --bg-input: #5a5c6a;
     --bg-deep: #11111b;
     --border: #5a5c6a;
