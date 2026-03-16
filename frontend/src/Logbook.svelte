@@ -444,7 +444,7 @@
     if (!f) return "--";
     const n = parseFloat(f);
     if (isNaN(n)) return f;
-    return parseFloat(n.toFixed(1)).toString() + " KHz";
+    return n.toFixed(1).padStart(9, "\u2007") + " KHz";
   }
 
   function formatTimestamp(ts) {
