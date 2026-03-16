@@ -157,7 +157,6 @@
     mode = vfoMode;
   }
 
-  let qrzTimer;
   let lastQrzCall = "";
   let prefillSource = null; // tracks if prefill came from hunting
 
@@ -197,9 +196,11 @@
 
   function onCallInput() {
     call = call.replace(/\s/g, "");
-    clearTimeout(qrzTimer);
+  }
+
+  function onCallBlur() {
     if (call.length >= 3) {
-      qrzTimer = setTimeout(() => lookupCallsign(call.toUpperCase()), 500);
+      lookupCallsign(call.toUpperCase());
     }
   }
 
@@ -442,6 +443,7 @@
         type="text"
         bind:value={call}
         on:input={onCallInput}
+        on:blur={onCallBlur}
         required
         maxlength="10"
         autocomplete="off"
