@@ -14,7 +14,7 @@ with a local web UI, optionally connected to your radio via
 - Mode autocomplete from your radio's supported modes
 - Sortable log table with click-to-edit
 - ADIF export and import
-- POTA Spots page — browse active Parks on the Air activators, filter by
+- Hunting page — browse active Parks on the Air activators, filter by
   mode/band, click to tune your radio
 - SKCC and POTA park tracking
 - All timestamps in UTC
@@ -95,9 +95,9 @@ your radio via XMLRPC.
 If flrig is not running, everything still works — just enter frequency and
 mode manually.
 
-## POTA Spots
+## Hunting
 
-The **POTA Spots** page (`/#/pota-spots`) shows a live grid of active
+The **Hunting** page shows a live grid of active
 [Parks on the Air](https://pota.app/) activators, sourced from the
 pota.app API.
 
