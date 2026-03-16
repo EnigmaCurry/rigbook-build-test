@@ -29,8 +29,15 @@
   function utcNowDate() { return new Date().toISOString().slice(0, 10); }
   function utcNowTime() { return new Date().toISOString().slice(11, 19); }
   function normalizeTime() {
-    const digits = timePart.replace(/\D/g, "");
-    if (digits.length >= 4 && !timePart.includes(":")) {
+    const stripped = timePart.trim();
+    // Already formatted with colons — just pad seconds if needed
+    if (/^\d{2}:\d{2}$/.test(stripped)) {
+      timePart = `${stripped}:00`;
+      return;
+    }
+    // Digits only — insert colons
+    const digits = stripped.replace(/\D/g, "");
+    if (digits.length >= 4 && !stripped.includes(":")) {
       const h = digits.slice(0, 2);
       const m = digits.slice(2, 4);
       const s = digits.slice(4, 6) || "00";
