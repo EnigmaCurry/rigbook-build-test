@@ -50,6 +50,8 @@
       { label: "SSB", lo: 3600, hi: 4000 },
     ]},
     { name: "60m", lo: 5330, hi: 5410, segments: [
+      { label: "CW", lo: 5330, hi: 5410 },
+      { label: "Digi", lo: 5330, hi: 5410 },
       { label: "USB", lo: 5330, hi: 5410 },
     ]},
     { name: "40m", lo: 7000, hi: 7300, segments: [
