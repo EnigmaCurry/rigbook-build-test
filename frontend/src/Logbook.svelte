@@ -341,6 +341,17 @@
     }
   }
 
+  function focusOverlay(node) {
+    node.focus();
+  }
+
+  function onParkOverlayKeydown(e) {
+    if (e.key === "Escape") {
+      parkOverlay = null;
+      parkOverlayLoading = false;
+    }
+  }
+
   async function openParkOverlay() {
     const ref = pota_park.trim().toUpperCase();
     if (!ref) return;
@@ -820,7 +831,8 @@
 {#if parkOverlay || parkOverlayLoading}
   <!-- svelte-ignore a11y-click-events-have-key-events -->
   <!-- svelte-ignore a11y-no-static-element-interactions -->
-  <div class="park-overlay-backdrop" on:click={() => { parkOverlay = null; parkOverlayLoading = false; }}>
+  <!-- svelte-ignore a11y-no-noninteractive-tabindex -->
+  <div class="park-overlay-backdrop" tabindex="0" on:click={() => { parkOverlay = null; parkOverlayLoading = false; }} on:keydown={onParkOverlayKeydown} use:focusOverlay>
     <!-- svelte-ignore a11y-click-events-have-key-events -->
     <!-- svelte-ignore a11y-no-static-element-interactions -->
     <div class="park-overlay" on:click|stopPropagation>
