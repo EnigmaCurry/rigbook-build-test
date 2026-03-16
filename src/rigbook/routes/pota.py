@@ -287,13 +287,18 @@ async def fetch_parks_for_selected(session: AsyncSession = Depends(get_session))
 async def search_parks(q: str = "", session: AsyncSession = Depends(get_session)):
     if len(q) < 2:
         return []
+    # Insert hyphen if query looks like a reference missing one (e.g. "US1024" -> "US-1024")
+    import re
+
     pattern = f"%{q}%"
+    m = re.match(r"^([A-Za-z]{1,2})(\d.*)$", q)
+    ref_pattern = f"%{m.group(1)}-{m.group(2)}%" if m else pattern
     parks = (
         (
             await session.execute(
                 select(PotaPark)
                 .where(
-                    PotaPark.reference.ilike(pattern)
+                    PotaPark.reference.ilike(ref_pattern)
                     | PotaPark.name.ilike(pattern)
                     | PotaPark.location_desc.ilike(pattern)
                     | PotaPark.grid.ilike(pattern)
