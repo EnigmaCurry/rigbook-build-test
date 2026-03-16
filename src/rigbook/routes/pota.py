@@ -283,6 +283,39 @@ async def fetch_parks_for_selected(session: AsyncSession = Depends(get_session))
     return StreamingResponse(stream(), media_type="text/event-stream")
 
 
+@router.get("/parks/search")
+async def search_parks(q: str = "", session: AsyncSession = Depends(get_session)):
+    if len(q) < 2:
+        return []
+    pattern = f"%{q}%"
+    parks = (
+        (
+            await session.execute(
+                select(PotaPark)
+                .where(
+                    PotaPark.reference.ilike(pattern)
+                    | PotaPark.name.ilike(pattern)
+                    | PotaPark.location_desc.ilike(pattern)
+                    | PotaPark.grid.ilike(pattern)
+                )
+                .group_by(PotaPark.reference)
+                .limit(20)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    return [
+        {
+            "reference": p.reference,
+            "name": p.name,
+            "location_desc": p.location_desc,
+            "grid": p.grid,
+        }
+        for p in parks
+    ]
+
+
 @router.get("/locations/{descriptor}/parks")
 async def get_parks(
     descriptor: str, session: AsyncSession = Depends(get_session)

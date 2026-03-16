@@ -216,8 +216,63 @@
 
   $: stripCall = () => { call = call.replace(/\s/g, ""); };
   $: stripGrid = () => { grid = grid.replace(/[^A-Za-z0-9]/g, ""); };
-  $: stripPota = () => { pota_park = pota_park.replace(/[^A-Za-z0-9\-]/g, ""); };
   $: stripSkcc = () => { skcc = skcc.replace(/[^A-Za-z0-9]/g, ""); };
+
+  // POTA park autocomplete
+  let potaResults = [];
+  let potaOpen = false;
+  let potaHighlight = -1;
+  let potaTimer = null;
+
+  function onPotaInput() {
+    pota_park = pota_park.replace(/[^A-Za-z0-9\- ]/g, "");
+    potaHighlight = -1;
+    clearTimeout(potaTimer);
+    const q = pota_park.trim();
+    if (q.length < 2) { potaResults = []; potaOpen = false; return; }
+    potaTimer = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/pota/parks/search?q=${encodeURIComponent(q)}`);
+        if (res.ok) {
+          potaResults = await res.json();
+          potaOpen = potaResults.length > 0;
+        }
+      } catch {}
+    }, 200);
+  }
+
+  function onPotaFocus() {
+    if (potaResults.length > 0) potaOpen = true;
+  }
+
+  function onPotaBlur() {
+    setTimeout(() => { potaOpen = false; }, 150);
+  }
+
+  function pickPota(park) {
+    pota_park = park.reference;
+    if (park.grid && !grid) grid = park.grid;
+    potaOpen = false;
+    potaResults = [];
+  }
+
+  function onPotaKeydown(e) {
+    if (!potaOpen || potaResults.length === 0) return;
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      potaHighlight = (potaHighlight + 1) % potaResults.length;
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      potaHighlight = potaHighlight <= 0 ? potaResults.length - 1 : potaHighlight - 1;
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      pickPota(potaResults[potaHighlight >= 0 ? potaHighlight : 0]);
+    } else if (e.key === "Tab" && potaHighlight >= 0) {
+      pickPota(potaResults[potaHighlight]);
+    } else if (e.key === "Escape") {
+      potaOpen = false;
+    }
+  }
 
   function editContact(c) {
     editingId = c.id;
@@ -569,7 +624,21 @@
   <div class="form-row">
     <div class="field">
       <label for="pota_park">POTA Park</label>
-      <input id="pota_park" type="text" bind:value={pota_park} on:input={stripPota} style="text-transform: uppercase" />
+      <div class="pota-ac">
+        <input id="pota_park" type="text" bind:value={pota_park} on:input={onPotaInput} on:focus={onPotaFocus} on:blur={onPotaBlur} on:keydown={onPotaKeydown} style="text-transform: uppercase" autocomplete="off" />
+        {#if potaOpen && potaResults.length > 0}
+          <ul class="pota-dropdown">
+            {#each potaResults as park, i}
+              <!-- svelte-ignore a11y-no-noninteractive-element-interactions -->
+              <li class:highlighted={i === potaHighlight} on:mousedown|preventDefault={() => pickPota(park)}>
+                <span class="pota-ref">{park.reference}</span>
+                <span class="pota-name">{park.name}</span>
+                <span class="pota-loc">{park.location_desc}{park.grid ? " " + park.grid : ""}</span>
+              </li>
+            {/each}
+          </ul>
+        {/if}
+      </div>
     </div>
     <div class="field">
       <label for="skcc">SKCC</label>
@@ -961,5 +1030,71 @@
     border-radius: 8px;
     margin-left: 0.3rem;
     vertical-align: middle;
+  }
+
+  .pota-ac {
+    position: relative;
+  }
+
+  .pota-dropdown {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    max-height: 200px;
+    overflow-y: auto;
+    background: var(--bg-card);
+    border: 1px solid var(--border-input);
+    border-top: none;
+    border-radius: 0 0 3px 3px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    z-index: 100;
+  }
+
+  .pota-dropdown li {
+    padding: 0.3rem 0.5rem;
+    cursor: pointer;
+    font-size: 0.8rem;
+    display: flex;
+    gap: 0.5rem;
+    align-items: baseline;
+    line-height: 1.4;
+  }
+
+  .pota-dropdown li:hover,
+  .pota-dropdown li.highlighted {
+    background: var(--accent);
+    color: var(--bg);
+  }
+
+  .pota-ref {
+    color: var(--accent-vfo);
+    font-weight: bold;
+    flex-shrink: 0;
+  }
+
+  .pota-dropdown li:hover .pota-ref,
+  .pota-dropdown li.highlighted .pota-ref {
+    color: var(--bg);
+  }
+
+  .pota-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .pota-loc {
+    color: var(--text-dim);
+    font-size: 0.75rem;
+    flex-shrink: 0;
+    margin-left: auto;
+  }
+
+  .pota-dropdown li:hover .pota-loc,
+  .pota-dropdown li.highlighted .pota-loc {
+    color: var(--bg);
   }
 </style>
