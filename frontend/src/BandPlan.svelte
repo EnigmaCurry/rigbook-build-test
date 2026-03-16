@@ -139,15 +139,16 @@
 
 <style>
   .bandplan {
-    position: absolute;
-    top: 100%;
-    left: 0;
-    min-width: 380px;
+    position: fixed;
+    top: auto;
+    left: 1rem;
+    right: 1rem;
+    max-width: 600px;
     max-height: 80vh;
     overflow-y: auto;
     background: var(--bg-card);
     border: 1px solid var(--border);
-    border-radius: 0 0 6px 6px;
+    border-radius: 6px;
     z-index: 200;
     padding: 0.25rem 0;
   }
