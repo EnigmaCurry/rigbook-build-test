@@ -827,7 +827,7 @@
 <section class="log">
   <div class="log-title-row">
     <h2>Log ({displayedContacts.length})</h2>
-    {#if !editingId && prevContactCount > 0 && showForm}
+    {#if prevContactCount > 0 && showForm}
       <div class="log-tabs">
         <button class="log-tab" class:active={logFilter === "all"} on:click={() => logFilter = "all"}>All</button>
         <button class="log-tab" class:active={logFilter === "call"} on:click={() => logFilter = "call"}>{call.trim().toUpperCase()}</button>
