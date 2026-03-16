@@ -26,7 +26,7 @@
 
   // Use mode segment boundaries for Lo/Mid/Hi, fall back to full band
   function segFor(band) {
-    if (band.name !== activeBand || !segLabel) return { lo: band.lo, hi: band.hi };
+    if (!segLabel) return { lo: band.lo, hi: band.hi };
     const seg = band.segments.find(s => s.label === segLabel);
     return seg || { lo: band.lo, hi: band.hi };
   }
