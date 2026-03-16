@@ -3,8 +3,13 @@
 
   const dispatch = createEventDispatcher();
 
+  let inputEl;
   let query = "";
   let open = false;
+
+  export function focus() {
+    inputEl?.focus();
+  }
   let logbookResults = [];
   let potaResults = [];
   let skccResults = [];
@@ -146,6 +151,7 @@
 
 <div class="search-wrap">
   <input
+    bind:this={inputEl}
     type="search"
     bind:value={query}
     on:input={onInput}

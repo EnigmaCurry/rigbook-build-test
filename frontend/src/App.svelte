@@ -169,9 +169,38 @@
     document.documentElement.classList.toggle("light", theme === "light");
   }
 
+  let searchComponent;
+
+  function onGlobalKeydown(e) {
+    // Ignore if typing in an input/textarea/select
+    const tag = e.target.tagName;
+    if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+
+    if (e.key === "n" || e.key === "N") {
+      e.preventDefault();
+      navigate("add");
+    } else if (e.key === "/") {
+      e.preventDefault();
+      searchComponent?.focus();
+    } else if (e.key === "h" || e.key === "H") {
+      e.preventDefault();
+      navigate("hunting");
+    } else if (e.key === "l" || e.key === "L") {
+      e.preventDefault();
+      navigate("log");
+    } else if (e.key === "t" || e.key === "T") {
+      e.preventDefault();
+      startVfoEdit();
+    } else if (e.key === "?") {
+      e.preventDefault();
+      navigate("about");
+    }
+  }
+
   onMount(() => {
     applyTheme();
     window.addEventListener("storage", applyTheme);
+    window.addEventListener("keydown", onGlobalKeydown);
     fetchCallsign();
     pollFlrig();
     flrigInterval = setInterval(pollFlrig, 2000);
@@ -182,6 +211,7 @@
     clearInterval(flrigInterval);
     window.removeEventListener("hashchange", onHashChange);
     window.removeEventListener("storage", applyTheme);
+    window.removeEventListener("keydown", onGlobalKeydown);
   });
 </script>
 
@@ -208,7 +238,7 @@
         <span class="vfo disconnected" title="Radio not connected">📻 ❌</span>
       {/if}
     </div>
-    <Search on:action={handleSearchAction} />
+    <Search bind:this={searchComponent} on:action={handleSearchAction} />
     <div class="hamburger-wrap">
       <button class="hamburger" on:click={() => menuOpen = !menuOpen} aria-label="Menu">
         <span class="bar"></span>
