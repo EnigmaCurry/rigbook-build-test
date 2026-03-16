@@ -1,7 +1,15 @@
 <script>
   import { createEventDispatcher } from "svelte";
 
+  export let currentFreq = "";
+
   const dispatch = createEventDispatcher();
+
+  $: freq = parseFloat(currentFreq) || 0;
+
+  function inBand(band) {
+    return freq >= band.lo && freq <= band.hi;
+  }
 
   const BANDS = [
     { name: "160m", lo: 1800, hi: 2000, segments: [
@@ -73,7 +81,7 @@
 
 <div class="bandplan">
   {#each BANDS as band}
-    <div class="band-row">
+    <div class="band-row" class:active={inBand(band)}>
       <span class="band-name">{band.name}</span>
       <div class="band-buttons">
         <button class="bp-btn" on:mousedown|preventDefault={() => tune(band.lo)} title="{band.lo} KHz">Lo</button>
@@ -114,6 +122,12 @@
 
   .band-row:last-child {
     border-bottom: none;
+  }
+
+  .band-row.active {
+    background: var(--row-hover);
+    border-left: 3px solid var(--accent);
+    padding-left: calc(0.5rem - 3px);
   }
 
   .band-name {

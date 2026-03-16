@@ -261,7 +261,7 @@
             <input bind:this={vfoFreqInput} type="text" bind:value={vfoEditFreq} class="vfo-input freq" placeholder="Freq"
               on:keydown={e => { if (e.key === "Enter") saveVfo(); if (e.key === "Escape") cancelVfoEdit(); }}
             />
-            <BandPlan on:tune={e => { vfoEditFreq = String(e.detail); vfoFreqInput?.focus(); }} />
+            <BandPlan currentFreq={vfoEditFreq} on:tune={e => { vfoEditFreq = String(e.detail); vfoFreqInput?.focus(); }} />
           </div>
           <button class="vfo-btn save" on:click={saveVfo}>Set</button>
           <button class="vfo-btn cancel" on:click={cancelVfoEdit}>X</button>
