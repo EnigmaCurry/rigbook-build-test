@@ -10,8 +10,12 @@
   let pollInterval;
   let filterMode = "";
   let filterBand = "";
-  let seenSpotIds = new Set();
-  let newSpotIds = new Set();
+  let seenSpotKeys = new Set();
+  let newSpotKeys = new Set();
+
+  function spotKey(s) {
+    return `${s.activator}|${s.reference}`;
+  }
 
   const BANDS = {
     "160m": [1800, 2000],
@@ -72,18 +76,17 @@
       if (res.ok) {
         const fresh = await res.json();
         // Track new spots (skip first load)
-        if (seenSpotIds.size > 0) {
+        if (seenSpotKeys.size > 0) {
           const justNew = new Set();
           for (const s of fresh) {
-            if (!seenSpotIds.has(s.spotId)) justNew.add(s.spotId);
+            if (!seenSpotKeys.has(spotKey(s))) justNew.add(spotKey(s));
           }
-          newSpotIds = justNew;
-          // Clear flash after 5 seconds
+          newSpotKeys = justNew;
           if (justNew.size > 0) {
-            setTimeout(() => { newSpotIds = new Set(); }, 15000);
+            setTimeout(() => { newSpotKeys = new Set(); }, 15000);
           }
         }
-        for (const s of fresh) seenSpotIds.add(s.spotId);
+        for (const s of fresh) seenSpotKeys.add(spotKey(s));
         spots = fresh;
         error = "";
       } else {
@@ -138,7 +141,7 @@
   {:else}
     <div class="grid">
       {#each filteredSpots as spot}
-        <div class="card" class:new-spot={newSpotIds.has(spot.spotId)} on:click={() => tuneToSpot(spot)} on:keydown={e => e.key === "Enter" && tuneToSpot(spot)} tabindex="0" role="button">
+        <div class="card" class:new-spot={newSpotKeys.has(spotKey(spot))} on:click={() => tuneToSpot(spot)} on:keydown={e => e.key === "Enter" && tuneToSpot(spot)} tabindex="0" role="button">
           <div class="card-header">
             <span class="activator">{spot.activator}</span>
             <span class="badge mode">{spot.mode || "?"}</span>
