@@ -1,5 +1,5 @@
 <script>
-  import { createEventDispatcher, onMount, tick } from "svelte";
+  import { createEventDispatcher, onMount, onDestroy, tick } from "svelte";
   import { bandColor, bandTextColor } from "./bandColors.js";
 
   export let currentFreq = "";
@@ -117,23 +117,36 @@
 
   let bandplanEl;
 
-  function clampToViewport() {
-    if (!bandplanEl) return;
-    const rect = bandplanEl.getBoundingClientRect();
-    // If overflowing right edge, shift left
-    if (rect.right > window.innerWidth) {
-      bandplanEl.style.left = "auto";
-      bandplanEl.style.right = "0";
+  function positionDropdown() {
+    if (!bandplanEl || !bandplanEl.parentElement) return;
+    const parent = bandplanEl.parentElement.getBoundingClientRect();
+    const vw = window.innerWidth;
+    const dropWidth = Math.min(Math.max(300, vw - 16), 600);
+
+    // Ideal: align left edge with parent left edge
+    let left = parent.left;
+
+    // Clamp so it doesn't overflow right
+    if (left + dropWidth > vw - 8) {
+      left = vw - 8 - dropWidth;
     }
-    // If overflowing left edge, shift right
-    if (rect.left < 0) {
-      bandplanEl.style.left = "0";
-      bandplanEl.style.right = "auto";
+    // Clamp so it doesn't overflow left
+    if (left < 8) {
+      left = 8;
     }
+
+    bandplanEl.style.left = left + "px";
+    bandplanEl.style.top = parent.bottom + "px";
+    bandplanEl.style.width = dropWidth + "px";
   }
 
   onMount(() => {
-    tick().then(clampToViewport);
+    tick().then(positionDropdown);
+    window.addEventListener("resize", positionDropdown);
+  });
+
+  onDestroy(() => {
+    window.removeEventListener("resize", positionDropdown);
   });
 
   $: if (activeBand && bandplanEl) {
@@ -164,11 +177,7 @@
 
 <style>
   .bandplan {
-    position: absolute;
-    top: 100%;
-    left: 0;
-    min-width: 300px;
-    max-width: 600px;
+    position: fixed;
     max-height: 80vh;
     overflow-y: auto;
     background: var(--bg-card);
