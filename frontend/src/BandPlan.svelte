@@ -42,12 +42,11 @@
 
   const BANDS = [
     { name: "160m", lo: 1800, hi: 2000, segments: [
-      { label: "CW", lo: 1800, hi: 1850 },
-      { label: "SSB", lo: 1850, hi: 2000 },
+      { label: "CW", lo: 1800, hi: 2000 },
+      { label: "SSB", lo: 1800, hi: 2000 },
     ]},
     { name: "80m", lo: 3500, hi: 4000, segments: [
-      { label: "CW", lo: 3500, hi: 3600 },
-      { label: "Digi", lo: 3570, hi: 3600 },
+      { label: "CW", lo: 3500, hi: 4000 },
       { label: "SSB", lo: 3600, hi: 4000 },
     ]},
     { name: "60m", lo: 5330, hi: 5410, segments: [
@@ -56,48 +55,40 @@
       { label: "USB", lo: 5330, hi: 5410 },
     ]},
     { name: "40m", lo: 7000, hi: 7300, segments: [
-      { label: "CW", lo: 7000, hi: 7125 },
-      { label: "Digi", lo: 7070, hi: 7125 },
+      { label: "CW", lo: 7000, hi: 7300 },
       { label: "SSB", lo: 7125, hi: 7300 },
     ]},
     { name: "30m", lo: 10100, hi: 10150, segments: [
-      { label: "CW", lo: 10100, hi: 10130 },
-      { label: "Digi", lo: 10130, hi: 10150 },
+      { label: "CW", lo: 10100, hi: 10150 },
+      { label: "SSB", lo: 10100, hi: 10150 },
     ]},
     { name: "20m", lo: 14000, hi: 14350, segments: [
-      { label: "CW", lo: 14000, hi: 14150 },
-      { label: "Digi", lo: 14070, hi: 14112 },
+      { label: "CW", lo: 14000, hi: 14350 },
       { label: "SSB", lo: 14150, hi: 14350 },
     ]},
     { name: "17m", lo: 18068, hi: 18168, segments: [
-      { label: "CW", lo: 18068, hi: 18110 },
-      { label: "Digi", lo: 18095, hi: 18110 },
+      { label: "CW", lo: 18068, hi: 18168 },
       { label: "SSB", lo: 18110, hi: 18168 },
     ]},
     { name: "15m", lo: 21000, hi: 21450, segments: [
-      { label: "CW", lo: 21000, hi: 21200 },
-      { label: "Digi", lo: 21070, hi: 21110 },
+      { label: "CW", lo: 21000, hi: 21450 },
       { label: "SSB", lo: 21200, hi: 21450 },
     ]},
     { name: "12m", lo: 24890, hi: 24990, segments: [
-      { label: "CW", lo: 24890, hi: 24930 },
-      { label: "Digi", lo: 24910, hi: 24930 },
+      { label: "CW", lo: 24890, hi: 24990 },
       { label: "SSB", lo: 24930, hi: 24990 },
     ]},
     { name: "10m", lo: 28000, hi: 29700, segments: [
-      { label: "CW", lo: 28000, hi: 28300 },
-      { label: "Digi", lo: 28070, hi: 28150 },
+      { label: "CW", lo: 28000, hi: 29700 },
       { label: "SSB", lo: 28300, hi: 29700 },
     ]},
     { name: "6m", lo: 50000, hi: 54000, segments: [
-      { label: "CW", lo: 50000, hi: 50100 },
-      { label: "SSB", lo: 50100, hi: 50300 },
-      { label: "FM", lo: 52000, hi: 54000 },
+      { label: "CW", lo: 50000, hi: 54000 },
+      { label: "SSB", lo: 50100, hi: 54000 },
     ]},
     { name: "2m", lo: 144000, hi: 148000, segments: [
-      { label: "CW", lo: 144000, hi: 144100 },
-      { label: "SSB", lo: 144100, hi: 144300 },
-      { label: "FM", lo: 145000, hi: 148000 },
+      { label: "CW", lo: 144000, hi: 148000 },
+      { label: "SSB", lo: 144100, hi: 148000 },
     ]},
   ];
 
