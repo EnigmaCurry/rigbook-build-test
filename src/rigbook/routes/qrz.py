@@ -208,6 +208,22 @@ async def qrz_lookup(callsign: str, session: AsyncSession = Depends(get_session)
         return result
 
 
+@router.get("/status")
+async def qrz_status(session: AsyncSession = Depends(get_session)):
+    global _session_key
+    username, api_key = await _get_credentials(session)
+    if not username:
+        return {"ok": False, "error": "No callsign configured"}
+    if not api_key:
+        return {"ok": False, "error": "No QRZ password configured"}
+    # Force a fresh login to verify credentials
+    _session_key = None
+    key = await _login(username, api_key)
+    if key:
+        return {"ok": True, "username": username}
+    return {"ok": False, "error": "Login failed — check password"}
+
+
 @router.delete("/cache")
 async def clear_cache(session: AsyncSession = Depends(get_session)):
     await session.execute(delete(Cache).where(Cache.namespace == NAMESPACE))

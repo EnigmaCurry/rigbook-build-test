@@ -11,6 +11,8 @@
   let theme = localStorage.getItem("rigbook-theme") || (window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark");
   let saving = false;
   let message = "";
+  let qrzStatus = null; // { ok, error?, username? }
+  let qrzChecking = false;
 
   function toggleTheme() {
     theme = theme === "dark" ? "light" : "dark";
@@ -95,6 +97,18 @@
     saving = false;
   }
 
+  async function checkQrz() {
+    qrzChecking = true;
+    qrzStatus = null;
+    try {
+      const res = await fetch("/api/qrz/status");
+      if (res.ok) qrzStatus = await res.json();
+    } catch {
+      qrzStatus = { ok: false, error: "Request failed" };
+    }
+    qrzChecking = false;
+  }
+
   onMount(fetchSettings);
 </script>
 
@@ -125,6 +139,21 @@
     <input id="qrz_password" type="password" bind:value={qrz_password} autocomplete="off" disabled={!my_callsign.trim()} placeholder={hasQrzPassword ? "Leave blank to keep current" : ""} />
     <span class="hint">{#if !my_callsign.trim()}Set My Callsign first{:else if hasQrzPassword}Leave blank to remain unchanged{:else}Your QRZ account password (uses My Callsign as username){/if}</span>
   </div>
+
+  {#if hasQrzPassword}
+    <div class="setting-row qrz-status-row">
+      <button class="theme-toggle" on:click={checkQrz} disabled={qrzChecking}>
+        {qrzChecking ? "Checking..." : "Test QRZ Connection"}
+      </button>
+      {#if qrzStatus}
+        {#if qrzStatus.ok}
+          <span class="qrz-ok">Connected as {qrzStatus.username}</span>
+        {:else}
+          <span class="qrz-error">{qrzStatus.error}</span>
+        {/if}
+      {/if}
+    </div>
+  {/if}
 
   <h3>Cache</h3>
 
@@ -260,5 +289,21 @@
 
   .theme-toggle:hover {
     background: var(--btn-secondary-hover);
+  }
+
+  .qrz-status-row {
+    flex-direction: row;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  .qrz-ok {
+    color: var(--accent);
+    font-size: 0.85rem;
+  }
+
+  .qrz-error {
+    color: var(--accent-error);
+    font-size: 0.85rem;
   }
 </style>
