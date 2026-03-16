@@ -177,7 +177,7 @@
     if (prefill.call) call = prefill.call;
     if (prefill.freq) freq = prefill.freq;
     if (prefill.mode) mode = prefill.mode;
-    if (prefill.pota_park) pota_park = prefill.pota_park;
+    if (prefill.pota_park) { pota_park = prefill.pota_park; resolvePotaParkName(); }
     if (prefill.grid) grid = prefill.grid;
     if (prefill.country) country = prefill.country;
     if (prefill.skcc) skcc = prefill.skcc;
@@ -260,6 +260,19 @@
   let potaTimer = null;
   let potaParkName = "";
 
+  async function resolvePotaParkName() {
+    const ref = pota_park.trim().toUpperCase();
+    if (!ref) { potaParkName = ""; return; }
+    try {
+      const res = await fetch(`/api/pota/parks/search?q=${encodeURIComponent(ref)}`);
+      if (res.ok) {
+        const results = await res.json();
+        const match = results.find(p => p.reference === ref);
+        if (match) potaParkName = match.name;
+      }
+    } catch {}
+  }
+
   function onPotaInput() {
     pota_park = pota_park.replace(/[^A-Za-z0-9\- ]/g, "");
     potaParkName = "";
@@ -283,20 +296,9 @@
   }
 
   function onPotaBlur() {
-    setTimeout(async () => {
+    setTimeout(() => {
       potaOpen = false;
-      // Resolve park name if we have a reference but no name
-      const ref = pota_park.trim().toUpperCase();
-      if (ref && !potaParkName) {
-        try {
-          const res = await fetch(`/api/pota/parks/search?q=${encodeURIComponent(ref)}`);
-          if (res.ok) {
-            const results = await res.json();
-            const match = results.find(p => p.reference === ref);
-            if (match) potaParkName = match.name;
-          }
-        } catch {}
-      }
+      if (pota_park.trim() && !potaParkName) resolvePotaParkName();
     }, 150);
   }
 
@@ -341,6 +343,8 @@
     rst_sent = c.rst_sent || "";
     rst_recv = c.rst_recv || "";
     pota_park = c.pota_park || "";
+    potaParkName = "";
+    if (pota_park) resolvePotaParkName();
     name = c.name || "";
     qth = c.qth || "";
     state = c.state || "";
