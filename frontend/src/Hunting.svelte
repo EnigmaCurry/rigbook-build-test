@@ -1,6 +1,7 @@
 <script>
   import { onMount, onDestroy } from "svelte";
   import { createEventDispatcher } from "svelte";
+  import { bandColor } from "./bandColors.js";
 
   const dispatch = createEventDispatcher();
 
@@ -145,7 +146,7 @@
           <div class="card-header">
             <span class="activator">{spot.activator}</span>
             <span class="badge mode">{spot.mode || "?"}</span>
-            <span class="badge band">{freqToBand(spot.frequency) || "?"}</span>
+            <span class="badge band" style="background: {bandColor(freqToBand(spot.frequency))}">{freqToBand(spot.frequency) || "?"}</span>
           </div>
           <div class="park-name">{spot.name || spot.reference}</div>
           <div class="park-ref">{spot.reference} — {spot.locationDesc}</div>
@@ -293,8 +294,7 @@
   }
 
   .badge.band {
-    background: #a6e3a1;
-    color: var(--bg);
+    color: #fff;
   }
 
   .park-name {
