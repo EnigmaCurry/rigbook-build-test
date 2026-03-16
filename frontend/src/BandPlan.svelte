@@ -6,10 +6,7 @@
   const dispatch = createEventDispatcher();
 
   $: freq = parseFloat(currentFreq) || 0;
-
-  function inBand(band) {
-    return freq >= band.lo && freq <= band.hi;
-  }
+  $: activeBand = BANDS.find(b => freq >= b.lo && freq <= b.hi)?.name || "";
 
   const BANDS = [
     { name: "160m", lo: 1800, hi: 2000, segments: [
@@ -70,8 +67,8 @@
     ]},
   ];
 
-  function tune(freq) {
-    dispatch("tune", freq);
+  function tune(f) {
+    dispatch("tune", f);
   }
 
   function mid(lo, hi) {
@@ -80,7 +77,7 @@
 
   let bandplanEl;
 
-  $: if (freq && bandplanEl) {
+  $: if (activeBand && bandplanEl) {
     setTimeout(() => {
       const active = bandplanEl?.querySelector(".band-row.active");
       if (active) active.scrollIntoView({ block: "nearest" });
@@ -90,7 +87,7 @@
 
 <div class="bandplan" bind:this={bandplanEl}>
   {#each BANDS as band}
-    <div class="band-row" class:active={inBand(band)}>
+    <div class="band-row" class:active={activeBand === band.name}>
       <span class="band-name">{band.name}</span>
       <div class="band-buttons">
         <button class="bp-btn" on:mousedown|preventDefault={() => tune(band.lo)} title="{band.lo} KHz">Lo</button>
