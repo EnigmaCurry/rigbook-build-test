@@ -408,14 +408,14 @@
     name = "";
     qth = "";
     state = "";
-    country = "United States";
+    country = "";
     grid = "";
     skcc = "";
     comments = "";
     notes = "";
     datePart = utcNowDate();
     timePart = utcNowTime();
-    fetchSubdivisions("US");
+    subdivisions = [];
   }
 
   async function submitContact() {
