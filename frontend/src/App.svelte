@@ -8,6 +8,29 @@
   import Search from "./Search.svelte";
   import Settings from "./Settings.svelte";
   import About from "./About.svelte";
+  import { bandColor, bandTextColor } from "./bandColors.js";
+
+  const BANDS = [
+    { name: "160m", lo: 1800, hi: 2000 },
+    { name: "80m", lo: 3500, hi: 4000 },
+    { name: "60m", lo: 5330, hi: 5410 },
+    { name: "40m", lo: 7000, hi: 7300 },
+    { name: "30m", lo: 10100, hi: 10150 },
+    { name: "20m", lo: 14000, hi: 14350 },
+    { name: "17m", lo: 18068, hi: 18168 },
+    { name: "15m", lo: 21000, hi: 21450 },
+    { name: "12m", lo: 24890, hi: 24990 },
+    { name: "10m", lo: 28000, hi: 29700 },
+    { name: "6m", lo: 50000, hi: 54000 },
+    { name: "2m", lo: 144000, hi: 148000 },
+  ];
+
+  function freqToBand(f) {
+    const n = parseFloat(f);
+    if (isNaN(n)) return "";
+    const b = BANDS.find(b => n >= b.lo && n <= b.hi);
+    return b ? b.name : "";
+  }
 
   function parseHash() {
     const hash = window.location.hash.slice(1) || "/";
@@ -281,6 +304,9 @@
         <!-- svelte-ignore a11y-click-events-have-key-events -->
         <!-- svelte-ignore a11y-no-static-element-interactions -->
         <span class="vfo" on:click={startVfoEdit} title="Click to change VFO">📻 {formatFreq(vfoFreq)}</span>
+        {#if freqToBand(parseFloat(vfoFreq) / 1000)}
+          <span class="band-tag" style="background: {bandColor(freqToBand(parseFloat(vfoFreq) / 1000))}; color: {bandTextColor(freqToBand(parseFloat(vfoFreq) / 1000))}">{freqToBand(parseFloat(vfoFreq) / 1000)}</span>
+        {/if}
         {#if vfoMode}
           <!-- svelte-ignore a11y-click-events-have-key-events -->
           <!-- svelte-ignore a11y-no-static-element-interactions -->
@@ -439,6 +465,15 @@
     color: var(--accent-vfo);
     font-size: 1rem;
     cursor: pointer;
+  }
+
+  .band-tag {
+    display: inline-block;
+    font-size: 0.65rem;
+    font-weight: bold;
+    padding: 0.1rem 0.35rem;
+    border-radius: 8px;
+    vertical-align: middle;
   }
 
   .vfo-mode {
