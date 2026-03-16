@@ -505,8 +505,8 @@
     skcc = "";
     comments = "";
     notes = "";
-    datePart = utcNowDate();
-    timePart = utcNowTime();
+    datePart = "";
+    timePart = "";
     subdivisions = [];
   }
 
@@ -552,8 +552,8 @@
         skcc = "";
         comments = "";
         notes = "";
-        datePart = utcNowDate();
-        timePart = utcNowTime();
+        datePart = "";
+        timePart = "";
         await fetchContacts();
       } else {
         const data = await res.json().catch(() => null);
