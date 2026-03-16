@@ -64,3 +64,10 @@ config-grid grid: _check-curl
 # Show current settings
 config-show: _check-curl
     @curl -s http://localhost:8073/api/settings | python -m json.tool
+
+# Delete the database
+clean:
+    @echo "This will delete ~/.local/rigbook/rigbook.db"
+    @read -p "Are you sure? [y/N] " confirm && [ "$$confirm" = "y" ] || { echo "Cancelled."; exit 1; }
+    rm -f ~/.local/rigbook/rigbook.db
+    @echo "Database deleted."
