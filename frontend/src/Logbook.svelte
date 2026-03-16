@@ -468,6 +468,28 @@
       return ts;
     }
   }
+
+  function relativeTime(ts) {
+    if (!ts) return "";
+    try {
+      const d = new Date(ts);
+      const now = new Date();
+      const diffMs = now - d;
+      const mins = Math.floor(diffMs / 60000);
+      if (mins < 1) return "just now";
+      if (mins < 60) return `${mins} minute${mins === 1 ? "" : "s"} ago`;
+      const hours = Math.floor(mins / 60);
+      if (hours < 24) return `${hours} hour${hours === 1 ? "" : "s"} ago`;
+      const days = Math.floor(hours / 24);
+      if (days < 30) return `${days} day${days === 1 ? "" : "s"} ago`;
+      const months = Math.floor(days / 30);
+      if (months < 12) return `${months} month${months === 1 ? "" : "s"} ago`;
+      const years = Math.floor(days / 365);
+      return `${years} year${years === 1 ? "" : "s"} ago`;
+    } catch {
+      return "";
+    }
+  }
 </script>
 
 {#if showForm}
@@ -623,7 +645,7 @@
         <tbody>
           {#each displayedContacts as c}
             <tr class="clickable" class:editing={editingId === c.id} on:click={() => editContact(c)}>
-              <td>{formatTimestamp(c.timestamp)}</td>
+              <td title={relativeTime(c.timestamp)}>{formatTimestamp(c.timestamp)}</td>
               <td class="call">{c.call}</td>
               <td>{formatFreq(c.freq)} {#if freqToBand(c.freq)}<span class="band-tag" style="background: {bandColor(freqToBand(c.freq))}; color: {bandTextColor(freqToBand(c.freq))}">{freqToBand(c.freq)}</span>{/if}</td>
               <td>{c.mode || ""}</td>
