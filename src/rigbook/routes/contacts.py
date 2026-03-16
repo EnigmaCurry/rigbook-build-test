@@ -1,7 +1,7 @@
-from datetime import datetime
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, field_serializer, field_validator
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -55,6 +55,15 @@ class ContactCreate(BaseModel):
             raise ValueError("grid must be alphanumeric with no spaces")
         return v.upper()
 
+    @field_validator("timestamp")
+    @classmethod
+    def normalize_timestamp(cls, v: datetime | None) -> datetime | None:
+        if v is None:
+            return v
+        if v.tzinfo is not None:
+            v = v.astimezone(timezone.utc).replace(tzinfo=None)
+        return v
+
 
 class ContactUpdate(BaseModel):
     call: str | None = None
@@ -72,6 +81,15 @@ class ContactUpdate(BaseModel):
     comments: str | None = None
     notes: str | None = None
     timestamp: datetime | None = None
+
+    @field_validator("timestamp")
+    @classmethod
+    def normalize_timestamp(cls, v: datetime | None) -> datetime | None:
+        if v is None:
+            return v
+        if v.tzinfo is not None:
+            v = v.astimezone(timezone.utc).replace(tzinfo=None)
+        return v
 
 
 class ContactResponse(BaseModel):
@@ -91,6 +109,10 @@ class ContactResponse(BaseModel):
     comments: str | None
     notes: str | None
     timestamp: datetime
+
+    @field_serializer("timestamp")
+    def serialize_timestamp(self, v: datetime) -> str:
+        return v.strftime("%Y-%m-%dT%H:%M:%SZ")
 
     model_config = {"from_attributes": True}
 
