@@ -472,20 +472,24 @@
   function relativeTime(ts) {
     if (!ts) return "";
     try {
-      const d = new Date(ts);
+      const s = String(ts);
+      const d = new Date(s.endsWith("Z") || s.includes("+") ? s : s + "Z");
+      if (isNaN(d)) return "";
       const now = new Date();
       const diffMs = now - d;
-      const mins = Math.floor(diffMs / 60000);
+      const absDiffMs = Math.abs(diffMs);
+      const suffix = diffMs < 0 ? "from now" : "ago";
+      const mins = Math.floor(absDiffMs / 60000);
       if (mins < 1) return "just now";
-      if (mins < 60) return `${mins} minute${mins === 1 ? "" : "s"} ago`;
+      if (mins < 60) return `${mins} minute${mins === 1 ? "" : "s"} ${suffix}`;
       const hours = Math.floor(mins / 60);
-      if (hours < 24) return `${hours} hour${hours === 1 ? "" : "s"} ago`;
+      if (hours < 24) return `${hours} hour${hours === 1 ? "" : "s"} ${suffix}`;
       const days = Math.floor(hours / 24);
-      if (days < 30) return `${days} day${days === 1 ? "" : "s"} ago`;
+      if (days < 30) return `${days} day${days === 1 ? "" : "s"} ${suffix}`;
       const months = Math.floor(days / 30);
-      if (months < 12) return `${months} month${months === 1 ? "" : "s"} ago`;
+      if (months < 12) return `${months} month${months === 1 ? "" : "s"} ${suffix}`;
       const years = Math.floor(days / 365);
-      return `${years} year${years === 1 ? "" : "s"} ago`;
+      return `${years} year${years === 1 ? "" : "s"} ${suffix}`;
     } catch {
       return "";
     }
