@@ -384,8 +384,8 @@
     --row-hover: #44465a;
     --row-editing: #3a5a3a;
     --bar-color: #eaeaea;
-    --menu-bg: #4a4c5a;
-    --menu-hover: #5a5c6a;
+    --menu-bg: #2e303a;
+    --menu-hover: #3e404a;
   }
 
   :global(:root.light) {
@@ -411,8 +411,8 @@
     --row-hover: #dddde4;
     --row-editing: #c8ecc8;
     --bar-color: #333344;
-    --menu-bg: #f4f4f6;
-    --menu-hover: #e0e0e8;
+    --menu-bg: #d8d8e0;
+    --menu-hover: #c8c8d4;
   }
 
   :global(*, *::before, *::after) {
