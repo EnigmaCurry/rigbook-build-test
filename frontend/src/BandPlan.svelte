@@ -1,6 +1,6 @@
 <script>
   import { createEventDispatcher } from "svelte";
-  import { bandColor } from "./bandColors.js";
+  import { bandColor, bandTextColor } from "./bandColors.js";
 
   export let currentFreq = "";
   export let currentMode = "";
@@ -122,7 +122,7 @@
 <div class="bandplan" bind:this={bandplanEl}>
   {#each BANDS as band}
     <div class="band-row" class:active={activeBand === band.name}>
-      <span class="band-name" style="color: {bandColor(band.name)}" on:mousedown|preventDefault={() => tune(mid(segFor(band).lo, segFor(band).hi))} title="{mid(segFor(band).lo, segFor(band).hi)} KHz">{band.name}</span>
+      <span class="band-name" style="background: {bandColor(band.name)}; color: {bandTextColor(band.name)}" on:mousedown|preventDefault={() => tune(mid(segFor(band).lo, segFor(band).hi))} title="{mid(segFor(band).lo, segFor(band).hi)} KHz">{band.name}</span>
       <div class="band-buttons">
         <button class="bp-btn" class:bp-active={activeBand === band.name && activeThird === "lo"} on:mousedown|preventDefault={() => tune(segFor(band).lo)} title="{segFor(band).lo} KHz">Lo</button>
         <button class="bp-btn" class:bp-active={activeBand === band.name && activeThird === "mid"} on:mousedown|preventDefault={() => tune(mid(segFor(band).lo, segFor(band).hi))} title="{mid(segFor(band).lo, segFor(band).hi)} KHz">Mid</button>
@@ -172,8 +172,11 @@
 
   .band-name {
     font-weight: bold;
-    font-size: 0.8rem;
-    width: 35px;
+    font-size: 0.7rem;
+    padding: 0.1rem 0.35rem;
+    border-radius: 8px;
+    text-align: center;
+    min-width: 35px;
     flex-shrink: 0;
     cursor: pointer;
   }
