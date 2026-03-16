@@ -1,7 +1,5 @@
 <script>
   import { createEventDispatcher } from "svelte";
-  import { COASTLINES } from "./coastlines.js";
-
   export let value = "";
 
   const dispatch = createEventDispatcher();
@@ -67,10 +65,13 @@
       {/if}
     </div>
     <svg viewBox="0 0 100 100" class="map-svg">
-      <!-- Coastline outlines -->
-      {#each COASTLINES as path}
-        <path d={path} class="coastline" />
-      {/each}
+      <!-- World map background from Natural Earth / Wikimedia -->
+      <image
+        href="https://upload.wikimedia.org/wikipedia/commons/thumb/e/ea/Equirectangular-projection.jpg/1280px-Equirectangular-projection.jpg"
+        x="0" y="0" width="100" height="100"
+        preserveAspectRatio="none"
+        opacity="0.4"
+      />
       <!-- Grid fields -->
       {#each LETTERS as lonL, lonIdx}
         {#each LETTERS as latL, latIdx}
@@ -166,14 +167,6 @@
     background: var(--bg-deep);
     border: 1px solid var(--border);
     border-radius: 4px;
-  }
-
-  .coastline {
-    fill: var(--btn-secondary);
-    opacity: 0.25;
-    stroke: var(--text-dim);
-    stroke-width: 0.15;
-    pointer-events: none;
   }
 
   .cell {
