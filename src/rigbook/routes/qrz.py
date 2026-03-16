@@ -190,8 +190,10 @@ async def qrz_lookup(callsign: str, session: AsyncSession = Depends(get_session)
             return cached
 
         username, api_key = await _get_credentials(session)
-        if not api_key or not username:
-            return {"error": "QRZ credentials not configured"}
+        if not username:
+            return {"error": "Set My Callsign in Settings (used as QRZ username)"}
+        if not api_key:
+            return {"error": "Set QRZ Password in Settings"}
 
         result = await _fetch_callsign(call_upper, username, api_key)
         if result == _FETCH_ERROR:
