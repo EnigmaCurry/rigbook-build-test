@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import AsyncGenerator
 
-from sqlalchemy import String, DateTime, Integer, inspect, text
+from sqlalchemy import Float, String, DateTime, Integer, inspect, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
@@ -55,6 +55,45 @@ class Setting(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     key: Mapped[str] = mapped_column(String, unique=True, nullable=False)
     value: Mapped[str | None] = mapped_column(String, nullable=True)
+
+
+class PotaProgram(Base):
+    __tablename__ = "pota_programs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    program_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    prefix: Mapped[str] = mapped_column(String, nullable=False)
+    name: Mapped[str] = mapped_column(String, nullable=False)
+    fetched_at: Mapped[float] = mapped_column(Float, nullable=False)
+
+
+class PotaLocation(Base):
+    __tablename__ = "pota_locations"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    location_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    program_prefix: Mapped[str] = mapped_column(String, nullable=False)
+    descriptor: Mapped[str] = mapped_column(String, nullable=False)
+    name: Mapped[str] = mapped_column(String, nullable=False)
+    latitude: Mapped[float | None] = mapped_column(Float, nullable=True)
+    longitude: Mapped[float | None] = mapped_column(Float, nullable=True)
+    fetched_at: Mapped[float] = mapped_column(Float, nullable=False)
+
+
+class PotaPark(Base):
+    __tablename__ = "pota_parks"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    reference: Mapped[str] = mapped_column(String, nullable=False, unique=True)
+    name: Mapped[str] = mapped_column(String, nullable=False)
+    location_desc: Mapped[str] = mapped_column(String, nullable=False)
+    latitude: Mapped[float | None] = mapped_column(Float, nullable=True)
+    longitude: Mapped[float | None] = mapped_column(Float, nullable=True)
+    grid: Mapped[str | None] = mapped_column(String, nullable=True)
+    attempts: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    activations: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    qsos: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    fetched_at: Mapped[float] = mapped_column(Float, nullable=False)
 
 
 engine = create_async_engine(f"sqlite+aiosqlite:///{DB_PATH}")
