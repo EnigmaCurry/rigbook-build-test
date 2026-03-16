@@ -1,5 +1,6 @@
 <script>
   import { createEventDispatcher } from "svelte";
+  import { COASTLINES } from "./coastlines.js";
 
   export let value = "";
 
@@ -55,32 +56,6 @@
     return "";
   }
 
-  // Simple equirectangular continents outline - major land bounding boxes for visual reference
-  const CONTINENTS = [
-    // North America
-    { x1: -170, y1: 15, x2: -50, y2: 75 },
-    // South America
-    { x1: -82, y1: -56, x2: -34, y2: 13 },
-    // Europe
-    { x1: -10, y1: 35, x2: 40, y2: 72 },
-    // Africa
-    { x1: -18, y1: -35, x2: 52, y2: 37 },
-    // Asia
-    { x1: 25, y1: 0, x2: 180, y2: 78 },
-    // Australia
-    { x1: 112, y1: -45, x2: 155, y2: -10 },
-  ];
-
-  function isLand(lon, lat) {
-    for (const c of CONTINENTS) {
-      if (lon >= c.x1 && lon <= c.x2 && lat >= c.y1 && lat <= c.y2) return true;
-    }
-    return false;
-  }
-
-  // Map coordinates to SVG (equirectangular projection)
-  function lonToX(lon) { return ((lon + 180) / 360) * 100; }
-  function latToY(lat) { return ((90 - lat) / 180) * 100; }
 </script>
 
 <div class="gridmap">
@@ -92,15 +67,9 @@
       {/if}
     </div>
     <svg viewBox="0 0 100 100" class="map-svg">
-      <!-- Continent outlines for reference -->
-      {#each CONTINENTS as c}
-        <rect
-          x={lonToX(c.x1)}
-          y={latToY(c.y2)}
-          width={lonToX(c.x2) - lonToX(c.x1)}
-          height={latToY(c.y1) - latToY(c.y2)}
-          class="continent"
-        />
+      <!-- Coastline outlines -->
+      {#each COASTLINES as path}
+        <path d={path} class="coastline" />
       {/each}
       <!-- Grid fields -->
       {#each LETTERS as lonL, lonIdx}
@@ -114,7 +83,6 @@
             {x} {y} width={w} height={h}
             class="cell"
             class:selected={code === parsedField}
-            class:land={isLand(lonIdx * 20 - 170, latIdx * 10 - 85)}
             on:click={() => selectField(lonIdx, latIdx)}
           />
           <text
@@ -200,9 +168,12 @@
     border-radius: 4px;
   }
 
-  .continent {
+  .coastline {
     fill: var(--btn-secondary);
-    opacity: 0.15;
+    opacity: 0.25;
+    stroke: var(--text-dim);
+    stroke-width: 0.15;
+    pointer-events: none;
   }
 
   .cell {
@@ -221,16 +192,6 @@
   .cell.selected {
     fill: var(--accent);
     opacity: 0.4;
-  }
-
-  .cell.land {
-    fill: var(--btn-secondary);
-    opacity: 0.1;
-  }
-
-  .cell.land:hover {
-    fill: var(--accent);
-    opacity: 0.3;
   }
 
   .cell-label {
