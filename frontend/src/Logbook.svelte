@@ -768,7 +768,7 @@
     </div>
     <div class="field">
       <label for="time">Time (UTC)</label>
-      <input id="time" type="time" step="1" bind:value={timePart} />
+      <input id="time" type="text" bind:value={timePart} placeholder="HH:MM:SS" pattern="\d{2}:\d{2}(:\d{2})?" maxlength="8" />
     </div>
     <div class="field wide">
       <label for="notes">Notes (private)</label>
