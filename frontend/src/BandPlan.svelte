@@ -105,6 +105,8 @@
     dispatch("tune", f);
   }
 
+  const EDGE_MARGIN = 1; // KHz safety margin to stay inside band edges
+
   function mid(lo, hi) {
     return Math.round((lo + hi) / 2);
   }
@@ -124,9 +126,9 @@
     <div class="band-row" class:active={activeBand === band.name}>
       <span class="band-name" style="background: {bandColor(band.name)}; color: {bandTextColor(band.name)}" on:mousedown|preventDefault={() => tune(mid(segFor(band).lo, segFor(band).hi))} title="{mid(segFor(band).lo, segFor(band).hi)} KHz">{band.name}</span>
       <div class="band-buttons">
-        <button class="bp-btn" class:bp-active={activeBand === band.name && activeThird === "lo"} on:mousedown|preventDefault={() => tune(segFor(band).lo)} title="{segFor(band).lo} KHz">Lo</button>
+        <button class="bp-btn" class:bp-active={activeBand === band.name && activeThird === "lo"} on:mousedown|preventDefault={() => tune(segFor(band).lo + EDGE_MARGIN)} title="{segFor(band).lo + EDGE_MARGIN} KHz">Lo</button>
         <button class="bp-btn" class:bp-active={activeBand === band.name && activeThird === "mid"} on:mousedown|preventDefault={() => tune(mid(segFor(band).lo, segFor(band).hi))} title="{mid(segFor(band).lo, segFor(band).hi)} KHz">Mid</button>
-        <button class="bp-btn" class:bp-active={activeBand === band.name && activeThird === "hi"} on:mousedown|preventDefault={() => tune(segFor(band).hi)} title="{segFor(band).hi} KHz">Hi</button>
+        <button class="bp-btn" class:bp-active={activeBand === band.name && activeThird === "hi"} on:mousedown|preventDefault={() => tune(segFor(band).hi - EDGE_MARGIN)} title="{segFor(band).hi - EDGE_MARGIN} KHz">Hi</button>
       </div>
       <div class="segments">
         {#each band.segments as seg}
