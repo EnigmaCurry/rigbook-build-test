@@ -28,7 +28,11 @@
   let skcc = "";
   function utcNowDate() { return new Date().toISOString().slice(0, 10); }
   function utcNowTime() { return new Date().toISOString().slice(11, 19); }
-  function fillNow() { datePart = utcNowDate(); timePart = utcNowTime(); }
+  function fillNow() {
+    if (datePart && timePart && !confirm("Update timestamp to now?")) return;
+    datePart = utcNowDate();
+    timePart = utcNowTime();
+  }
   let datePart = utcNowDate();
   let timePart = utcNowTime();
   let comments = "";
