@@ -499,7 +499,6 @@
     fetchDefaultRst();
     fetchCountries();
     fetchModes();
-    fetchSubdivisions("US");
   });
 
   const BANDS = [
