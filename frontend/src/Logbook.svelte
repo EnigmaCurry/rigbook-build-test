@@ -418,6 +418,28 @@
     fetchSubdivisions("US");
   });
 
+  const BANDS = [
+    { name: "160m", lo: 1800, hi: 2000 },
+    { name: "80m", lo: 3500, hi: 4000 },
+    { name: "60m", lo: 5330, hi: 5410 },
+    { name: "40m", lo: 7000, hi: 7300 },
+    { name: "30m", lo: 10100, hi: 10150 },
+    { name: "20m", lo: 14000, hi: 14350 },
+    { name: "17m", lo: 18068, hi: 18168 },
+    { name: "15m", lo: 21000, hi: 21450 },
+    { name: "12m", lo: 24890, hi: 24990 },
+    { name: "10m", lo: 28000, hi: 29700 },
+    { name: "6m", lo: 50000, hi: 54000 },
+    { name: "2m", lo: 144000, hi: 148000 },
+  ];
+
+  function freqToBand(f) {
+    const n = parseFloat(f);
+    if (isNaN(n)) return "";
+    const b = BANDS.find(b => n >= b.lo && n <= b.hi);
+    return b ? b.name : "";
+  }
+
   function formatFreq(f) {
     if (!f) return "--";
     const n = parseFloat(f);
@@ -582,7 +604,7 @@
             <tr class="clickable" class:editing={editingId === c.id} on:click={() => editContact(c)}>
               <td>{formatTimestamp(c.timestamp)}</td>
               <td class="call">{c.call}</td>
-              <td>{formatFreq(c.freq)}</td>
+              <td>{formatFreq(c.freq)} {#if freqToBand(c.freq)}<span class="band-tag">{freqToBand(c.freq)}</span>{/if}</td>
               <td>{c.mode || ""}</td>
               <td>{c.rst_sent || ""}</td>
               <td>{c.rst_recv || ""}</td>
@@ -830,5 +852,17 @@
 
   tr.editing {
     background: var(--row-editing);
+  }
+
+  .band-tag {
+    display: inline-block;
+    background: var(--accent);
+    color: var(--bg);
+    font-size: 0.65rem;
+    font-weight: bold;
+    padding: 0.1rem 0.35rem;
+    border-radius: 8px;
+    margin-left: 0.3rem;
+    vertical-align: middle;
   }
 </style>
