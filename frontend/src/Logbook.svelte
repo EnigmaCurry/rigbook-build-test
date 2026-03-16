@@ -39,6 +39,18 @@
   $: countryItems = countries.map(c => ({ name: c.name, aliases: c.aliases || [] }));
   $: subdivisionNames = subdivisions.map(s => s.name);
 
+  function normalizeCountry() {
+    if (!country || !countries.length) return;
+    const upper = country.toUpperCase().trim();
+    if (countries.some(c => c.name === country)) return;
+    // Match by code (e.g. "US" -> "United States")
+    const byCode = countries.find(c => c.code.toUpperCase() === upper);
+    if (byCode) { country = byCode.name; onCountryChange(); return; }
+    // Match by alias (e.g. "USA" -> "United States")
+    const byAlias = countries.find(c => (c.aliases || []).some(a => a.toUpperCase() === upper));
+    if (byAlias) { country = byAlias.name; onCountryChange(); return; }
+  }
+
   function normalizeState() {
     if (!state || !subdivisions.length) return;
     const upper = state.toUpperCase().trim();
@@ -614,7 +626,7 @@
     </div>
     <div class="field">
       <label>Country</label>
-      <Autocomplete bind:value={country} items={countryItems} on:pick={onCountryChange} on:input={onCountryChange} />
+      <Autocomplete bind:value={country} items={countryItems} on:pick={onCountryChange} on:input={onCountryChange} on:blur={normalizeCountry} />
     </div>
     <div class="field">
       <label>State</label>
