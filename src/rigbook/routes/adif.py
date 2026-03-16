@@ -4,7 +4,7 @@ from io import StringIO
 from adif_file import adi
 from fastapi import APIRouter, Depends, UploadFile
 from fastapi.responses import StreamingResponse
-from sqlalchemy import select
+from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from rigbook.db import Contact, Setting, get_session
@@ -124,14 +124,28 @@ async def import_adif(file: UploadFile, session: AsyncSession = Depends(get_sess
 
     imported = 0
     skipped = 0
+    duplicates = 0
     for record in records:
         data = adif_record_to_contact_dict(record)
         if not data.get("call"):
             skipped += 1
             continue
+        ts = data.get("timestamp")
+        if ts:
+            # Normalize to naive UTC for comparison
+            check_ts = ts.replace(tzinfo=None) if ts.tzinfo else ts
+            existing = (await session.execute(
+                select(Contact).where(and_(
+                    Contact.call == data["call"].upper(),
+                    Contact.timestamp == check_ts,
+                ))
+            )).scalar_one_or_none()
+            if existing:
+                duplicates += 1
+                continue
         contact = Contact(**data)
         session.add(contact)
         imported += 1
 
     await session.commit()
-    return {"imported": imported, "skipped": skipped}
+    return {"imported": imported, "skipped": skipped, "duplicates": duplicates}

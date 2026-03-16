@@ -21,7 +21,7 @@
       });
       if (res.ok) {
         const data = await res.json();
-        message = `Imported ${data.imported} contacts.${data.skipped ? ` Skipped ${data.skipped}.` : ""}`;
+        message = `Imported ${data.imported} contacts.${data.duplicates ? ` ${data.duplicates} duplicates skipped.` : ""}${data.skipped ? ` ${data.skipped} invalid skipped.` : ""}`;
         messageType = "success";
       } else {
         const data = await res.json().catch(() => null);
@@ -43,7 +43,7 @@
   <button on:click={exportAdif}>Download ADIF</button>
 
   <h2>Import</h2>
-  <p>Import contacts from an ADIF (.adi) file. Duplicate contacts are not detected.</p>
+  <p>Import contacts from an ADIF (.adi) file. Duplicates (same callsign + timestamp) are automatically skipped.</p>
   <label class="file-label">
     <input type="file" accept=".adi,.adif,.ADI,.ADIF" on:change={importAdif} disabled={importing} />
     {importing ? "Importing..." : "Choose ADIF File"}
