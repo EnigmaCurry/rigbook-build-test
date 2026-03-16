@@ -19,10 +19,19 @@ class SettingResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+HIDDEN_KEYS = {"qrz_password"}
+
+
+def _redact(setting: Setting) -> SettingResponse:
+    if setting.key in HIDDEN_KEYS:
+        return SettingResponse(key=setting.key, value="***" if setting.value else None)
+    return SettingResponse.model_validate(setting)
+
+
 @router.get("/", response_model=list[SettingResponse])
 async def list_settings(session: AsyncSession = Depends(get_session)):
     result = await session.execute(select(Setting))
-    return result.scalars().all()
+    return [_redact(s) for s in result.scalars().all()]
 
 
 @router.get("/{key}", response_model=SettingResponse)
@@ -31,7 +40,7 @@ async def get_setting(key: str, session: AsyncSession = Depends(get_session)):
     setting = result.scalar_one_or_none()
     if not setting:
         return SettingResponse(key=key, value=None)
-    return setting
+    return _redact(setting)
 
 
 @router.put("/{key}", response_model=SettingResponse)
