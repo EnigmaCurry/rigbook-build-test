@@ -530,7 +530,7 @@
   }
 
   async function submitContact() {
-    const required = { call, freq, mode };
+    const required = { call, freq, mode, date: datePart, time: timePart };
     const missing = Object.entries(required).filter(([, v]) => !v || !String(v).trim());
     if (missing.length) {
       errorMsg = `Required: ${missing.map(([k]) => k).join(", ")}`;
