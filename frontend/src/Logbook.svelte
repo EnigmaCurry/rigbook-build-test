@@ -2,7 +2,7 @@
   import { onMount, createEventDispatcher } from "svelte";
   import Autocomplete from "./Autocomplete.svelte";
   import GridMap from "./GridMap.svelte";
-  import { bandColor } from "./bandColors.js";
+  import { bandColor, bandTextColor } from "./bandColors.js";
 
   export let editId = null;
   export let prefill = null;
@@ -605,7 +605,7 @@
             <tr class="clickable" class:editing={editingId === c.id} on:click={() => editContact(c)}>
               <td>{formatTimestamp(c.timestamp)}</td>
               <td class="call">{c.call}</td>
-              <td>{formatFreq(c.freq)} {#if freqToBand(c.freq)}<span class="band-tag" style="background: {bandColor(freqToBand(c.freq))}">{freqToBand(c.freq)}</span>{/if}</td>
+              <td>{formatFreq(c.freq)} {#if freqToBand(c.freq)}<span class="band-tag" style="background: {bandColor(freqToBand(c.freq))}; color: {bandTextColor(freqToBand(c.freq))}">{freqToBand(c.freq)}</span>{/if}</td>
               <td>{c.mode || ""}</td>
               <td>{c.rst_sent || ""}</td>
               <td>{c.rst_recv || ""}</td>
@@ -857,7 +857,6 @@
 
   .band-tag {
     display: inline-block;
-    color: #fff;
     font-size: 0.65rem;
     font-weight: bold;
     padding: 0.1rem 0.35rem;
