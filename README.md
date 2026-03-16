@@ -13,6 +13,8 @@ with a local web UI, optionally connected to your radio via
   **callsign** opens Logbook, **VFO frequency** opens the band plan tuner,
   **mode** cycles radio modes, **UTC clock** copies the timestamp to
   clipboard, and **+** adds a new QSO
+- Keyboard shortcuts: `/` search, `N` new QSO, `H` hunting, `L` logbook,
+  `T` tune radio, `M` cycle mode, `?` about, `Esc` close
 - Country and state autocomplete (all ISO countries and subdivisions)
 - Mode autocomplete from your radio's supported modes
 - Sortable log table with click-to-edit
