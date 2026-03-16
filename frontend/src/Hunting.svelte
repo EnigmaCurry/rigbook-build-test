@@ -10,6 +10,8 @@
   let pollInterval;
   let filterMode = "";
   let filterBand = "";
+  let seenSpotIds = new Set();
+  let newSpotIds = new Set();
 
   const BANDS = {
     "160m": [1800, 2000],
@@ -68,7 +70,21 @@
     try {
       const res = await fetch("/api/pota/spots");
       if (res.ok) {
-        spots = await res.json();
+        const fresh = await res.json();
+        // Track new spots (skip first load)
+        if (seenSpotIds.size > 0) {
+          const justNew = new Set();
+          for (const s of fresh) {
+            if (!seenSpotIds.has(s.spotId)) justNew.add(s.spotId);
+          }
+          newSpotIds = justNew;
+          // Clear flash after 5 seconds
+          if (justNew.size > 0) {
+            setTimeout(() => { newSpotIds = new Set(); }, 5000);
+          }
+        }
+        for (const s of fresh) seenSpotIds.add(s.spotId);
+        spots = fresh;
         error = "";
       } else {
         error = `Failed to fetch spots: ${res.status}`;
@@ -122,7 +138,7 @@
   {:else}
     <div class="grid">
       {#each filteredSpots as spot}
-        <div class="card" on:click={() => tuneToSpot(spot)} on:keydown={e => e.key === "Enter" && tuneToSpot(spot)} tabindex="0" role="button">
+        <div class="card" class:new-spot={newSpotIds.has(spot.spotId)} on:click={() => tuneToSpot(spot)} on:keydown={e => e.key === "Enter" && tuneToSpot(spot)} tabindex="0" role="button">
           <div class="card-header">
             <span class="activator">{spot.activator}</span>
             <span class="badge mode">{spot.mode || "?"}</span>
@@ -236,6 +252,16 @@
   .card:focus {
     outline: none;
     border-color: var(--accent);
+  }
+
+  .card.new-spot {
+    animation: flash 1s ease-in-out 3;
+    border-color: var(--accent);
+  }
+
+  @keyframes flash {
+    0%, 100% { background: var(--bg-card); }
+    50% { background: var(--row-editing); }
   }
 
   .card-header {
