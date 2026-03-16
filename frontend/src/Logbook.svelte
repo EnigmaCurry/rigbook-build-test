@@ -144,6 +144,7 @@
     if (prefill.pota_park) pota_park = prefill.pota_park;
     if (prefill.grid) grid = prefill.grid;
     if (prefill.country) country = prefill.country;
+    if (prefill.skcc) skcc = prefill.skcc;
     dispatch("prefillconsumed");
     // Lookup name from QRZ
     if (prefill.call) lookupCallsign(prefill.call.toUpperCase());

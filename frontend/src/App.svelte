@@ -129,6 +129,18 @@
       window.location.hash = `/log/${data.id}`;
     } else if (type === "pota") {
       tuneAndPrefill(data);
+    } else if (type === "skcc") {
+      prefill = {
+        call: data.call || "",
+        freq: "",
+        mode: "",
+        pota_park: "",
+        grid: "",
+        country: "",
+        state: "",
+        skcc: data.skcc || "",
+      };
+      navigate("add");
     } else if (type === "qrz") {
       prefill = {
         call: data.call || "",

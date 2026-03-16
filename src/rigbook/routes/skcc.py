@@ -86,6 +86,24 @@ async def skcc_lookup(callsign: str, session: AsyncSession = Depends(get_session
     return {"call": call_upper, "skcc": skcc_nr}
 
 
+@router.get("/search")
+async def skcc_search(q: str = "", session: AsyncSession = Depends(get_session)):
+    if len(q) < 2:
+        return []
+    if not await _has_valid_cache(session):
+        await _fetch_and_store(session)
+
+    pattern = f"%{q}%"
+    result = await session.execute(
+        select(Cache.key, Cache.value).where(
+            Cache.namespace == NAMESPACE,
+            Cache.expires_at > time.time(),
+            (Cache.value.ilike(pattern) | Cache.key.ilike(pattern)),
+        ).limit(5)
+    )
+    return [{"call": row.key, "skcc": row.value} for row in result.all()]
+
+
 @router.delete("/cache")
 async def clear_skcc_cache(session: AsyncSession = Depends(get_session)):
     await session.execute(delete(Cache).where(Cache.namespace == NAMESPACE))

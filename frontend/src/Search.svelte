@@ -7,6 +7,7 @@
   let open = false;
   let logbookResults = [];
   let potaResults = [];
+  let skccResults = [];
   let qrzResult = null;
   let qrzLoading = false;
   let potaSpots = [];
@@ -16,6 +17,7 @@
   $: allResults = [
     ...logbookResults.map(r => ({ type: "logbook", data: r })),
     ...potaResults.map(r => ({ type: "pota", data: r })),
+    ...skccResults.map(r => ({ type: "skcc", data: r })),
     ...(qrzResult ? [{ type: "qrz", data: qrzResult }] : []),
   ];
 
@@ -48,6 +50,15 @@
     } catch { logbookResults = []; }
   }
 
+  async function searchSkcc(q) {
+    if (!q || q.length < 2) { skccResults = []; return; }
+    try {
+      const res = await fetch(`/api/skcc/search?q=${encodeURIComponent(q)}`);
+      if (res.ok) skccResults = await res.json();
+      else skccResults = [];
+    } catch { skccResults = []; }
+  }
+
   async function searchQrz() {
     if (!query || query.length < 3) return;
     qrzLoading = true;
@@ -67,7 +78,7 @@
     qrzResult = null;
     clearTimeout(debounceTimer);
     potaResults = filterPota(query);
-    debounceTimer = setTimeout(() => searchLogbook(query), 300);
+    debounceTimer = setTimeout(() => { searchLogbook(query); searchSkcc(query); }, 300);
   }
 
   function onKeydown(e) {
@@ -99,6 +110,7 @@
     query = "";
     logbookResults = [];
     potaResults = [];
+    skccResults = [];
     qrzResult = null;
     dispatch("action", item);
   }
@@ -175,9 +187,24 @@
         {/each}
       {/if}
 
+      {#if skccResults.length > 0}
+        <div class="group-header">SKCC</div>
+        {#each skccResults as s, i}
+          {@const idx = logbookResults.length + potaResults.length + i}
+          <div
+            class="result-item"
+            class:highlighted={highlightIndex === idx}
+            on:mousedown|preventDefault={() => pick({ type: "skcc", data: s })}
+          >
+            <span class="result-call">{s.call}</span>
+            <span class="result-detail">SKCC #{s.skcc}</span>
+          </div>
+        {/each}
+      {/if}
+
       {#if qrzResult}
         <div class="group-header">QRZ</div>
-        {@const idx = logbookResults.length + potaResults.length}
+        {@const idx = logbookResults.length + potaResults.length + skccResults.length}
         <div
           class="result-item"
           class:highlighted={highlightIndex === idx}
