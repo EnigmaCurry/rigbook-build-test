@@ -13,6 +13,7 @@ from rigbook.db import (
     PotaPark,
     PotaProgram,
     Setting,
+    async_session,
     get_session,
 )
 
@@ -208,7 +209,7 @@ async def fetch_parks_for_selected(session: AsyncSession = Depends(get_session))
                     res.raise_for_status()
                     parks_data = res.json()
 
-                async with get_session_context() as s:
+                async with async_session() as s:
                     await s.execute(
                         delete(PotaPark).where(
                             PotaPark.location_desc == loc.descriptor
@@ -241,13 +242,6 @@ async def fetch_parks_for_selected(session: AsyncSession = Depends(get_session))
         yield f"data: {json.dumps({'type': 'done', 'total': total})}\n\n"
 
     return StreamingResponse(stream(), media_type="text/event-stream")
-
-
-async def get_session_context():
-    """Create standalone async session for use inside streaming generators."""
-    from rigbook.db import async_session
-
-    return async_session()
 
 
 @router.get("/locations/{descriptor}/parks")

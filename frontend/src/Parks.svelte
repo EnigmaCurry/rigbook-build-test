@@ -6,6 +6,7 @@
   let saving = false;
   let fetching = false;
   let fetchProgress = null; // { done, total, location }
+  let fetchResult = null; // shown after fetch completes
   let filter = "";
   let dirty = false;
 
@@ -52,6 +53,10 @@
     if (dirty) await saveSelections();
     fetching = true;
     fetchProgress = null;
+    fetchResult = null;
+    let totalParks = 0;
+    let totalLocations = 0;
+    let errors = 0;
     try {
       const res = await fetch("/api/pota/fetch-parks", { method: "POST" });
       const contentType = res.headers.get("content-type") || "";
@@ -70,12 +75,23 @@
             const m = line.match(/^data: (.+)$/);
             if (!m) continue;
             const msg = JSON.parse(m[1]);
-            if (msg.type === "progress" || msg.type === "error") {
+            if (msg.type === "progress") {
               fetchProgress = msg;
+              totalParks += msg.parks || 0;
+              totalLocations++;
+            } else if (msg.type === "error") {
+              fetchProgress = msg;
+              errors++;
             } else if (msg.type === "start") {
               fetchProgress = { done: 0, total: msg.total, location: "" };
             }
           }
+        }
+        fetchResult = { locations: totalLocations, parks: totalParks, errors };
+      } else {
+        const data = await res.json();
+        if (data.status === "up_to_date") {
+          fetchResult = { upToDate: true, locations: data.locations };
         }
       }
     } catch {}
@@ -110,6 +126,16 @@
       {/if}
     </button>
   </div>
+
+  {#if fetchResult}
+    <div class="fetch-result">
+      {#if fetchResult.upToDate}
+        All {fetchResult.locations} locations already up to date.
+      {:else}
+        Fetched {fetchResult.parks} parks across {fetchResult.locations} locations.{#if fetchResult.errors} ({fetchResult.errors} errors){/if}
+      {/if}
+    </div>
+  {/if}
 
   {#if fetching && fetchProgress}
     <div class="progress">
@@ -243,6 +269,12 @@
   .progress-text {
     font-size: 0.75rem;
     color: var(--text-dim);
+  }
+
+  .fetch-result {
+    font-size: 0.85rem;
+    color: var(--accent);
+    margin-bottom: 0.75rem;
   }
 
   .loading {
