@@ -360,9 +360,6 @@
   </header>
 
   {#if page === "log"}
-    <div class="log-header">
-      <button class="btn-add" on:click={() => navigate("add")}>Add QSO</button>
-    </div>
     <Logbook showForm={false} {vfoFreq} {vfoMode} {freqUnit} on:editchange={e => { editId = e.detail; navigate("add"); window.location.hash = `/log/${e.detail}`; }} on:navigate={e => navigate(e.detail)} />
   {:else if page === "add"}
     <Logbook showForm={true} {editId} {prefill} {vfoFreq} {vfoMode} {freqUnit} on:editchange={e => { editId = e.detail; window.location.hash = e.detail ? `/log/${e.detail}` : "/add"; }} on:navigate={e => navigate(e.detail)} on:prefillconsumed={() => prefill = null} />
@@ -575,25 +572,7 @@
     color: var(--text);
   }
 
-  .log-header {
-    margin-bottom: 1rem;
-  }
 
-  .btn-add {
-    background: var(--accent);
-    color: var(--bg);
-    border: none;
-    padding: 0.6rem 2rem;
-    font-family: inherit;
-    font-size: 1rem;
-    font-weight: bold;
-    border-radius: 4px;
-    cursor: pointer;
-  }
-
-  .btn-add:hover {
-    background: var(--accent-hover);
-  }
 
   .hamburger-wrap {
     position: relative;
