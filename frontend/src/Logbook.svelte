@@ -28,6 +28,16 @@
   let skcc = "";
   function utcNowDate() { return new Date().toISOString().slice(0, 10); }
   function utcNowTime() { return new Date().toISOString().slice(11, 19); }
+  function normalizeTime() {
+    const digits = timePart.replace(/\D/g, "");
+    if (digits.length >= 4 && !timePart.includes(":")) {
+      const h = digits.slice(0, 2);
+      const m = digits.slice(2, 4);
+      const s = digits.slice(4, 6) || "00";
+      timePart = `${h}:${m}:${s}`;
+    }
+  }
+
   function fillNow() {
     if (datePart && timePart && !confirm("Update timestamp to now?")) return;
     datePart = utcNowDate();
@@ -774,7 +784,7 @@
     <div class="field">
       <label for="time">Time (UTC)</label>
       <div class="time-input-row">
-        <input id="time" type="text" bind:value={timePart} placeholder="HH:MM:SS" maxlength="8" />
+        <input id="time" type="text" bind:value={timePart} on:blur={normalizeTime} placeholder="HH:MM:SS" maxlength="8" />
         <button type="button" class="now-btn" on:click={fillNow} title="Set to now">&#128339;</button>
       </div>
     </div>
