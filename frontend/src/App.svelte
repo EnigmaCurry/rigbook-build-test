@@ -79,11 +79,24 @@
     }
   }
 
+  let freqUnit = "KHz";
+
+  async function fetchFreqUnit() {
+    try {
+      const res = await fetch("/api/settings/freq_unit");
+      if (res.ok) {
+        const data = await res.json();
+        if (data.value) freqUnit = data.value;
+      }
+    } catch {}
+  }
+
   function formatFreq(f) {
     if (!f) return "";
-    const n = parseFloat(f) / 1000;
-    if (isNaN(n)) return f;
-    return parseFloat(n.toFixed(1)).toString();
+    const khz = parseFloat(f) / 1000;
+    if (isNaN(khz)) return f;
+    if (freqUnit === "MHz") return parseFloat((khz / 1000).toFixed(4)).toString();
+    return parseFloat(khz.toFixed(1)).toString();
   }
 
   function startVfoEdit() {
@@ -154,6 +167,7 @@
     const paths = { hunting: "/", log: "/logbook", add: "/add", grid: "/grid", export: "/export", settings: "/settings", links: "/links", about: "/about" };
     window.location.hash = paths[p] || "/";
     fetchCallsign();
+    fetchFreqUnit();
   }
 
   async function tuneAndPrefill(spot) {
@@ -220,6 +234,7 @@
     page = parsed.page;
     editId = parsed.editId;
     fetchCallsign();
+    fetchFreqUnit();
   }
 
   // Apply theme from localStorage on load
@@ -265,6 +280,7 @@
     window.addEventListener("storage", applyTheme);
     window.addEventListener("keydown", onGlobalKeydown);
     fetchCallsign();
+    fetchFreqUnit();
     fetchRadioModes();
     pollFlrig();
     flrigInterval = setInterval(pollFlrig, 2000);
@@ -307,7 +323,7 @@
       {:else if vfoConnected}
         <!-- svelte-ignore a11y-click-events-have-key-events -->
         <!-- svelte-ignore a11y-no-static-element-interactions -->
-        <span class="vfo" on:click={startVfoEdit} title="Click to change VFO"><span class="vfo-icon">📻 </span>{formatFreq(vfoFreq) + " "}<span class="vfo-khz">KHz</span>{#if freqToBand(parseFloat(vfoFreq) / 1000)}{" "}<span class="band-tag" style="background: {bandColor(freqToBand(parseFloat(vfoFreq) / 1000))}; color: {bandTextColor(freqToBand(parseFloat(vfoFreq) / 1000))}">{freqToBand(parseFloat(vfoFreq) / 1000)}</span>{/if}</span>
+        <span class="vfo" on:click={startVfoEdit} title="Click to change VFO"><span class="vfo-icon">📻 </span>{formatFreq(vfoFreq) + " "}<span class="vfo-khz">{freqUnit}</span>{#if freqToBand(parseFloat(vfoFreq) / 1000)}{" "}<span class="band-tag" style="background: {bandColor(freqToBand(parseFloat(vfoFreq) / 1000))}; color: {bandTextColor(freqToBand(parseFloat(vfoFreq) / 1000))}">{freqToBand(parseFloat(vfoFreq) / 1000)}</span>{/if}</span>
         {#if vfoMode}
           <!-- svelte-ignore a11y-click-events-have-key-events -->
           <!-- svelte-ignore a11y-no-static-element-interactions -->
@@ -317,7 +333,7 @@
         <span class="vfo disconnected" title="Radio not connected">❌ No Radio</span>
       {/if}
     </div>
-    <Search bind:this={searchComponent} on:action={handleSearchAction} />
+    <Search bind:this={searchComponent} {freqUnit} on:action={handleSearchAction} />
     <div class="hamburger-wrap">
       <button class="add-btn" on:click={() => navigate("add")} title="Add QSO">+</button>
       <button class="hamburger" on:click={() => menuOpen = !menuOpen} aria-label="Menu">
@@ -347,11 +363,11 @@
     <div class="log-header">
       <button class="btn-add" on:click={() => navigate("add")}>Add QSO</button>
     </div>
-    <Logbook showForm={false} {vfoFreq} {vfoMode} on:editchange={e => { editId = e.detail; navigate("add"); window.location.hash = `/log/${e.detail}`; }} on:navigate={e => navigate(e.detail)} />
+    <Logbook showForm={false} {vfoFreq} {vfoMode} {freqUnit} on:editchange={e => { editId = e.detail; navigate("add"); window.location.hash = `/log/${e.detail}`; }} on:navigate={e => navigate(e.detail)} />
   {:else if page === "add"}
-    <Logbook showForm={true} {editId} {prefill} {vfoFreq} {vfoMode} on:editchange={e => { editId = e.detail; window.location.hash = e.detail ? `/log/${e.detail}` : "/add"; }} on:navigate={e => navigate(e.detail)} on:prefillconsumed={() => prefill = null} />
+    <Logbook showForm={true} {editId} {prefill} {vfoFreq} {vfoMode} {freqUnit} on:editchange={e => { editId = e.detail; window.location.hash = e.detail ? `/log/${e.detail}` : "/add"; }} on:navigate={e => navigate(e.detail)} on:prefillconsumed={() => prefill = null} />
   {:else if page === "hunting"}
-    <Hunting on:tune={e => tuneAndPrefill(e.detail)} />
+    <Hunting {freqUnit} on:tune={e => tuneAndPrefill(e.detail)} />
   {:else if page === "grid"}
     <GridMap bind:value={gridMapValue} on:select={e => { gridMapValue = e.detail; }} />
   {:else if page === "export"}

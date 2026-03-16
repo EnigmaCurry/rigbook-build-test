@@ -8,6 +8,7 @@
   export let prefill = null;
   export let vfoFreq = "";
   export let vfoMode = "";
+  export let freqUnit = "KHz";
 
   const dispatch = createEventDispatcher();
 
@@ -445,6 +446,7 @@
     if (!f) return "--";
     const n = parseFloat(f);
     if (isNaN(n)) return f;
+    if (freqUnit === "MHz") return parseFloat((n / 1000).toFixed(4)).toString().padStart(9, "\u2007") + " MHz";
     return n.toFixed(1).padStart(9, "\u2007") + " KHz";
   }
 
@@ -478,7 +480,7 @@
       />
     </div>
     <div class="field">
-      <label for="freq">Freq (KHz) *</label>
+      <label for="freq">Freq ({freqUnit}) *</label>
       <input id="freq" type="text" bind:value={freq} required />
     </div>
     <div class="field">
