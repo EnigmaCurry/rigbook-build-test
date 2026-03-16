@@ -62,6 +62,8 @@
   let vfoEditFreq = "";
   let vfoEditMode = "";
   let flrigInterval;
+  let utcNow = new Date().toISOString().slice(0, 19).replace("T", " ") + "z";
+  let clockInterval;
 
   async function pollFlrig() {
     try {
@@ -284,11 +286,13 @@
     fetchRadioModes();
     pollFlrig();
     flrigInterval = setInterval(pollFlrig, 2000);
+    clockInterval = setInterval(() => { utcNow = new Date().toISOString().slice(0, 19).replace("T", " ") + "z"; }, 1000);
     window.addEventListener("hashchange", onHashChange);
   });
 
   onDestroy(() => {
     clearInterval(flrigInterval);
+    clearInterval(clockInterval);
     window.removeEventListener("hashchange", onHashChange);
     window.removeEventListener("storage", applyTheme);
     window.removeEventListener("keydown", onGlobalKeydown);
@@ -334,6 +338,7 @@
       {/if}
     </div>
     <Search bind:this={searchComponent} {freqUnit} on:action={handleSearchAction} />
+    <span class="utc-clock">{utcNow}</span>
     <div class="hamburger-wrap">
       <button class="add-btn" on:click={() => navigate("add")} title="Add QSO">+</button>
       <button class="hamburger" on:click={() => menuOpen = !menuOpen} aria-label="Menu">
@@ -580,6 +585,13 @@
     display: flex;
     align-items: center;
     gap: 0.4rem;
+  }
+
+  .utc-clock {
+    font-size: 0.75rem;
+    color: var(--text-dim);
+    font-family: monospace;
+    white-space: nowrap;
   }
 
   .add-btn {
