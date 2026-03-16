@@ -66,16 +66,22 @@
     return b ? b.name : "";
   }
 
+  const SSB_BW = 3; // KHz typical SSB bandwidth
+  const EDGE_MARGIN = 1;
+
   function freqToBandForMode(f, mode) {
     const n = parseFloat(f);
     if (isNaN(n)) return "";
     const b = BANDS.find(b => n >= b.lo && n <= b.hi);
     if (!b) return "";
-    const segLabel = VFO_MODE_MAP[mode?.toUpperCase()] || "";
+    const upper = mode?.toUpperCase() || "";
+    const segLabel = VFO_MODE_MAP[upper] || "";
     if (!segLabel) return b.name;
     const seg = b.segments.find(s => s.label === segLabel);
     if (!seg) return b.name;
-    return (n >= seg.lo && n <= seg.hi) ? b.name : "";
+    const loMargin = upper === "LSB" ? SSB_BW : EDGE_MARGIN;
+    const hiMargin = upper === "USB" ? SSB_BW : EDGE_MARGIN;
+    return (n >= seg.lo + loMargin && n <= seg.hi - hiMargin) ? b.name : "";
   }
 
   function parseHash() {
