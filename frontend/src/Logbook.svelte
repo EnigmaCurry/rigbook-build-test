@@ -259,6 +259,8 @@
   let potaHighlight = -1;
   let potaTimer = null;
   let potaParkName = "";
+  let parkOverlay = null;
+  let parkOverlayLoading = false;
 
   async function resolvePotaParkName() {
     const ref = pota_park.trim().toUpperCase();
@@ -337,6 +339,21 @@
     } else if (e.key === "Escape") {
       potaOpen = false;
     }
+  }
+
+  async function openParkOverlay() {
+    const ref = pota_park.trim().toUpperCase();
+    if (!ref) return;
+    parkOverlayLoading = true;
+    parkOverlay = null;
+    try {
+      const res = await fetch(`/api/pota/park/${encodeURIComponent(ref)}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (!data.error) parkOverlay = data;
+      }
+    } catch {}
+    parkOverlayLoading = false;
   }
 
   function editContact(c) {
@@ -690,7 +707,9 @@
 
   <div class="form-row">
     <div class="field">
-      <label for="pota_park">POTA Park{#if potaParkName} — <a href="#/parks/park/{encodeURIComponent(pota_park.trim().toUpperCase())}" class="pota-park-name">{potaParkName}</a>{/if}</label>
+      <!-- svelte-ignore a11y-click-events-have-key-events -->
+      <!-- svelte-ignore a11y-no-static-element-interactions -->
+      <label for="pota_park">POTA Park{#if potaParkName} — <span class="pota-park-name" on:click={openParkOverlay}>{potaParkName}</span>{/if}</label>
       <div class="pota-ac">
         <input id="pota_park" type="text" bind:value={pota_park} on:input={onPotaInput} on:focus={onPotaFocus} on:blur={onPotaBlur} on:keydown={onPotaKeydown} style="text-transform: uppercase" autocomplete="off" />
         {#if potaOpen && potaResults.length > 0}
@@ -797,6 +816,48 @@
     </div>
   {/if}
 </section>
+
+{#if parkOverlay || parkOverlayLoading}
+  <!-- svelte-ignore a11y-click-events-have-key-events -->
+  <!-- svelte-ignore a11y-no-static-element-interactions -->
+  <div class="park-overlay-backdrop" on:click={() => { parkOverlay = null; parkOverlayLoading = false; }}>
+    <!-- svelte-ignore a11y-click-events-have-key-events -->
+    <!-- svelte-ignore a11y-no-static-element-interactions -->
+    <div class="park-overlay" on:click|stopPropagation>
+      <!-- svelte-ignore a11y-click-events-have-key-events -->
+      <!-- svelte-ignore a11y-no-static-element-interactions -->
+      <span class="park-overlay-close" on:click={() => { parkOverlay = null; parkOverlayLoading = false; }}>&times;</span>
+      {#if parkOverlayLoading}
+        <p class="park-overlay-loading">Loading park...</p>
+      {:else if parkOverlay}
+        <h3 class="park-overlay-ref">{parkOverlay.reference}</h3>
+        <p class="park-overlay-name">{parkOverlay.name}</p>
+        <div class="park-overlay-details">
+          <div class="park-overlay-row"><span class="park-overlay-label">Location</span> <span>{parkOverlay.location_name || ""} ({parkOverlay.location_desc})</span></div>
+          <div class="park-overlay-row"><span class="park-overlay-label">Country</span> <span>{parkOverlay.program_name || ""}</span></div>
+          {#if parkOverlay.grid}
+            <div class="park-overlay-row"><span class="park-overlay-label">Grid</span> <span>{parkOverlay.grid}</span></div>
+          {/if}
+          {#if parkOverlay.latitude != null && parkOverlay.longitude != null}
+            <div class="park-overlay-row"><span class="park-overlay-label">Coordinates</span> <span>{parkOverlay.latitude}, {parkOverlay.longitude}</span></div>
+          {/if}
+          {#if parkOverlay.activations != null}
+            <div class="park-overlay-row"><span class="park-overlay-label">Activations</span> <span>{parkOverlay.activations}</span></div>
+          {/if}
+          {#if parkOverlay.attempts != null}
+            <div class="park-overlay-row"><span class="park-overlay-label">Attempts</span> <span>{parkOverlay.attempts}</span></div>
+          {/if}
+          {#if parkOverlay.qsos != null}
+            <div class="park-overlay-row"><span class="park-overlay-label">QSOs</span> <span>{parkOverlay.qsos}</span></div>
+          {/if}
+        </div>
+        <div class="park-overlay-links">
+          <a href="https://pota.app/#/park/{parkOverlay.reference}" target="_blank" rel="noopener">View on POTA</a>
+        </div>
+      {/if}
+    </div>
+  </div>
+{/if}
 
 <style>
   form {
@@ -1102,10 +1163,93 @@
   .pota-park-name {
     color: var(--accent-vfo);
     font-weight: normal;
-    text-decoration: none;
+    cursor: pointer;
   }
 
   .pota-park-name:hover {
+    text-decoration: underline;
+  }
+
+  .park-overlay-backdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.6);
+    z-index: 200;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .park-overlay {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 1.5rem;
+    max-width: 500px;
+    width: 90%;
+    position: relative;
+  }
+
+  .park-overlay-close {
+    position: absolute;
+    top: 0.5rem;
+    right: 0.75rem;
+    font-size: 1.4rem;
+    color: var(--text-dim);
+    cursor: pointer;
+    line-height: 1;
+  }
+
+  .park-overlay-close:hover {
+    color: var(--text);
+  }
+
+  .park-overlay-loading {
+    color: var(--text-muted);
+    font-style: italic;
+  }
+
+  .park-overlay-ref {
+    color: var(--accent-vfo);
+    font-size: 1.3rem;
+    margin: 0 0 0.25rem 0;
+  }
+
+  .park-overlay-name {
+    font-size: 1.1rem;
+    color: var(--text);
+    margin: 0 0 1rem 0;
+  }
+
+  .park-overlay-details {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    margin-bottom: 1rem;
+  }
+
+  .park-overlay-row {
+    display: flex;
+    gap: 0.75rem;
+    font-size: 0.9rem;
+  }
+
+  .park-overlay-label {
+    color: var(--text-dim);
+    min-width: 10ch;
+    flex-shrink: 0;
+  }
+
+  .park-overlay-links a {
+    color: var(--accent);
+    text-decoration: none;
+    font-size: 0.85rem;
+  }
+
+  .park-overlay-links a:hover {
     text-decoration: underline;
   }
 
