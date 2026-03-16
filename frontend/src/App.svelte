@@ -10,12 +10,12 @@
     const hash = window.location.hash.slice(1) || "/";
     if (hash === "/about") return { page: "about", editId: null };
     if (hash === "/settings") return { page: "settings", editId: null };
-    if (hash === "/hunting") return { page: "hunting", editId: null };
+    if (hash === "/logbook") return { page: "log", editId: null };
     if (hash === "/export") return { page: "export", editId: null };
     if (hash === "/add") return { page: "add", editId: null };
     const match = hash.match(/^\/log\/(\d+)$/);
     if (match) return { page: "add", editId: parseInt(match[1], 10) };
-    return { page: "log", editId: null };
+    return { page: "hunting", editId: null };
   }
 
   let { page, editId } = parseHash();
@@ -90,7 +90,7 @@
     page = p;
     editId = null;
     menuOpen = false;
-    const paths = { log: "/", add: "/add", "hunting": "/hunting", export: "/export", settings: "/settings", about: "/about" };
+    const paths = { hunting: "/", log: "/logbook", add: "/add", export: "/export", settings: "/settings", about: "/about" };
     window.location.hash = paths[p] || "/";
     fetchCallsign();
   }
