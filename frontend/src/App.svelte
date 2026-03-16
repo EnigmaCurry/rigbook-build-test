@@ -118,8 +118,8 @@
     if (isNaN(hz)) return [];
     const khz = hz / 1000;
     const str = freqUnit === "MHz"
-      ? parseFloat((khz / 1000).toFixed(4)).toString()
-      : parseFloat(khz.toFixed(1)).toString();
+      ? (khz / 1000).toFixed(6)
+      : khz.toFixed(3);
 
     // Find the decimal point position to calculate place values
     const dotIdx = str.indexOf(".");
