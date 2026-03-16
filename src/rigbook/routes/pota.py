@@ -40,21 +40,21 @@ async def _fetch_and_cache_programs(session: AsyncSession):
         session.add(
             PotaProgram(
                 program_id=p.get("programId", 0),
-                prefix=p.get("prefix", ""),
-                name=p.get("name", ""),
+                prefix=p.get("programPrefix", ""),
+                name=p.get("programName", ""),
                 fetched_at=now,
             )
         )
 
     for loc in loc_res:
-        descriptor = loc.get("descriptor") or loc.get("locationDesc", "")
+        descriptor = loc.get("locationDesc", "")
         prefix = descriptor.split("-")[0] if "-" in descriptor else descriptor
         session.add(
             PotaLocation(
                 location_id=loc.get("locationId", 0),
                 program_prefix=prefix,
                 descriptor=descriptor,
-                name=loc.get("name", ""),
+                name=loc.get("locationName", ""),
                 latitude=loc.get("latitude"),
                 longitude=loc.get("longitude"),
                 fetched_at=now,
@@ -216,7 +216,7 @@ async def _fetch_and_cache_parks(session: AsyncSession, descriptor: str):
                 location_desc=descriptor,
                 latitude=p.get("latitude"),
                 longitude=p.get("longitude"),
-                grid=p.get("grid4") or p.get("grid6") or p.get("grid"),
+                grid=p.get("grid"),
                 attempts=p.get("attempts"),
                 activations=p.get("activations"),
                 qsos=p.get("qsos"),
