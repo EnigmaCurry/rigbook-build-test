@@ -7,24 +7,7 @@
   let level = "field"; // "field" or "square"
   let selectedField = "";
 
-  // Maidenhead: 18 longitude fields (A-R) x 18 latitude fields (A-R)
   const LETTERS = "ABCDEFGHIJKLMNOPQR".split("");
-
-  // Convert field to lon/lat of its SW corner
-  function fieldToLonLat(lonIdx, latIdx) {
-    return {
-      lon: lonIdx * 20 - 180,
-      lat: latIdx * 10 - 90,
-    };
-  }
-
-  function squareToLonLat(fieldLonIdx, fieldLatIdx, sqLon, sqLat) {
-    const base = fieldToLonLat(fieldLonIdx, fieldLatIdx);
-    return {
-      lon: base.lon + sqLon * 2,
-      lat: base.lat + sqLat * 1,
-    };
-  }
 
   // Parse a grid value to determine what's selected
   $: parsedField = value.length >= 2 ? value.substring(0, 2).toUpperCase() : "";
@@ -40,12 +23,6 @@
     level = "square";
   }
 
-  // SVG coordinates for the selected field (used for zoomed view)
-  $: fieldX = (fieldLonIdx / 18) * 100;
-  $: fieldY = ((17 - fieldLatIdx) / 18) * 100;
-  $: fieldW = 100 / 18;
-  $: fieldH = 100 / 18;
-
   function selectSquare(sqLon, sqLat) {
     const grid = selectedField + sqLon + sqLat;
     value = grid;
@@ -57,14 +34,57 @@
     level = "field";
   }
 
-  // Determine color for a field cell
-  function fieldClass(lonIdx, latIdx) {
-    const code = LETTERS[lonIdx] + LETTERS[latIdx];
-    if (code === parsedField) return "selected";
-    // Highlight land-heavy areas slightly
-    return "";
+  // --- OSM tile math for zoomed view ---
+  const ZOOM = 5;
+  const N = Math.pow(2, ZOOM);
+
+  function lon2tile(lon) { return ((lon + 180) / 360) * N; }
+  function lat2tile(lat) {
+    const rad = (lat * Math.PI) / 180;
+    return ((1 - Math.log(Math.tan(rad) + 1 / Math.cos(rad)) / Math.PI) / 2) * N;
   }
 
+  // Field bounding box in lon/lat
+  $: fieldLon = fieldLonIdx * 20 - 180;
+  $: fieldLat = fieldLatIdx * 10 - 90;
+
+  // Tile coordinates covering the field
+  $: tileX0 = Math.floor(lon2tile(fieldLon));
+  $: tileX1 = Math.ceil(lon2tile(fieldLon + 20));
+  $: tileY0 = Math.floor(lat2tile(fieldLat + 10));
+  $: tileY1 = Math.ceil(lat2tile(fieldLat));
+
+  // Pixel positions of the field within the tile grid
+  $: pxFieldLeft = (lon2tile(fieldLon) - tileX0) * 256;
+  $: pxFieldRight = (lon2tile(fieldLon + 20) - tileX0) * 256;
+  $: pxFieldTop = (lat2tile(fieldLat + 10) - tileY0) * 256;
+  $: pxFieldBottom = (lat2tile(fieldLat) - tileY0) * 256;
+  $: pxFieldW = pxFieldRight - pxFieldLeft;
+  $: pxFieldH = pxFieldBottom - pxFieldTop;
+
+  // Build tile list
+  $: tiles = (() => {
+    const list = [];
+    for (let ty = tileY0; ty < tileY1; ty++) {
+      for (let tx = tileX0; tx < tileX1; tx++) {
+        list.push({
+          x: tx,
+          y: ty,
+          left: (tx - tileX0) * 256 - pxFieldLeft,
+          top: (ty - tileY0) * 256 - pxFieldTop,
+        });
+      }
+    }
+    return list;
+  })();
+
+  // Grid square pixel positions within the field area
+  function sqStyle(lonIdx, latIdx) {
+    // latIdx 0 = top row = highest latitude
+    const left = (lonIdx / 10) * 100;
+    const top = (latIdx / 10) * 100;
+    return `left:${left}%;top:${top}%;width:10%;height:10%`;
+  }
 </script>
 
 <div class="gridmap">
@@ -76,14 +96,12 @@
       {/if}
     </div>
     <svg viewBox="0 0 100 100" class="map-svg">
-      <!-- World map background from Natural Earth / Wikimedia -->
       <image
         href="/world-map.jpg"
         x="0" y="0" width="100" height="100"
         preserveAspectRatio="none"
         opacity="0.4"
       />
-      <!-- Grid fields -->
       {#each LETTERS as lonL, lonIdx}
         {#each LETTERS as latL, latIdx}
           {@const code = LETTERS[lonIdx] + LETTERS[latIdx]}
@@ -114,37 +132,39 @@
         <span class="current">Current: {value}</span>
       {/if}
     </div>
-    <svg viewBox="{fieldX} {fieldY} {fieldW} {fieldH}" class="map-svg zoomed">
-      <!-- Same world map, zoomed to field -->
-      <image
-        href="/world-map.jpg"
-        x="0" y="0" width="100" height="100"
-        preserveAspectRatio="none"
-        opacity="0.4"
-      />
-      <!-- 10x10 square grid -->
-      {#each Array(10) as _, lonIdx}
-        {#each Array(10) as _, latIdx}
-          {@const code = selectedField + lonIdx + (9 - latIdx)}
-          {@const sx = fieldX + (lonIdx / 10) * fieldW}
-          {@const sy = fieldY + (latIdx / 10) * fieldH}
-          {@const sw = fieldW / 10}
-          {@const sh = fieldH / 10}
-          <rect
-            x={sx} y={sy} width={sw} height={sh}
-            class="cell"
-            class:selected={code === parsedSquare}
-            on:click={() => selectSquare(lonIdx, 9 - latIdx)}
+    <div class="zoomed-container" style="aspect-ratio: {pxFieldW}/{pxFieldH}">
+      <!-- OSM tiles -->
+      <div class="tiles-layer">
+        {#each tiles as tile}
+          <img
+            src="/api/tiles/{ZOOM}/{tile.x}/{tile.y}.png"
+            alt=""
+            class="tile"
+            style="left:{tile.left}px;top:{tile.top}px"
           />
-          <text
-            x={sx + sw / 2}
-            y={sy + sh / 2}
-            class="sq-label"
-            class:selected-text={code === parsedSquare}
-          >{lonIdx}{9 - latIdx}</text>
         {/each}
-      {/each}
-    </svg>
+      </div>
+      <!-- Grid overlay -->
+      <div class="grid-overlay">
+        {#each Array(10) as _, lonIdx}
+          {#each Array(10) as _, latIdx}
+            {@const code = selectedField + lonIdx + (9 - latIdx)}
+            <!-- svelte-ignore a11y-click-events-have-key-events -->
+            <div
+              class="sq-cell"
+              class:selected={code === parsedSquare}
+              style={sqStyle(lonIdx, latIdx)}
+              on:click={() => selectSquare(lonIdx, 9 - latIdx)}
+              role="button"
+              tabindex="0"
+            >
+              <span class="sq-label">{lonIdx}{9 - latIdx}</span>
+            </div>
+          {/each}
+        {/each}
+      </div>
+      <div class="osm-attr">© OpenStreetMap</div>
+    </div>
   {/if}
 </div>
 
@@ -227,18 +247,78 @@
     font-weight: bold;
   }
 
+  /* Zoomed view */
+  .zoomed-container {
+    position: relative;
+    width: 100%;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: var(--bg-deep);
+  }
+
+  .tiles-layer {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    opacity: 0.6;
+  }
+
+  .tile {
+    position: absolute;
+    width: 256px;
+    height: 256px;
+    image-rendering: auto;
+  }
+
+  .grid-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+  }
+
+  .sq-cell {
+    position: absolute;
+    border: 1px solid rgba(128, 128, 128, 0.3);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+  }
+
+  .sq-cell:hover {
+    background: rgba(0, 255, 136, 0.3);
+    border-color: var(--accent);
+  }
+
+  .sq-cell.selected {
+    background: rgba(0, 255, 136, 0.35);
+    border-color: var(--accent);
+  }
+
   .sq-label {
-    font-size: 0.25px;
-    fill: var(--text-muted);
-    text-anchor: middle;
-    dominant-baseline: central;
-    pointer-events: none;
-    font-family: inherit;
-  }
-
-  .sq-label.selected-text {
-    fill: var(--accent);
+    color: var(--text);
+    font-size: 0.7rem;
     font-weight: bold;
+    text-shadow: 0 0 3px var(--bg), 0 0 6px var(--bg);
+    pointer-events: none;
   }
 
+  .sq-cell.selected .sq-label {
+    color: var(--accent);
+  }
+
+  .osm-attr {
+    position: absolute;
+    bottom: 2px;
+    right: 4px;
+    font-size: 0.55rem;
+    color: var(--text-dim);
+    opacity: 0.7;
+  }
 </style>
