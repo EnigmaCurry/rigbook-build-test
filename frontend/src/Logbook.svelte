@@ -73,6 +73,9 @@
 
   $: prevContactCount = call.trim() ? contacts.filter(c => c.call?.toUpperCase() === call.trim().toUpperCase()).length : 0;
 
+  let logFilter = "all";
+  $: if (prevContactCount === 0) logFilter = "all";
+
   $: sortedContacts = [...contacts].sort((a, b) => {
     let va = a[sortCol] ?? "";
     let vb = b[sortCol] ?? "";
@@ -87,6 +90,10 @@
     if (va > vb) return sortAsc ? 1 : -1;
     return 0;
   });
+
+  $: displayedContacts = logFilter === "all" || !call.trim()
+    ? sortedContacts
+    : sortedContacts.filter(c => c.call?.toUpperCase() === call.trim().toUpperCase());
 
   async function fetchContacts() {
     try {
@@ -590,7 +597,13 @@
 {/if}
 
 <section class="log">
-  <h2>Log ({contacts.length})</h2>
+  <div class="log-title-row">
+    <h2>Log ({displayedContacts.length})</h2>
+    {#if !editingId && prevContactCount > 0 && showForm}
+      <label class="log-radio"><input type="radio" bind:group={logFilter} value="all" /> All</label>
+      <label class="log-radio"><input type="radio" bind:group={logFilter} value="call" /> {call.trim().toUpperCase()}</label>
+    {/if}
+  </div>
   {#if contacts.length === 0}
     <p class="empty">No contacts logged yet.</p>
   {:else}
@@ -606,7 +619,7 @@
           </tr>
         </thead>
         <tbody>
-          {#each sortedContacts as c}
+          {#each displayedContacts as c}
             <tr class="clickable" class:editing={editingId === c.id} on:click={() => editContact(c)}>
               <td>{formatTimestamp(c.timestamp)}</td>
               <td class="call">{c.call}</td>
@@ -724,6 +737,26 @@
     margin: 0 0 0.5rem 0;
     font-size: 0.95rem;
     color: var(--accent);
+  }
+
+  .log-title-row {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 0.5rem;
+  }
+
+  .log-title-row h2 {
+    margin: 0;
+  }
+
+  .log-radio {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 0.2rem;
   }
 
   .prev-contact {
