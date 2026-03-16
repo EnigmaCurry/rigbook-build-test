@@ -220,6 +220,16 @@
     }
   }
 
+  function parkAward(count) {
+    if (count >= 20) return "🏆";
+    if (count >= 15) return "💎";
+    if (count >= 10) return "🌟";
+    if (count >= 5) return "⭐";
+    if (count >= 2) return "🥈";
+    if (count >= 1) return "🥇";
+    return "";
+  }
+
   onMount(() => {
     loadPrograms();
     if (tab === "park" && parkRef) loadParkDetail(parkRef);
@@ -409,6 +419,10 @@
             {#if parkDetail.qsos != null}
               <div class="detail-row"><span class="detail-label">QSOs</span> <span>{parkDetail.qsos}</span></div>
             {/if}
+            <div class="detail-row">
+              <span class="detail-label">My QSOs</span>
+              <span>{parkDetail.my_qsos || 0} {parkAward(parkDetail.my_qsos || 0)}</span>
+            </div>
           </div>
           {#if parkDetail.latitude != null && parkDetail.longitude != null}
             <iframe

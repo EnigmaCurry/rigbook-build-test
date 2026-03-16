@@ -352,6 +352,16 @@
     }
   }
 
+  function parkAward(count) {
+    if (count >= 20) return "🏆";
+    if (count >= 15) return "💎";
+    if (count >= 10) return "🌟";
+    if (count >= 5) return "⭐";
+    if (count >= 2) return "🥈";
+    if (count >= 1) return "🥇";
+    return "";
+  }
+
   async function openParkOverlay() {
     const ref = pota_park.trim().toUpperCase();
     if (!ref) return;
@@ -862,6 +872,10 @@
           {#if parkOverlay.qsos != null}
             <div class="park-overlay-row"><span class="park-overlay-label">QSOs</span> <span>{parkOverlay.qsos}</span></div>
           {/if}
+          <div class="park-overlay-row">
+            <span class="park-overlay-label">My QSOs</span>
+            <span>{parkOverlay.my_qsos || 0} {parkAward(parkOverlay.my_qsos || 0)}</span>
+          </div>
         </div>
         {#if parkOverlay.latitude != null && parkOverlay.longitude != null}
           <iframe

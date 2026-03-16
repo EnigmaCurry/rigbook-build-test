@@ -9,6 +9,7 @@ from sqlalchemy import delete, func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from rigbook.db import (
+    Contact,
     PotaLocation,
     PotaPark,
     PotaProgram,
@@ -380,6 +381,13 @@ async def get_park(reference: str, session: AsyncSession = Depends(get_session))
     if not park:
         return {"error": "Park not found"}
     p, loc_name, prog_name = park
+
+    my_qsos = (
+        await session.execute(
+            select(func.count()).where(Contact.pota_park == ref)
+        )
+    ).scalar() or 0
+
     return {
         "reference": p.reference,
         "name": p.name,
@@ -390,6 +398,7 @@ async def get_park(reference: str, session: AsyncSession = Depends(get_session))
         "attempts": p.attempts,
         "activations": p.activations,
         "qsos": p.qsos,
+        "my_qsos": my_qsos,
         "location_name": loc_name,
         "program_name": prog_name,
     }
