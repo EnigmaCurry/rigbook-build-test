@@ -258,9 +258,11 @@
   let potaOpen = false;
   let potaHighlight = -1;
   let potaTimer = null;
+  let potaParkName = "";
 
   function onPotaInput() {
     pota_park = pota_park.replace(/[^A-Za-z0-9\- ]/g, "");
+    potaParkName = "";
     potaHighlight = -1;
     clearTimeout(potaTimer);
     const q = pota_park.trim();
@@ -281,11 +283,26 @@
   }
 
   function onPotaBlur() {
-    setTimeout(() => { potaOpen = false; }, 150);
+    setTimeout(async () => {
+      potaOpen = false;
+      // Resolve park name if we have a reference but no name
+      const ref = pota_park.trim().toUpperCase();
+      if (ref && !potaParkName) {
+        try {
+          const res = await fetch(`/api/pota/parks/search?q=${encodeURIComponent(ref)}`);
+          if (res.ok) {
+            const results = await res.json();
+            const match = results.find(p => p.reference === ref);
+            if (match) potaParkName = match.name;
+          }
+        } catch {}
+      }
+    }, 150);
   }
 
   function pickPota(park) {
     pota_park = park.reference;
+    potaParkName = park.name;
     if (park.grid && !grid) grid = park.grid;
     if (park.program_name && !country) {
       country = park.program_name;
@@ -423,6 +440,7 @@
     rst_sent = defaultRst;
     rst_recv = defaultRst;
     pota_park = "";
+    potaParkName = "";
     name = "";
     qth = "";
     state = "";
@@ -662,7 +680,7 @@
 
   <div class="form-row">
     <div class="field">
-      <label for="pota_park">POTA Park</label>
+      <label for="pota_park">POTA Park{#if potaParkName} <span class="pota-park-name">— {potaParkName}</span>{/if}</label>
       <div class="pota-ac">
         <input id="pota_park" type="text" bind:value={pota_park} on:input={onPotaInput} on:focus={onPotaFocus} on:blur={onPotaBlur} on:keydown={onPotaKeydown} style="text-transform: uppercase" autocomplete="off" />
         {#if potaOpen && potaResults.length > 0}
@@ -1069,6 +1087,11 @@
     border-radius: 8px;
     margin-left: 0.3rem;
     vertical-align: middle;
+  }
+
+  .pota-park-name {
+    color: var(--accent-vfo);
+    font-weight: normal;
   }
 
   .pota-ac {
