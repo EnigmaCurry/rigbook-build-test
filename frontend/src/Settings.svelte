@@ -118,6 +118,7 @@
   <div class="setting-row">
     <label for="qrz_api_key">QRZ API Key</label>
     <input id="qrz_api_key" type="password" bind:value={qrz_api_key} autocomplete="off" />
+    <span class="hint">Uses your callsign as QRZ username</span>
   </div>
 
   <h3>Cache</h3>
@@ -226,6 +227,11 @@
   button:disabled {
     opacity: 0.5;
     cursor: not-allowed;
+  }
+
+  .hint {
+    font-size: 0.7rem;
+    color: var(--text-dim);
   }
 
   .message {

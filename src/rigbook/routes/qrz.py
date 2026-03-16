@@ -21,12 +21,25 @@ NAMESPACE = "qrz"
 _session_key: str | None = None
 
 
-async def _get_api_key(session: AsyncSession) -> str:
+async def _get_credentials(session: AsyncSession) -> tuple[str, str]:
+    """Return (username, api_key) from settings. Username defaults to my_callsign."""
     result = await session.execute(
-        select(Setting).where(Setting.key == "qrz_api_key")
+        select(Setting).where(
+            Setting.key.in_(["qrz_api_key", "qrz_username", "my_callsign"])
+        )
     )
-    s = result.scalar_one_or_none()
-    return s.value if s and s.value else ""
+    api_key = ""
+    username = ""
+    callsign = ""
+    for s in result.scalars():
+        if s.key == "qrz_api_key" and s.value:
+            api_key = s.value
+        if s.key == "qrz_username" and s.value:
+            username = s.value
+        if s.key == "my_callsign" and s.value:
+            callsign = s.value
+    # Use explicit QRZ username, fall back to my_callsign
+    return username or callsign, api_key
 
 
 async def _get_cached(call: str, session: AsyncSession) -> dict | None:
@@ -60,31 +73,41 @@ async def _store_cached(call: str, data: dict, session: AsyncSession):
     await session.commit()
 
 
-async def _login(api_key: str) -> str | None:
+async def _login(username: str, api_key: str) -> str | None:
     global _session_key
     try:
         async with httpx.AsyncClient(timeout=10) as client:
             res = await client.get(
                 QRZ_URL,
-                params={"username": api_key, "password": api_key, "agent": "Rigbook/0.1"},
+                params={
+                    "username": username,
+                    "password": api_key,
+                    "agent": "Rigbook/0.1",
+                },
             )
             root = ET.fromstring(res.text)
             ns = {"q": "http://xmldata.qrz.com"}
             key_el = root.find(".//q:Session/q:Key", ns)
             if key_el is not None and key_el.text:
                 _session_key = key_el.text
+                logger.info("QRZ login successful for %s", username)
                 return _session_key
-    except Exception:
-        pass
+            error_el = root.find(".//q:Session/q:Error", ns)
+            if error_el is not None:
+                logger.warning("QRZ login failed: %s", error_el.text)
+    except Exception as e:
+        logger.warning("QRZ login error: %s", e)
     return None
 
 
-async def _fetch_callsign(callsign: str, api_key: str) -> dict | None:
+async def _fetch_callsign(
+    callsign: str, username: str, api_key: str
+) -> dict | None:
     global _session_key
     logger.info("QRZ fetching: %s", callsign)
 
     if not _session_key:
-        await _login(api_key)
+        await _login(username, api_key)
     if not _session_key:
         return None
 
@@ -103,10 +126,11 @@ async def _fetch_callsign(callsign: str, api_key: str) -> dict | None:
                     err = error_el.text or ""
                     if "session" in err.lower() or "invalid" in err.lower():
                         _session_key = None
-                        await _login(api_key)
+                        await _login(username, api_key)
                         if not _session_key:
                             return None
                         continue
+                    logger.debug("QRZ lookup error for %s: %s", callsign, err)
                     return None
 
                 cs = root.find(".//q:Callsign", ns)
@@ -143,11 +167,11 @@ async def qrz_lookup(callsign: str, session: AsyncSession = Depends(get_session)
     if cached:
         return cached
 
-    api_key = await _get_api_key(session)
-    if not api_key:
-        return {"error": "QRZ API key not configured"}
+    username, api_key = await _get_credentials(session)
+    if not api_key or not username:
+        return {"error": "QRZ credentials not configured"}
 
-    data = await _fetch_callsign(call_upper, api_key)
+    data = await _fetch_callsign(call_upper, username, api_key)
     if data is None:
         return {"error": "Callsign not found"}
 
