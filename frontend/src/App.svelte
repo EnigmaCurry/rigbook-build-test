@@ -60,7 +60,7 @@
     vfoEditMode = vfoMode;
     vfoEditing = true;
     // Focus after Svelte renders the input
-    setTimeout(() => vfoFreqInput?.focus(), 0);
+    setTimeout(() => { vfoFreqInput?.focus(); vfoFreqInput?.select(); }, 0);
   }
 
   async function saveVfo() {
