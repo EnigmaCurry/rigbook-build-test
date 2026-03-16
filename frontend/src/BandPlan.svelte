@@ -142,7 +142,7 @@
     top: 100%;
     left: 0;
     min-width: 380px;
-    max-height: 400px;
+    max-height: 80vh;
     overflow-y: auto;
     background: var(--bg-card);
     border: 1px solid var(--border);
