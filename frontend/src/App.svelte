@@ -130,7 +130,7 @@
         continue;
       }
       // Position relative to decimal: chars before dot have positive powers
-      const posFromDot = dotIdx >= 0 ? dotIdx - i : str.length - i;
+      const posFromDot = dotIdx >= 0 ? (i < dotIdx ? dotIdx - i : dotIdx - i + 1) : str.length - i;
       // Convert place value from display unit to Hz
       const unitMultiplier = freqUnit === "MHz" ? 1e9 : 1e3; // MHz->Hz or KHz->Hz
       const placeHz = Math.round(Math.pow(10, posFromDot - 1) * unitMultiplier);
