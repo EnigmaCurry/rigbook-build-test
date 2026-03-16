@@ -2,18 +2,22 @@
   import { onMount, onDestroy } from "svelte";
 
   // --- Tab routing ---
-  const TABS = ["by-country", "download"];
+  const TABS = ["my-qsos", "by-country", "download"];
   let tab = parseTab();
   let parkRef = parseParkRef();
   let parkDetail = null;
   let parkLoading = false;
+
+  // --- My QSOs state ---
+  let myParks = [];
+  let myParksLoading = false;
 
   function parseTab() {
     const hash = window.location.hash.slice(1) || "";
     const parts = hash.split("/").filter(Boolean);
     if (parts.length >= 3 && parts[1] === "park") return "park";
     if (parts.length >= 2 && TABS.includes(parts[1])) return parts[1];
-    return "by-country";
+    return "my-qsos";
   }
 
   function parseParkRef() {
@@ -26,6 +30,7 @@
   function switchTab(t) {
     tab = t;
     parkDetail = null;
+    if (t === "my-qsos") loadMyParks();
     window.location.hash = `/parks/${t}`;
   }
 
@@ -230,8 +235,18 @@
     return "";
   }
 
+  async function loadMyParks() {
+    myParksLoading = true;
+    try {
+      const res = await fetch("/api/pota/my-parks");
+      if (res.ok) myParks = await res.json();
+    } catch {}
+    myParksLoading = false;
+  }
+
   onMount(() => {
     loadPrograms();
+    loadMyParks();
     if (tab === "park" && parkRef) loadParkDetail(parkRef);
     window.addEventListener("hashchange", onHashChange);
   });
@@ -258,12 +273,48 @@
     </div>
 
     <div class="tabs">
+      <button class="tab" class:active={tab === "my-qsos"} on:click={() => switchTab("my-qsos")}>My QSOs</button>
       <button class="tab" class:active={tab === "by-country"} on:click={() => switchTab("by-country")}>By Country</button>
       <button class="tab" class:active={tab === "download"} on:click={() => switchTab("download")}>Download</button>
     </div>
   {/if}
 
-  {#if tab === "by-country"}
+  {#if tab === "my-qsos"}
+    <div class="tab-content">
+      {#if myParksLoading}
+        <p class="loading">Loading...</p>
+      {:else if myParks.length === 0}
+        <p class="empty">No POTA QSOs logged yet.</p>
+      {:else}
+        {#if myParks.some(p => p.latitude != null)}
+          <div class="my-map-wrap">
+            <iframe
+              class="my-map"
+              title="My POTA parks"
+              src="https://www.openstreetmap.org/export/embed.html?bbox={Math.min(...myParks.filter(p => p.longitude != null).map(p => p.longitude)) - 2},{Math.min(...myParks.filter(p => p.latitude != null).map(p => p.latitude)) - 2},{Math.max(...myParks.filter(p => p.longitude != null).map(p => p.longitude)) + 2},{Math.max(...myParks.filter(p => p.latitude != null).map(p => p.latitude)) + 2}&layer=mapnik"
+              frameborder="0"
+            ></iframe>
+          </div>
+        {/if}
+        <div class="my-parks-list">
+          {#each myParks as park}
+            <!-- svelte-ignore a11y-click-events-have-key-events -->
+            <!-- svelte-ignore a11y-no-static-element-interactions -->
+            <div class="tree-row park-row clickable" on:click={() => viewPark(park.reference)}>
+              <span class="park-ref">{park.reference}</span>
+              <span class="park-name">{park.name || park.reference}</span>
+              {#if park.grid}
+                <span class="park-grid">{park.grid}</span>
+              {/if}
+              <span class="park-stat">{park.qso_count} QSO{park.qso_count !== 1 ? "s" : ""} {parkAward(park.qso_count)}</span>
+              <span class="park-date">{park.last_contact ? park.last_contact.slice(0, 10) : ""}</span>
+            </div>
+          {/each}
+        </div>
+      {/if}
+    </div>
+
+  {:else if tab === "by-country"}
     <div class="tab-content">
       {#if cachedPrograms.length === 0}
         <p class="empty">No parks cached yet. Go to the Download tab to select countries and fetch parks.</p>
@@ -576,6 +627,32 @@
     background: var(--bg-deep);
     padding: 0.05rem 0.4rem;
     border-radius: 8px;
+    flex-shrink: 0;
+    margin-left: auto;
+  }
+
+  /* My QSOs tab */
+  .my-map-wrap {
+    margin-bottom: 0.75rem;
+  }
+
+  .my-map {
+    width: 100%;
+    height: 300px;
+    border: 1px solid var(--border);
+    border-radius: 3px;
+  }
+
+  .my-parks-list {
+    display: flex;
+    flex-direction: column;
+    max-height: 50vh;
+    overflow-y: auto;
+  }
+
+  .park-date {
+    color: var(--text-dim);
+    font-size: 0.8rem;
     flex-shrink: 0;
     margin-left: auto;
   }

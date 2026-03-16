@@ -357,6 +357,42 @@ async def search_parks(q: str = "", session: AsyncSession = Depends(get_session)
     ]
 
 
+@router.get("/my-parks")
+async def get_my_parks(session: AsyncSession = Depends(get_session)):
+    """Return parks where the user has logged at least one QSO, ordered by most recent."""
+    rows = (
+        await session.execute(
+            select(
+                Contact.pota_park,
+                func.count().label("qso_count"),
+                func.max(Contact.timestamp).label("last_contact"),
+            )
+            .where(Contact.pota_park.isnot(None), Contact.pota_park != "")
+            .group_by(Contact.pota_park)
+            .order_by(func.max(Contact.timestamp).desc())
+        )
+    ).all()
+
+    results = []
+    for pota_park, qso_count, last_contact in rows:
+        park = (
+            await session.execute(
+                select(PotaPark).where(PotaPark.reference == pota_park)
+            )
+        ).scalars().first()
+        results.append({
+            "reference": pota_park,
+            "name": park.name if park else None,
+            "latitude": park.latitude if park else None,
+            "longitude": park.longitude if park else None,
+            "grid": park.grid if park else None,
+            "location_desc": park.location_desc if park else None,
+            "qso_count": qso_count,
+            "last_contact": last_contact.isoformat() if last_contact else None,
+        })
+    return results
+
+
 @router.get("/park/{reference}")
 async def get_park(reference: str, session: AsyncSession = Depends(get_session)):
     ref = reference.upper()
