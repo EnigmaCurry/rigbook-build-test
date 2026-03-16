@@ -261,11 +261,11 @@
     display: flex;
     align-items: center;
     gap: 0.5rem;
-    padding: 0.25rem 0.4rem;
+    padding: 0.3rem 0.4rem;
     cursor: pointer;
     border-radius: 3px;
     white-space: nowrap;
-    overflow: hidden;
+    line-height: 1.4;
   }
 
   .program-row:hover {
