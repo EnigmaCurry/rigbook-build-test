@@ -77,9 +77,18 @@
   function mid(lo, hi) {
     return Math.round((lo + hi) / 2);
   }
+
+  let bandplanEl;
+
+  $: if (freq && bandplanEl) {
+    setTimeout(() => {
+      const active = bandplanEl?.querySelector(".band-row.active");
+      if (active) active.scrollIntoView({ block: "nearest" });
+    }, 0);
+  }
 </script>
 
-<div class="bandplan">
+<div class="bandplan" bind:this={bandplanEl}>
   {#each BANDS as band}
     <div class="band-row" class:active={inBand(band)}>
       <span class="band-name">{band.name}</span>
