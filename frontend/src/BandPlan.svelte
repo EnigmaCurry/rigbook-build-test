@@ -1,5 +1,5 @@
 <script>
-  import { createEventDispatcher } from "svelte";
+  import { createEventDispatcher, onMount, tick } from "svelte";
   import { bandColor, bandTextColor } from "./bandColors.js";
 
   export let currentFreq = "";
@@ -117,6 +117,25 @@
 
   let bandplanEl;
 
+  function clampToViewport() {
+    if (!bandplanEl) return;
+    const rect = bandplanEl.getBoundingClientRect();
+    // If overflowing right edge, shift left
+    if (rect.right > window.innerWidth) {
+      bandplanEl.style.left = "auto";
+      bandplanEl.style.right = "0";
+    }
+    // If overflowing left edge, shift right
+    if (rect.left < 0) {
+      bandplanEl.style.left = "0";
+      bandplanEl.style.right = "auto";
+    }
+  }
+
+  onMount(() => {
+    tick().then(clampToViewport);
+  });
+
   $: if (activeBand && bandplanEl) {
     setTimeout(() => {
       const active = bandplanEl?.querySelector(".band-row.active");
@@ -145,10 +164,10 @@
 
 <style>
   .bandplan {
-    position: fixed;
-    top: auto;
-    left: 1rem;
-    right: 1rem;
+    position: absolute;
+    top: 100%;
+    left: 0;
+    min-width: 300px;
     max-width: 600px;
     max-height: 80vh;
     overflow-y: auto;
