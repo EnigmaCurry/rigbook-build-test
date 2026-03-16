@@ -185,7 +185,9 @@ async def qrz_lookup(callsign: str, session: AsyncSession = Depends(get_session)
 
         data = await _fetch_callsign(call_upper, username, api_key)
         if data is None:
-            return {"error": "Callsign not found"}
+            not_found = {"error": "Callsign not found"}
+            await _store_cached(call_upper, not_found, session)
+            return not_found
 
         await _store_cached(call_upper, data, session)
         return data
