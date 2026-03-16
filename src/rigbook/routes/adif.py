@@ -7,7 +7,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from rigbook.db import Contact, get_session
+from rigbook.db import Contact, Setting, get_session
 
 router = APIRouter(prefix="/api/adif", tags=["adif"])
 
@@ -102,10 +102,17 @@ async def export_adif(session: AsyncSession = Depends(get_session)):
 
     output = adi.dumps(doc)
 
+    callsign_row = (await session.execute(
+        select(Setting).where(Setting.key == "my_callsign")
+    )).scalar_one_or_none()
+    callsign = callsign_row.value if callsign_row and callsign_row.value else "rigbook"
+    ts = datetime.now(timezone.utc).strftime("%Y-%m-%d %H%M%Sz")
+    filename = f"{callsign} - {ts}.adi"
+
     return StreamingResponse(
         StringIO(output),
         media_type="application/octet-stream",
-        headers={"Content-Disposition": "attachment; filename=rigbook.adi"},
+        headers={"Content-Disposition": f"attachment; filename=\"{filename}\""},
     )
 
 
