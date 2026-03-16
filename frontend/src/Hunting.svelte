@@ -351,6 +351,6 @@
   }
 
   .count {
-    color: #a6e3a1;
+    color: #658a62;
   }
 </style>
