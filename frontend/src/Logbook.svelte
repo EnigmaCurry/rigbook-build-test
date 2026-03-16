@@ -71,6 +71,8 @@
     }
   }
 
+  $: prevContactCount = call.trim() ? contacts.filter(c => c.call?.toUpperCase() === call.trim().toUpperCase()).length : 0;
+
   $: sortedContacts = [...contacts].sort((a, b) => {
     let va = a[sortCol] ?? "";
     let vb = b[sortCol] ?? "";
@@ -463,7 +465,7 @@
 
 {#if showForm}
 <form on:submit|preventDefault={editingId ? saveEdit : submitContact} on:keydown={e => e.key === "Enter" && e.target.tagName !== "TEXTAREA" && e.preventDefault()}>
-  <h3 class="form-heading">{editingId ? `Edit QSO — ${call || ""}` : "New QSO"}</h3>
+  <h3 class="form-heading">{editingId ? `Edit QSO — ${call || ""}` : "New QSO"}{#if !editingId && prevContactCount > 0} <span class="prev-contact">(you've contacted {call.trim().toUpperCase()} {prevContactCount} time{prevContactCount === 1 ? "" : "s"} before)</span>{/if}</h3>
   <div class="form-row">
     <div class="field">
       <label for="call">Call *</label>
@@ -722,6 +724,12 @@
     margin: 0 0 0.5rem 0;
     font-size: 0.95rem;
     color: var(--accent);
+  }
+
+  .prev-contact {
+    font-size: 0.8rem;
+    font-weight: normal;
+    color: var(--text-muted);
   }
 
   .error {
