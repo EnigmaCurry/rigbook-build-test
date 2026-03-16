@@ -66,8 +66,7 @@ config-show: _check-curl
     @curl -s http://localhost:8073/api/settings | python -m json.tool
 
 # Delete the database
+[confirm("This will delete ~/.local/rigbook/rigbook.db. Are you sure?")]
 clean:
-    @echo "This will delete ~/.local/rigbook/rigbook.db"
-    @read -p "Are you sure? [y/N] " confirm && [ "$$confirm" = "y" ] || { echo "Cancelled."; exit 1; }
     rm -f ~/.local/rigbook/rigbook.db
     @echo "Database deleted."
