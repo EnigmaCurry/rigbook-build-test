@@ -50,8 +50,8 @@
     datePart = utcNowDate();
     timePart = utcNowTime();
   }
-  let datePart = utcNowDate();
-  let timePart = utcNowTime();
+  let datePart = "";
+  let timePart = "";
   let comments = "";
   let notes = "";
 
@@ -269,6 +269,8 @@
 
   function onCallBlur() {
     if (call.length >= 3) {
+      if (!datePart) datePart = utcNowDate();
+      if (!timePart) timePart = utcNowTime();
       lookupCallsign(call.toUpperCase());
     }
   }
