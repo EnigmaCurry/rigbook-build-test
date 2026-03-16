@@ -1,5 +1,7 @@
 <script>
-  import { onMount, onDestroy } from "svelte";
+  import { onMount, onDestroy, tick } from "svelte";
+  import L from "leaflet";
+  import "leaflet/dist/leaflet.css";
 
   // --- Tab routing ---
   const TABS = ["my-qsos", "by-country", "download"];
@@ -11,6 +13,8 @@
   // --- My QSOs state ---
   let myParks = [];
   let myParksLoading = false;
+  let mapEl;
+  let leafletMap = null;
 
   function parseTab() {
     const hash = window.location.hash.slice(1) || "";
@@ -30,6 +34,7 @@
   function switchTab(t) {
     tab = t;
     parkDetail = null;
+    destroyMap();
     if (t === "my-qsos") loadMyParks();
     window.location.hash = `/parks/${t}`;
   }
@@ -235,6 +240,41 @@
     return "";
   }
 
+  function destroyMap() {
+    if (leafletMap) { leafletMap.remove(); leafletMap = null; }
+  }
+
+  async function renderMap() {
+    await tick();
+    destroyMap();
+    if (!mapEl) return;
+    const pts = myParks.filter(p => p.latitude != null && p.longitude != null);
+    if (!pts.length) return;
+
+    leafletMap = L.map(mapEl, { scrollWheelZoom: true });
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>',
+      maxZoom: 18,
+    }).addTo(leafletMap);
+
+    const markerIcon = L.divIcon({
+      className: "park-marker",
+      html: '<div class="park-marker-dot"></div>',
+      iconSize: [12, 12],
+      iconAnchor: [6, 6],
+    });
+
+    const bounds = [];
+    for (const p of pts) {
+      const ll = [p.latitude, p.longitude];
+      bounds.push(ll);
+      L.marker(ll, { icon: markerIcon })
+        .bindPopup(`<b>${p.reference}</b><br>${p.name || ""}<br>${p.qso_count} QSO${p.qso_count !== 1 ? "s" : ""} ${parkAward(p.qso_count)}`)
+        .addTo(leafletMap);
+    }
+    leafletMap.fitBounds(bounds, { padding: [30, 30], maxZoom: 8 });
+  }
+
   async function loadMyParks() {
     myParksLoading = true;
     try {
@@ -242,6 +282,7 @@
       if (res.ok) myParks = await res.json();
     } catch {}
     myParksLoading = false;
+    if (tab === "my-qsos") renderMap();
   }
 
   onMount(() => {
@@ -252,6 +293,7 @@
   });
 
   onDestroy(() => {
+    destroyMap();
     window.removeEventListener("hashchange", onHashChange);
   });
 </script>
@@ -286,16 +328,9 @@
       {:else if myParks.length === 0}
         <p class="empty">No POTA QSOs logged yet.</p>
       {:else}
-        {#if myParks.some(p => p.latitude != null)}
-          <div class="my-map-wrap">
-            <iframe
-              class="my-map"
-              title="My POTA parks"
-              src="https://www.openstreetmap.org/export/embed.html?bbox={Math.min(...myParks.filter(p => p.longitude != null).map(p => p.longitude)) - 2},{Math.min(...myParks.filter(p => p.latitude != null).map(p => p.latitude)) - 2},{Math.max(...myParks.filter(p => p.longitude != null).map(p => p.longitude)) + 2},{Math.max(...myParks.filter(p => p.latitude != null).map(p => p.latitude)) + 2}&layer=mapnik"
-              frameborder="0"
-            ></iframe>
-          </div>
-        {/if}
+        <div class="my-map-wrap">
+          <div class="my-map" bind:this={mapEl}></div>
+        </div>
         <div class="my-parks-list">
           {#each myParks as park}
             <!-- svelte-ignore a11y-click-events-have-key-events -->
@@ -638,9 +673,17 @@
 
   .my-map {
     width: 100%;
-    height: 300px;
+    height: 350px;
     border: 1px solid var(--border);
     border-radius: 3px;
+  }
+
+  :global(.park-marker-dot) {
+    width: 10px;
+    height: 10px;
+    background: #00ff88;
+    border: 2px solid #005533;
+    border-radius: 50%;
   }
 
   .my-parks-list {
