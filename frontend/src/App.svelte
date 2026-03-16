@@ -3,6 +3,7 @@
   import Logbook from "./Logbook.svelte";
   import ExportImport from "./ExportImport.svelte";
   import Hunting from "./Hunting.svelte";
+  import BandPlan from "./BandPlan.svelte";
   import Search from "./Search.svelte";
   import Settings from "./Settings.svelte";
   import About from "./About.svelte";
@@ -229,7 +230,12 @@
       {/if}
       {#if vfoEditing}
         <span class="vfo-edit">
-          <input bind:this={vfoFreqInput} type="text" bind:value={vfoEditFreq} class="vfo-input freq" placeholder="Freq" on:keydown={e => e.key === "Enter" && saveVfo()} />
+          <div class="vfo-freq-wrap">
+            <input bind:this={vfoFreqInput} type="text" bind:value={vfoEditFreq} class="vfo-input freq" placeholder="Freq"
+              on:keydown={e => { if (e.key === "Enter") saveVfo(); if (e.key === "Escape") cancelVfoEdit(); }}
+            />
+            <BandPlan on:tune={e => { vfoEditFreq = String(e.detail); vfoFreqInput?.focus(); }} />
+          </div>
           <button class="vfo-btn save" on:click={saveVfo}>Set</button>
           <button class="vfo-btn cancel" on:click={cancelVfoEdit}>X</button>
         </span>
@@ -402,6 +408,10 @@
     display: flex;
     align-items: center;
     gap: 0.3rem;
+  }
+
+  .vfo-freq-wrap {
+    position: relative;
   }
 
   .vfo-input {
