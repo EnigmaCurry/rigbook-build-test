@@ -110,10 +110,14 @@ async def get_programs(session: AsyncSession = Depends(get_session)):
     # Map location descriptors to program prefixes
     loc_rows = (await session.execute(select(PotaLocation))).scalars().all()
     prefix_park_count: dict[str, int] = {}
+    prefix_loc_count: dict[str, int] = {}
     for loc in loc_rows:
         prefix_park_count[loc.program_prefix] = prefix_park_count.get(
             loc.program_prefix, 0
         ) + park_counts.get(loc.descriptor, 0)
+        prefix_loc_count[loc.program_prefix] = (
+            prefix_loc_count.get(loc.program_prefix, 0) + 1
+        )
 
     # Get selected programs
     selected = await _get_selected(session)
@@ -122,6 +126,7 @@ async def get_programs(session: AsyncSession = Depends(get_session)):
         {
             "prefix": p.prefix,
             "name": p.name,
+            "location_count": prefix_loc_count.get(p.prefix, 0),
             "park_count": prefix_park_count.get(p.prefix, 0),
             "selected": p.prefix in selected,
         }

@@ -18,6 +18,9 @@
     : programs;
 
   $: selectedCount = programs.filter(p => p.selected).length;
+  $: cachedCountries = programs.filter(p => p.park_count > 0).length;
+  $: totalLocations = programs.reduce((s, p) => s + (p.location_count || 0), 0);
+  $: totalParks = programs.reduce((s, p) => s + (p.park_count || 0), 0);
 
   async function loadPrograms() {
     loading = true;
@@ -108,6 +111,15 @@
     <h2>POTA Parks Cache</h2>
   </div>
 
+  <div class="stats">
+    <span>{programs.length} countries</span>
+    <span>{totalLocations} locations</span>
+    <span>{totalParks} parks cached</span>
+    {#if cachedCountries > 0}
+      <span>({cachedCountries} countries with parks)</span>
+    {/if}
+  </div>
+
   <p class="description">Select countries to cache park data for. Then click Update to fetch all parks for selected countries.</p>
 
   <div class="controls">
@@ -182,6 +194,15 @@
     margin: 0;
     color: var(--accent);
     font-size: 1.2rem;
+  }
+
+  .stats {
+    display: flex;
+    gap: 1rem;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    margin-bottom: 0.5rem;
+    flex-wrap: wrap;
   }
 
   .description {
