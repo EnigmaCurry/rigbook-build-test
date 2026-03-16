@@ -1,6 +1,7 @@
 <script>
   import { onMount, createEventDispatcher } from "svelte";
   import Autocomplete from "./Autocomplete.svelte";
+  import GridMap from "./GridMap.svelte";
 
   export let editId = null;
   export let prefill = null;
@@ -40,6 +41,7 @@
   let submitting = false;
   let errorMsg = "";
   let editingId = null;
+  let showGridPicker = false;
   export let showForm = true;
 
   let sortCol = "timestamp";
@@ -488,7 +490,15 @@
     </div>
     <div class="field">
       <label for="grid">Grid</label>
-      <input id="grid" type="text" bind:value={grid} on:input={stripGrid} style="text-transform: uppercase" />
+      <div class="grid-input-row">
+        <input id="grid" type="text" bind:value={grid} on:input={stripGrid} style="text-transform: uppercase" />
+        <button type="button" class="grid-picker-btn" on:click={() => showGridPicker = !showGridPicker} title="Pick from map">🌍</button>
+      </div>
+      {#if showGridPicker}
+        <div class="grid-picker-wrap">
+          <GridMap bind:value={grid} on:select={() => showGridPicker = false} />
+        </div>
+      {/if}
     </div>
   </div>
 
@@ -678,6 +688,34 @@
     color: var(--accent-error);
     font-size: 0.85rem;
     margin-left: 0.5rem;
+  }
+
+  .grid-input-row {
+    display: flex;
+    gap: 0.25rem;
+  }
+
+  .grid-input-row input {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .grid-picker-btn {
+    background: var(--btn-secondary);
+    border: none;
+    padding: 0.2rem 0.4rem;
+    font-size: 0.85rem;
+    border-radius: 3px;
+    cursor: pointer;
+    line-height: 1;
+  }
+
+  .grid-picker-btn:hover {
+    background: var(--btn-secondary-hover);
+  }
+
+  .grid-picker-wrap {
+    margin-top: 0.5rem;
   }
 
   .log h2 {
