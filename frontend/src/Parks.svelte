@@ -15,6 +15,7 @@
   let myParksLoading = false;
   let mapEl;
   let leafletMap = null;
+  let markersByRef = {};
 
   function parseTab() {
     const hash = window.location.hash.slice(1) || "";
@@ -242,6 +243,31 @@
 
   function destroyMap() {
     if (leafletMap) { leafletMap.remove(); leafletMap = null; }
+    markersByRef = {};
+  }
+
+  const highlightIcon = L.divIcon({
+    className: "park-marker",
+    html: '<div class="park-marker-dot highlight"></div>',
+    iconSize: [18, 18],
+    iconAnchor: [9, 9],
+  });
+
+  const normalIcon = L.divIcon({
+    className: "park-marker",
+    html: '<div class="park-marker-dot"></div>',
+    iconSize: [12, 12],
+    iconAnchor: [6, 6],
+  });
+
+  function highlightPark(ref) {
+    const m = markersByRef[ref];
+    if (m) { m.setIcon(highlightIcon); m.openPopup(); }
+  }
+
+  function unhighlightPark(ref) {
+    const m = markersByRef[ref];
+    if (m) { m.setIcon(normalIcon); m.closePopup(); }
   }
 
   async function renderMap() {
@@ -257,20 +283,15 @@
       maxZoom: 18,
     }).addTo(leafletMap);
 
-    const markerIcon = L.divIcon({
-      className: "park-marker",
-      html: '<div class="park-marker-dot"></div>',
-      iconSize: [12, 12],
-      iconAnchor: [6, 6],
-    });
-
+    markersByRef = {};
     const bounds = [];
     for (const p of pts) {
       const ll = [p.latitude, p.longitude];
       bounds.push(ll);
-      L.marker(ll, { icon: markerIcon })
+      const m = L.marker(ll, { icon: normalIcon })
         .bindPopup(`<b>${p.reference}</b><br>${p.name || ""}<br>${p.qso_count} QSO${p.qso_count !== 1 ? "s" : ""} ${parkAward(p.qso_count)}`)
         .addTo(leafletMap);
+      markersByRef[p.reference] = m;
     }
     leafletMap.fitBounds(bounds, { padding: [30, 30], maxZoom: 8 });
   }
@@ -306,7 +327,7 @@
   {#if tab === "park"}
     <!-- svelte-ignore a11y-click-events-have-key-events -->
     <!-- svelte-ignore a11y-no-static-element-interactions -->
-    <span class="back-link" on:click={() => switchTab("by-country")}>&larr; Back to parks</span>
+    <span class="back-link" on:click={() => switchTab("my-qsos")}>&larr; Back</span>
   {:else}
     <div class="stats">
       <span>{programs.length} countries</span>
@@ -335,7 +356,8 @@
           {#each myParks as park}
             <!-- svelte-ignore a11y-click-events-have-key-events -->
             <!-- svelte-ignore a11y-no-static-element-interactions -->
-            <div class="tree-row park-row clickable" on:click={() => viewPark(park.reference)}>
+            <!-- svelte-ignore a11y-no-noninteractive-element-interactions -->
+            <div class="tree-row park-row clickable" on:click={() => viewPark(park.reference)} on:mouseenter={() => highlightPark(park.reference)} on:mouseleave={() => unhighlightPark(park.reference)}>
               <span class="park-ref">{park.reference}</span>
               <span class="park-name">{park.name || park.reference}</span>
               {#if park.grid}
@@ -684,6 +706,15 @@
     background: #00ff88;
     border: 2px solid #005533;
     border-radius: 50%;
+    transition: all 0.15s;
+  }
+
+  :global(.park-marker-dot.highlight) {
+    width: 16px;
+    height: 16px;
+    background: #ffcc00;
+    border-color: #996600;
+    box-shadow: 0 0 8px rgba(255, 204, 0, 0.6);
   }
 
   .my-parks-list {
