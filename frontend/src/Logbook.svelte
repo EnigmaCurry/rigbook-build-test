@@ -4,6 +4,7 @@
   import GridMap from "./GridMap.svelte";
   import { bandColor, bandTextColor } from "./bandColors.js";
   import { parkAward, parkAwardTitle } from "./parkAward.js";
+  import { countryFlag } from "./countryFlag.js";
 
   export let editId = null;
   export let prefill = null;
@@ -218,6 +219,7 @@
   }
 
   let lastQrzCall = "";
+  let callCountryCode = "";
   let prefillSource = null; // tracks if prefill came from hunting
 
   async function lookupCallsign(callsign) {
@@ -240,6 +242,7 @@
       const data = await res.json();
       if (data.error) return;
       // If from hunting spot, only fill name. Otherwise fill all empty fields.
+      if (data.country_code) callCountryCode = data.country_code;
       if (prefillSource === "hunting") {
         if (!name && data.name) name = data.name;
       } else {
@@ -500,6 +503,7 @@
   function clearForm() {
     lastQrzCall = "";
     prefillSource = null;
+    callCountryCode = "";
     call = "";
     freq = "";
     mode = "CW";
@@ -558,6 +562,7 @@
       });
       if (res.ok) {
         const wasHunting = prefillSource === "hunting";
+        callCountryCode = "";
         call = "";
         pota_park = "";
         potaParkName = "";
@@ -679,7 +684,7 @@
 <div class="logbook-layout">
 {#if showForm}
 <form on:submit|preventDefault={editingId ? saveEdit : submitContact} on:keydown={e => e.key === "Enter" && e.target.tagName !== "TEXTAREA" && e.preventDefault()}>
-  <h3 class="form-heading">{editingId ? `Edit QSO — ${call || ""}` : "New QSO"}{#if editingId}{" "}<span class="prev-contact">({relativeTime(`${datePart}T${timePart || "00:00:00"}Z`)})</span>{:else if prevContactCount > 0}{" "}<span class="prev-contact">(you've contacted {call.trim().toUpperCase()} {prevContactCount} time{prevContactCount === 1 ? "" : "s"} before)</span>{/if}</h3>
+  <h3 class="form-heading">{editingId ? `Edit QSO — ${call || ""}` : "New QSO"}{#if callCountryCode} {countryFlag(callCountryCode)}{/if}{#if editingId}{" "}<span class="prev-contact">({relativeTime(`${datePart}T${timePart || "00:00:00"}Z`)})</span>{:else if prevContactCount > 0}{" "}<span class="prev-contact">(you've contacted {call.trim().toUpperCase()} {prevContactCount} time{prevContactCount === 1 ? "" : "s"} before)</span>{/if}</h3>
   <div class="form-row">
     <div class="field">
       <label for="call">Call *</label>
