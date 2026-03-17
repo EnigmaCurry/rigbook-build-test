@@ -676,6 +676,7 @@
   }
 </script>
 
+<div class="logbook-layout">
 {#if showForm}
 <form on:submit|preventDefault={editingId ? saveEdit : submitContact} on:keydown={e => e.key === "Enter" && e.target.tagName !== "TEXTAREA" && e.preventDefault()}>
   <h3 class="form-heading">{editingId ? `Edit QSO — ${call || ""}` : "New QSO"}{#if editingId}{" "}<span class="prev-contact">({relativeTime(`${datePart}T${timePart || "00:00:00"}Z`)})</span>{:else if prevContactCount > 0}{" "}<span class="prev-contact">(you've contacted {call.trim().toUpperCase()} {prevContactCount} time{prevContactCount === 1 ? "" : "s"} before)</span>{/if}</h3>
@@ -863,6 +864,7 @@
     </div>
   {/if}
 </section>
+</div>
 
 {#if parkOverlay || parkOverlayLoading}
   <!-- svelte-ignore a11y-click-events-have-key-events -->
@@ -936,12 +938,26 @@
 {/if}
 
 <style>
+  .logbook-layout {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 0;
+  }
+
+  .logbook-layout .log {
+    flex: 1;
+    overflow-y: auto;
+    min-height: 0;
+  }
+
   form {
     background: var(--bg-card);
     border: 1px solid var(--border);
     border-radius: 4px;
     padding: 0.75rem;
     margin-bottom: 1rem;
+    flex-shrink: 0;
   }
 
   .form-row {
