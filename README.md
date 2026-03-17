@@ -12,7 +12,7 @@ with a local web UI, optionally connected to your radio via
 - Everything in the header is clickable: **Rigbook** goes to Hunting,
   **callsign** opens Logbook, **VFO frequency** opens the band plan tuner,
   **mode** cycles radio modes, **UTC clock** copies the timestamp to
-  clipboard, and **+** adds a new QSO
+  clipboard, **🌲** opens My Parks, and **+** adds a new QSO
 - Keyboard shortcuts: `/` search, `N` new QSO, `H` hunting, `L` logbook,
   `T` tune radio, `M` cycle mode, `?` about, `Esc` close
 - Country and state autocomplete (all ISO countries and subdivisions),
@@ -26,7 +26,8 @@ with a local web UI, optionally connected to your radio via
 - Sortable log table with click-to-edit
 - ADIF export and import
 - Hunting page — browse active Parks on the Air activators, filter by
-  mode/band, click to tune your radio (spots cached server-side for 30s)
+  mode/band, click to tune your radio (spots cached server-side for 30s),
+  award emojis shown for parks you've already contacted
 - QRZ callsign lookup with connection test button in Settings
 - SKCC member number auto-lookup
 - All timestamps in UTC with 24-hour format
@@ -76,7 +77,8 @@ Open http://localhost:8073 in your browser.
 4. QRZ auto-fills name, QTH, state, country, and grid (if configured)
 5. Type a POTA park reference or name to autocomplete from cached parks
 6. Click the clock button (🕓) to update the timestamp to now
-7. Click **Log QSO** to save — the form clears for the next contact
+7. Click **Log QSO** to save — returns to Hunting (if from a spot) or
+   Logbook (if manual)
 8. Click **Cancel** to return to the previous view
 
 ### Editing contacts
@@ -130,19 +132,32 @@ The **Parks** page lets you download and browse
 
 ### Downloading parks
 
-1. Go to **Parks** → **Download** tab
+1. Go to **Parks** → **Cache** tab
 2. Select the countries you want to cache (use the filter to find them)
 3. Click **Update Parks** — progress streams as each location is fetched
 4. Park data is cached in SQLite with a 24-hour TTL
+
+### My Parks
+
+The default **My Parks** tab shows all parks where you've logged
+contacts, with a Leaflet world map showing markers for each park.
+
+- Sort by date, name, or QSO count
+- Click a park in the list to highlight it on the map and open its popup
+- Hover over parks to preview them on the map
+- Map popups link to park detail pages
+- Award emojis show your progress: ✅ 1, ✌️ 2, 📐 3, 🍀 4, ⭐ 5,
+  🌟 10, 💎 15, 🏆 20+
 
 ### Browsing parks
 
 - **By Country** tab shows a tree: expand a country to see its
   locations, expand a location to see its parks
 - Click any park to view its detail page with name, location, grid,
-  coordinates, activation stats, an OpenStreetMap embed, and your
-  personal QSO count with award emojis (🥇 1, 🥈 2, ⭐ 5, 🌟 10,
-  💎 15, 🏆 20+)
+  coordinates, activation stats, an OpenStreetMap embed, your personal
+  QSO count with award emojis, and a log of your QSOs at that park
+- Park detail pages include an **Add QSO** button that pre-fills the
+  park reference
 - Park detail pages are deep-linkable (`/#/parks/park/US-0008`)
 
 ### Park autocomplete on QSO form
