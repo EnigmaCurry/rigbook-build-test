@@ -1,5 +1,7 @@
 <script>
-  import { onMount, createEventDispatcher } from "svelte";
+  import { onMount, tick, createEventDispatcher } from "svelte";
+  import L from "leaflet";
+  import "leaflet/dist/leaflet.css";
   import Autocomplete from "./Autocomplete.svelte";
   import GridMap from "./GridMap.svelte";
   import { bandColor, bandTextColor } from "./bandColors.js";
@@ -314,6 +316,28 @@
   let potaParkName = "";
   let parkOverlay = null;
   let parkOverlayLoading = false;
+  let overlayMapEl;
+  let overlayMap = null;
+
+  function destroyOverlayMap() {
+    if (overlayMap) { overlayMap.remove(); overlayMap = null; }
+  }
+
+  async function renderOverlayMap() {
+    await tick();
+    destroyOverlayMap();
+    if (!overlayMapEl || !parkOverlay || parkOverlay.latitude == null) return;
+    overlayMap = L.map(overlayMapEl, { scrollWheelZoom: true });
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>',
+      maxZoom: 18,
+    }).addTo(overlayMap);
+    const ll = [parkOverlay.latitude, parkOverlay.longitude];
+    L.marker(ll).addTo(overlayMap)
+      .bindPopup(`<b>${parkOverlay.reference}</b><br>${parkOverlay.name || ""}`)
+      .openPopup();
+    overlayMap.setView(ll, 12);
+  }
 
   async function resolvePotaParkName() {
     const ref = pota_park.trim().toUpperCase();
@@ -399,11 +423,14 @@
     node.focus();
   }
 
+  function closeParkOverlay() {
+    destroyOverlayMap();
+    parkOverlay = null;
+    parkOverlayLoading = false;
+  }
+
   function onParkOverlayKeydown(e) {
-    if (e.key === "Escape") {
-      parkOverlay = null;
-      parkOverlayLoading = false;
-    }
+    if (e.key === "Escape") closeParkOverlay();
   }
 
   async function openParkOverlay() {
@@ -419,6 +446,7 @@
       }
     } catch {}
     parkOverlayLoading = false;
+    if (parkOverlay) renderOverlayMap();
   }
 
   function editContact(c) {
@@ -534,8 +562,7 @@
     rst_recv = defaultRst;
     pota_park = "";
     potaParkName = "";
-    parkOverlay = null;
-    parkOverlayLoading = false;
+    closeParkOverlay();
     name = "";
     qth = "";
     state = "";
@@ -898,13 +925,13 @@
   <!-- svelte-ignore a11y-click-events-have-key-events -->
   <!-- svelte-ignore a11y-no-static-element-interactions -->
   <!-- svelte-ignore a11y-no-noninteractive-tabindex -->
-  <div class="park-overlay-backdrop" tabindex="0" on:click={() => { parkOverlay = null; parkOverlayLoading = false; }} on:keydown={onParkOverlayKeydown} use:focusOverlay>
+  <div class="park-overlay-backdrop" tabindex="0" on:click={closeParkOverlay} on:keydown={onParkOverlayKeydown} use:focusOverlay>
     <!-- svelte-ignore a11y-click-events-have-key-events -->
     <!-- svelte-ignore a11y-no-static-element-interactions -->
     <div class="park-overlay" on:click|stopPropagation>
       <!-- svelte-ignore a11y-click-events-have-key-events -->
       <!-- svelte-ignore a11y-no-static-element-interactions -->
-      <span class="park-overlay-close" on:click={() => { parkOverlay = null; parkOverlayLoading = false; }}>&times;</span>
+      <span class="park-overlay-close" on:click={closeParkOverlay}>&times;</span>
       {#if parkOverlayLoading}
         <p class="park-overlay-loading">Loading park...</p>
       {:else if parkOverlay}
@@ -934,12 +961,7 @@
           </div>
         </div>
         {#if parkOverlay.latitude != null && parkOverlay.longitude != null}
-          <iframe
-            class="park-map"
-            title="Park location"
-            src="https://www.openstreetmap.org/export/embed.html?bbox={parkOverlay.longitude - 0.05},{parkOverlay.latitude - 0.03},{parkOverlay.longitude + 0.05},{parkOverlay.latitude + 0.03}&layer=mapnik&marker={parkOverlay.latitude},{parkOverlay.longitude}"
-            frameborder="0"
-          ></iframe>
+          <div class="park-map" bind:this={overlayMapEl}></div>
         {/if}
         <div class="park-overlay-links">
           <a href="https://pota.app/#/park/{parkOverlay.reference}" target="_blank" rel="noopener">View on POTA</a>
@@ -951,7 +973,7 @@
             {#each parkOverlay.contacts as c}
               <!-- svelte-ignore a11y-click-events-have-key-events -->
               <!-- svelte-ignore a11y-no-static-element-interactions -->
-              <div class="park-overlay-qso-row" on:click={() => { parkOverlay = null; parkOverlayLoading = false; window.location.hash = `/log/${c.id}`; }}>
+              <div class="park-overlay-qso-row" on:click={() => { closeParkOverlay(); window.location.hash = `/log/${c.id}`; }}>
                 <span class="poq-date">{c.timestamp ? c.timestamp.slice(0, 10) : ""}</span>
                 <span class="poq-call">{c.call}</span>
                 <span class="poq-name">{c.name || ""}</span>
