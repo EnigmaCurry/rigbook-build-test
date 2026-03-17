@@ -1081,6 +1081,7 @@
     font-weight: bold;
     color: var(--accent-callsign);
     text-decoration: none;
+    margin-left: 0.4rem;
   }
 
   .form-callsign-text:hover {
@@ -1089,6 +1090,11 @@
 
   .form-callsign-flag {
     font-size: 1rem;
+    margin-left: 0.25rem;
+  }
+
+  .form-heading .prev-contact {
+    margin-left: 0.3rem;
   }
 
   .log-title-row {
