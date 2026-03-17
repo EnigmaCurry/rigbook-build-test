@@ -866,7 +866,7 @@
     left: 0;
     right: 0;
     bottom: 0;
-    z-index: 99;
+    z-index: 10001;
   }
 
   .menu {
@@ -877,7 +877,7 @@
     border: 1px solid var(--border);
     border-radius: 4px;
     min-width: 150px;
-    z-index: 100;
+    z-index: 10002;
     display: flex;
     flex-direction: column;
     overflow: hidden;
