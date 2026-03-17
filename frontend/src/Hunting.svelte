@@ -219,8 +219,8 @@
             <span class="badge band" style="background: {bandColor(freqToBand(spot.frequency))}; color: {bandTextColor(freqToBand(spot.frequency))}">{freqToBand(spot.frequency) || "?"}</span>
             {#if myCallCounts[spot.activator]}<span class="call-count" title="{callCountTitle(myCallCounts[spot.activator], spot.activator)}">{callCountEmoji(myCallCounts[spot.activator])}</span>{/if}
           </div>
-          <div class="park-name">{#if myParkQsos[spot.reference]}<span title="{parkQsoTitle(myParkQsos[spot.reference], spot.reference)}">{parkAward(myParkQsos[spot.reference].count)}</span> {/if}{spot.name || spot.reference}</div>
-          <div class="park-ref">{spot.reference} — {spot.locationDesc}</div>
+          <div class="park-name">{spot.name || spot.reference}</div>
+          <div class="park-ref">{#if myParkQsos[spot.reference]}<span title="{parkQsoTitle(myParkQsos[spot.reference], spot.reference)}">{parkAward(myParkQsos[spot.reference].count)}</span> {/if}{spot.reference} — {spot.locationDesc}</div>
           <div class="card-details">
             <span class="freq">{formatFreq(spot.frequency)} KHz</span>
             <span class="grid-sq">{spot.grid4 || ""}</span>
