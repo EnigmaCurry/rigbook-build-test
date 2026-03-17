@@ -860,7 +860,7 @@
   </div>
 
   <div class="form-row">
-    <div class="field">
+    <div class="field field-pota">
       <!-- svelte-ignore a11y-click-events-have-key-events -->
       <!-- svelte-ignore a11y-no-static-element-interactions -->
       <label for="pota_park">POTA Park{#if potaParkName} — {#if potaParkName.endsWith("not downloaded")}<a class="pota-park-name" href="#/parks/download" on:click|stopPropagation>{potaParkName}</a>{:else}<span class="pota-park-name" on:click|preventDefault|stopPropagation={openParkOverlay}>{potaParkName}</span>{/if}{/if}</label>
@@ -1085,6 +1085,12 @@
 
   .field-name {
     min-width: 50%;
+  }
+
+  .field-pota label {
+    white-space: normal;
+    overflow: visible;
+    text-overflow: unset;
   }
 
   .field label {
