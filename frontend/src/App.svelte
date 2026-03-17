@@ -110,8 +110,8 @@
   let gridMapValue = "";
   let menuOpen = false;
   let myCallsign = "";
-  let wideBreakpoint = 1200;
-  let wide = typeof window !== "undefined" && window.innerWidth >= 1200;
+  let wideBreakpoint = 1500;
+  let wide = typeof window !== "undefined" && window.innerWidth >= 1500;
   let vfoFreq = "";
   let vfoMode = "";
   let vfoConnected = false;
