@@ -573,6 +573,37 @@
           <div class="park-detail-links">
             <a href="https://pota.app/#/park/{parkDetail.reference}" target="_blank" rel="noopener">View on POTA</a>
           </div>
+          {#if parkDetail.contacts && parkDetail.contacts.length > 0}
+            <h4 class="park-qsos-heading">My QSOs ({parkDetail.contacts.length})</h4>
+            <div class="park-qsos-table">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>Call</th>
+                    <th>Name</th>
+                    <th>Freq</th>
+                    <th>Mode</th>
+                    <th>RST S</th>
+                    <th>RST R</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {#each parkDetail.contacts as c}
+                    <tr class="qso-row" on:click={() => { window.location.hash = `/log/${c.id}`; }}>
+                      <td>{c.timestamp ? c.timestamp.slice(0, 10) : ""}</td>
+                      <td class="call">{c.call}</td>
+                      <td>{c.name || ""}</td>
+                      <td>{c.freq || ""}</td>
+                      <td>{c.mode || ""}</td>
+                      <td>{c.rst_sent || ""}</td>
+                      <td>{c.rst_recv || ""}</td>
+                    </tr>
+                  {/each}
+                </tbody>
+              </table>
+            </div>
+          {/if}
         </div>
       {:else}
         <p class="empty">Park {parkRef} not found in cache.</p>
@@ -1008,5 +1039,46 @@
 
   .park-detail-links a:hover {
     text-decoration: underline;
+  }
+
+  .park-qsos-heading {
+    color: var(--text-muted);
+    font-size: 0.95rem;
+    margin: 1rem 0 0.5rem 0;
+  }
+
+  .park-qsos-table {
+    overflow-x: auto;
+  }
+
+  .park-qsos-table table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+  }
+
+  .park-qsos-table th {
+    text-align: left;
+    color: var(--text-dim);
+    font-weight: normal;
+    padding: 0.25rem 0.5rem;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .park-qsos-table td {
+    padding: 0.3rem 0.5rem;
+  }
+
+  .park-qsos-table td.call {
+    color: var(--accent-callsign);
+    font-weight: bold;
+  }
+
+  .qso-row {
+    cursor: pointer;
+  }
+
+  .qso-row:hover {
+    background: var(--row-hover);
   }
 </style>

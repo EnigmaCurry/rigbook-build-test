@@ -922,7 +922,23 @@
         {/if}
         <div class="park-overlay-links">
           <a href="https://pota.app/#/park/{parkOverlay.reference}" target="_blank" rel="noopener">View on POTA</a>
+          <a href="#/parks/park/{encodeURIComponent(parkOverlay.reference)}">View details</a>
         </div>
+        {#if parkOverlay.contacts && parkOverlay.contacts.length > 0}
+          <h4 class="park-overlay-qsos-heading">My QSOs ({parkOverlay.contacts.length})</h4>
+          <div class="park-overlay-qsos">
+            {#each parkOverlay.contacts as c}
+              <!-- svelte-ignore a11y-click-events-have-key-events -->
+              <!-- svelte-ignore a11y-no-static-element-interactions -->
+              <div class="park-overlay-qso-row" on:click={() => { parkOverlay = null; parkOverlayLoading = false; window.location.hash = `/log/${c.id}`; }}>
+                <span class="poq-date">{c.timestamp ? c.timestamp.slice(0, 10) : ""}</span>
+                <span class="poq-call">{c.call}</span>
+                <span class="poq-name">{c.name || ""}</span>
+                <span class="poq-mode">{c.mode || ""}</span>
+              </div>
+            {/each}
+          </div>
+        {/if}
       {/if}
     </div>
   </div>
@@ -1345,6 +1361,11 @@
     margin-bottom: 0.75rem;
   }
 
+  .park-overlay-links {
+    display: flex;
+    gap: 1rem;
+  }
+
   .park-overlay-links a {
     color: var(--accent);
     text-decoration: none;
@@ -1353,6 +1374,55 @@
 
   .park-overlay-links a:hover {
     text-decoration: underline;
+  }
+
+  .park-overlay-qsos-heading {
+    color: var(--text-muted);
+    font-size: 0.9rem;
+    margin: 0.75rem 0 0.4rem 0;
+  }
+
+  .park-overlay-qsos {
+    max-height: 150px;
+    overflow-y: auto;
+  }
+
+  .park-overlay-qso-row {
+    display: flex;
+    gap: 0.5rem;
+    padding: 0.2rem 0.3rem;
+    font-size: 0.8rem;
+    cursor: pointer;
+    border-radius: 3px;
+    line-height: 1.5;
+  }
+
+  .park-overlay-qso-row:hover {
+    background: var(--row-hover);
+  }
+
+  .poq-date {
+    color: var(--text-dim);
+    flex-shrink: 0;
+  }
+
+  .poq-call {
+    color: var(--accent-callsign);
+    font-weight: bold;
+    flex-shrink: 0;
+  }
+
+  .poq-name {
+    color: var(--text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .poq-mode {
+    color: var(--text-dim);
+    flex-shrink: 0;
+    margin-left: auto;
   }
 
   .pota-ac {

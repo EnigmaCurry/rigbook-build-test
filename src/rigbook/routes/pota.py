@@ -418,11 +418,27 @@ async def get_park(reference: str, session: AsyncSession = Depends(get_session))
         return {"error": "Park not found"}
     p, loc_name, prog_name = park
 
-    my_qsos = (
+    my_qsos_rows = (
         await session.execute(
-            select(func.count()).where(Contact.pota_park == ref)
+            select(Contact)
+            .where(Contact.pota_park == ref)
+            .order_by(Contact.timestamp.desc())
         )
-    ).scalar() or 0
+    ).scalars().all()
+
+    contacts = [
+        {
+            "id": c.id,
+            "call": c.call,
+            "name": c.name,
+            "freq": c.freq,
+            "mode": c.mode,
+            "rst_sent": c.rst_sent,
+            "rst_recv": c.rst_recv,
+            "timestamp": c.timestamp.isoformat() if c.timestamp else None,
+        }
+        for c in my_qsos_rows
+    ]
 
     return {
         "reference": p.reference,
@@ -434,7 +450,8 @@ async def get_park(reference: str, session: AsyncSession = Depends(get_session))
         "attempts": p.attempts,
         "activations": p.activations,
         "qsos": p.qsos,
-        "my_qsos": my_qsos,
+        "my_qsos": len(contacts),
+        "contacts": contacts,
         "location_name": loc_name,
         "program_name": prog_name,
     }
