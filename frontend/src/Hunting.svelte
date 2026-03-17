@@ -36,6 +36,7 @@
     const days = Math.floor(hrs / 24);
     if (days > 0) return `${days} day${days !== 1 ? "s" : ""} ago`;
     if (hrs > 0) return `${hrs} hour${hrs !== 1 ? "s" : ""} ago`;
+    if (mins <= 0) return "just now";
     return `${mins} minute${mins !== 1 ? "s" : ""} ago`;
   }
 
