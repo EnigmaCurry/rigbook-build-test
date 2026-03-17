@@ -720,8 +720,11 @@
   .my-parks-list {
     display: flex;
     flex-direction: column;
-    max-height: 50vh;
-    overflow-y: auto;
+    height: 40vh;
+    overflow-y: scroll;
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    padding: 0.25rem;
   }
 
   .park-date {
