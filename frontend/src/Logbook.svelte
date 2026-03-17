@@ -16,7 +16,7 @@
   import GridMap from "./GridMap.svelte";
   import { bandColor, bandTextColor } from "./bandColors.js";
   import { parkAward, parkAwardTitle } from "./parkAward.js";
-  import { countryFlag } from "./countryFlag.js";
+  import { countryFlag, prefixFromRef } from "./countryFlag.js";
 
   export let editId = null;
   export let prefill = null;
@@ -985,7 +985,7 @@
         <p class="park-overlay-name">{parkOverlay.name}</p>
         <div class="park-overlay-details">
           <div class="park-overlay-row"><span class="park-overlay-label">Location</span> <span>{parkOverlay.location_name || ""} ({parkOverlay.location_desc})</span></div>
-          <div class="park-overlay-row"><span class="park-overlay-label">Country</span> <span>{parkOverlay.program_name || ""}</span></div>
+          <div class="park-overlay-row"><span class="park-overlay-label">Country</span> <span>{countryFlag(prefixFromRef(parkOverlay.reference))} {parkOverlay.program_name || ""}</span></div>
           {#if parkOverlay.grid}
             <div class="park-overlay-row"><span class="park-overlay-label">Grid</span> <span>{parkOverlay.grid}</span></div>
           {/if}
