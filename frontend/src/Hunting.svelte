@@ -31,7 +31,9 @@
     const count = info.count;
     let s = `${count} QSO${count !== 1 ? "s" : ""} with ${call}`;
     if (info.last) {
-      const ago = Date.now() - new Date(info.last).getTime();
+      const lastStr = info.last.endsWith("Z") ? info.last : info.last + "Z";
+      const ago = Date.now() - new Date(lastStr).getTime();
+      if (ago < 0) return s;
       const mins = Math.floor(ago / 60000);
       const hrs = Math.floor(mins / 60);
       const days = Math.floor(hrs / 24);
