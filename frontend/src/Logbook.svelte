@@ -1127,8 +1127,8 @@
     border: 1px solid var(--border);
     border-radius: 6px;
     padding: 1rem;
-    width: 100%;
-    max-width: 800px;
+    width: 95vw;
+    max-width: 1200px;
     max-height: 90vh;
     overflow-y: auto;
   }
