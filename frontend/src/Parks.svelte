@@ -39,6 +39,8 @@
   let leafletMap = null;
   let markersByRef = {};
   let selectedPark = null;
+  let detailMapEl;
+  let detailMap = null;
 
   function parseTab() {
     const hash = window.location.hash.slice(1) || "";
@@ -59,6 +61,7 @@
     tab = t;
     parkDetail = null;
     destroyMap();
+    destroyDetailMap();
     if (t === "my-qsos") loadMyParks();
     window.location.hash = `/parks/${t}`;
   }
@@ -68,6 +71,26 @@
     tab = "park";
     window.location.hash = `/parks/park/${encodeURIComponent(ref)}`;
     loadParkDetail(ref);
+  }
+
+  function destroyDetailMap() {
+    if (detailMap) { detailMap.remove(); detailMap = null; }
+  }
+
+  async function renderDetailMap() {
+    await tick();
+    destroyDetailMap();
+    if (!detailMapEl || !parkDetail || parkDetail.latitude == null) return;
+    detailMap = L.map(detailMapEl, { scrollWheelZoom: true });
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>',
+      maxZoom: 18,
+    }).addTo(detailMap);
+    const ll = [parkDetail.latitude, parkDetail.longitude];
+    L.marker(ll).addTo(detailMap)
+      .bindPopup(`<b>${parkDetail.reference}</b><br>${parkDetail.name || ""}`)
+      .openPopup();
+    detailMap.setView(ll, 12);
   }
 
   async function loadParkDetail(ref) {
@@ -81,6 +104,7 @@
       }
     } catch {}
     parkLoading = false;
+    if (parkDetail) renderDetailMap();
   }
 
   function onHashChange() {
@@ -357,6 +381,7 @@
 
   onDestroy(() => {
     destroyMap();
+    destroyDetailMap();
     window.removeEventListener("hashchange", onHashChange);
   });
 </script>
@@ -589,12 +614,7 @@
             </div>
             {#if parkDetail.latitude != null && parkDetail.longitude != null}
               <div class="park-detail-map-wrap">
-                <iframe
-                  class="park-detail-map"
-                  title="Park location"
-                  src="https://www.openstreetmap.org/export/embed.html?bbox={parkDetail.longitude - 0.05},{parkDetail.latitude - 0.03},{parkDetail.longitude + 0.05},{parkDetail.latitude + 0.03}&layer=mapnik&marker={parkDetail.latitude},{parkDetail.longitude}"
-                  frameborder="0"
-                ></iframe>
+                <div class="park-detail-map" bind:this={detailMapEl}></div>
               </div>
             {/if}
           </div>
