@@ -85,6 +85,9 @@
   let errorMsg = "";
   let editingId = null;
   let showGridPicker = false;
+  $: if (typeof document !== "undefined") {
+    document.body.style.overflow = showGridPicker ? "hidden" : "";
+  }
   export let showForm = true;
 
   let sortCol = "timestamp";
