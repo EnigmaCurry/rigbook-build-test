@@ -1015,13 +1015,14 @@
     color: var(--text);
     overflow: hidden;
     text-overflow: ellipsis;
+    flex: 1;
+    min-width: 0;
   }
 
   .park-grid {
     color: var(--text-muted);
     font-size: 0.85rem;
     flex-shrink: 0;
-    margin-left: auto;
     width: 7ch;
     text-align: right;
   }
