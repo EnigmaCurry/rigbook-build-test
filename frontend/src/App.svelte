@@ -105,6 +105,7 @@
   let { page, editId } = parseHash();
   let previousPage = "log";
   let prefill = null;
+  let dualShowForm = false;
   let gridMapValue = "";
   let menuOpen = false;
   let myCallsign = "";
@@ -300,7 +301,8 @@
     if (loc.startsWith("US-")) {
       prefill.country = "United States";
     }
-    if (page !== "dual") navigate("add");
+    if (page === "dual") dualShowForm = true;
+    else navigate("add");
   }
 
   function handleSearchAction(e) {
@@ -463,7 +465,7 @@
       <button class="add-btn narrow-only" on:click={() => navigate("log")} title="Logbook">📖</button>
       <button class="add-btn narrow-only" on:click={() => navigate("hunting")} title="Hunting">🧭</button>
       <button class="add-btn parks-btn" on:click={() => navigate("parks")} title="My Parks">🌲</button>
-      <button class="add-btn" on:click={() => navigate("add")} title="Add QSO">+</button>
+      <button class="add-btn" on:click={() => { if (page === "dual") { dualShowForm = true; prefill = null; editId = null; } else navigate("add"); }} title="Add QSO">+</button>
       <button class="hamburger" on:click={() => menuOpen = !menuOpen} aria-label="Menu">
         <span class="bar"></span>
         <span class="bar"></span>
@@ -497,7 +499,7 @@
   {:else if page === "dual"}
     <div class="dual-layout">
       <div class="dual-pane">
-        <Logbook showForm={!!prefill} {prefill} {editId} {vfoFreq} {vfoMode} on:editchange={e => { editId = e.detail; if (e.detail) window.location.hash = `/log/${e.detail}`; }} on:navigate={e => { if (e.detail === "hunting" || e.detail === "log") { prefill = null; editId = null; } else navigate(e.detail); }} on:prefillconsumed={() => {}} />
+        <Logbook showForm={dualShowForm || !!prefill} {prefill} {editId} {vfoFreq} {vfoMode} on:editchange={e => { editId = e.detail; if (e.detail) window.location.hash = `/log/${e.detail}`; }} on:navigate={e => { if (e.detail === "hunting" || e.detail === "log") { prefill = null; editId = null; dualShowForm = false; } else navigate(e.detail); }} on:prefillconsumed={() => {}} />
       </div>
       <div class="dual-pane">
         <Hunting on:tune={e => tuneAndPrefill(e.detail)} />
