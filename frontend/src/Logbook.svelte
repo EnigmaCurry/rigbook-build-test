@@ -2,6 +2,16 @@
   import { onMount, tick, createEventDispatcher } from "svelte";
   import L from "leaflet";
   import "leaflet/dist/leaflet.css";
+  import markerIcon2x from "leaflet/dist/images/marker-icon-2x.png";
+  import markerIcon from "leaflet/dist/images/marker-icon.png";
+  import markerShadow from "leaflet/dist/images/marker-shadow.png";
+
+  delete L.Icon.Default.prototype._getIconUrl;
+  L.Icon.Default.mergeOptions({
+    iconRetinaUrl: markerIcon2x,
+    iconUrl: markerIcon,
+    shadowUrl: markerShadow,
+  });
   import Autocomplete from "./Autocomplete.svelte";
   import GridMap from "./GridMap.svelte";
   import { bandColor, bandTextColor } from "./bandColors.js";
@@ -319,6 +329,31 @@
   let overlayMapEl;
   let overlayMap = null;
 
+  let overlayFullscreen = false;
+
+  function addExpandControl(map, wrapEl) {
+    const ExpandControl = L.Control.extend({
+      options: { position: "topright" },
+      onAdd() {
+        const btn = L.DomUtil.create("div", "leaflet-bar leaflet-control map-expand-btn");
+        btn.innerHTML = "⛶";
+        btn.title = "Toggle fullscreen";
+        btn.onclick = (e) => {
+          e.stopPropagation();
+          overlayFullscreen = !overlayFullscreen;
+          if (overlayFullscreen) {
+            wrapEl.classList.add("map-fullscreen");
+          } else {
+            wrapEl.classList.remove("map-fullscreen");
+          }
+          setTimeout(() => map.invalidateSize(), 100);
+        };
+        return btn;
+      }
+    });
+    map.addControl(new ExpandControl());
+  }
+
   function destroyOverlayMap() {
     if (overlayMap) { overlayMap.remove(); overlayMap = null; }
   }
@@ -337,6 +372,7 @@
       .bindPopup(`<b>${parkOverlay.reference}</b><br>${parkOverlay.name || ""}`)
       .openPopup();
     overlayMap.setView(ll, 12);
+    addExpandControl(overlayMap, overlayMapEl);
   }
 
   async function resolvePotaParkName() {
@@ -424,13 +460,23 @@
   }
 
   function closeParkOverlay() {
+    if (overlayFullscreen && overlayMapEl) overlayMapEl.classList.remove("map-fullscreen");
+    overlayFullscreen = false;
     destroyOverlayMap();
     parkOverlay = null;
     parkOverlayLoading = false;
   }
 
   function onParkOverlayKeydown(e) {
-    if (e.key === "Escape") closeParkOverlay();
+    if (e.key === "Escape") {
+      if (overlayFullscreen && overlayMapEl) {
+        overlayMapEl.classList.remove("map-fullscreen");
+        overlayFullscreen = false;
+        setTimeout(() => overlayMap?.invalidateSize(), 100);
+        return;
+      }
+      closeParkOverlay();
+    }
   }
 
   async function openParkOverlay() {
@@ -1542,5 +1588,38 @@
   .pota-dropdown li:hover .pota-loc,
   .pota-dropdown li.highlighted .pota-loc {
     color: var(--bg);
+  }
+
+  :global(.map-expand-btn) {
+    width: 30px;
+    height: 30px;
+    line-height: 30px;
+    text-align: center;
+    font-size: 1.2rem;
+    cursor: pointer;
+    background: white;
+  }
+
+  :global(.map-expand-btn:hover) {
+    background: #f4f4f4;
+  }
+
+  :global(.map-fullscreen) {
+    position: fixed !important;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 10000;
+    width: 100% !important;
+    height: 100% !important;
+    max-width: none !important;
+    border-radius: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  :global(.leaflet-attribution-flag) {
+    display: none !important;
   }
 </style>
