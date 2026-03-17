@@ -731,6 +731,11 @@
     padding: 0.25rem;
   }
 
+  .my-parks-list .tree-row {
+    padding: 0.4rem 0.4rem;
+    line-height: 1.6;
+  }
+
   .park-date {
     color: var(--text-dim);
     font-size: 0.8rem;
