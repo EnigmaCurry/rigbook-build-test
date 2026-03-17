@@ -378,7 +378,7 @@
     <div class="tabs">
       <button class="tab" class:active={tab === "my-qsos"} on:click={() => switchTab("my-qsos")}>My Parks</button>
       <button class="tab" class:active={tab === "by-country"} on:click={() => switchTab("by-country")}>By Country</button>
-      <button class="tab" class:active={tab === "download"} on:click={() => switchTab("download")}>Download</button>
+      <button class="tab" class:active={tab === "download"} on:click={() => switchTab("download")}>Cache</button>
     </div>
   {/if}
 
@@ -420,7 +420,7 @@
   {:else if tab === "by-country"}
     <div class="tab-content">
       {#if cachedPrograms.length === 0}
-        <p class="empty">No parks cached yet. Go to the Download tab to select countries and fetch parks.</p>
+        <p class="empty">No parks cached yet. Go to the Cache tab to select countries and fetch parks.</p>
       {:else}
         <input type="text" class="filter-input" placeholder="Filter countries..." bind:value={listFilter} />
         <div class="tree">
