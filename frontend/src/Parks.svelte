@@ -26,6 +26,8 @@
       cmp = (a.last_contact || "").localeCompare(b.last_contact || "");
     } else if (mySort === "name") {
       cmp = (a.name || a.reference).localeCompare(b.name || b.reference);
+    } else if (mySort === "code") {
+      cmp = (a.reference || "").localeCompare(b.reference || "");
     } else if (mySort === "qsos") {
       cmp = (a.qso_count || 0) - (b.qso_count || 0);
     }
@@ -34,7 +36,7 @@
 
   function toggleMySort(col) {
     if (mySort === col) mySortAsc = !mySortAsc;
-    else { mySort = col; mySortAsc = col === "name"; }
+    else { mySort = col; mySortAsc = col === "name" || col === "code"; }
   }
   let mapEl;
   let leafletMap = null;
@@ -470,6 +472,7 @@
         <div class="my-sort-bar">
           <span class="my-sort-label">Sort:</span>
           <button class="my-sort-btn" class:active={mySort === "date"} on:click={() => toggleMySort("date")}>Date {mySort === "date" ? (mySortAsc ? "▲" : "▼") : ""}</button>
+          <button class="my-sort-btn" class:active={mySort === "code"} on:click={() => toggleMySort("code")}>Code {mySort === "code" ? (mySortAsc ? "▲" : "▼") : ""}</button>
           <button class="my-sort-btn" class:active={mySort === "name"} on:click={() => toggleMySort("name")}>Name {mySort === "name" ? (mySortAsc ? "▲" : "▼") : ""}</button>
           <button class="my-sort-btn" class:active={mySort === "qsos"} on:click={() => toggleMySort("qsos")}>QSOs {mySort === "qsos" ? (mySortAsc ? "▲" : "▼") : ""}</button>
         </div>
