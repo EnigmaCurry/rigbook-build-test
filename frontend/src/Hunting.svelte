@@ -37,9 +37,9 @@
       const mins = Math.floor(ago / 60000);
       const hrs = Math.floor(mins / 60);
       const days = Math.floor(hrs / 24);
-      if (days > 0) s += `, the last time was ${days} day${days !== 1 ? "s" : ""} ago`;
-      else if (hrs > 0) s += `, the last time was ${hrs} hour${hrs !== 1 ? "s" : ""} ago`;
-      else s += `, the last time was ${mins} minute${mins !== 1 ? "s" : ""} ago`;
+      if (days > 0) s += `, ${days} day${days !== 1 ? "s" : ""} ago`;
+      else if (hrs > 0) s += `, ${hrs} hour${hrs !== 1 ? "s" : ""} ago`;
+      else s += `, ${mins} minute${mins !== 1 ? "s" : ""} ago`;
     }
     return s;
   }
