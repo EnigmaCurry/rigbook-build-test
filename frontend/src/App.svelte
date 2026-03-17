@@ -510,7 +510,7 @@
       </div>
     </div>
   {:else if page === "parks"}
-    <Parks on:addqso={e => { prefill = e.detail; navigate("add"); }} />
+    <Parks on:addqso={e => { prefill = e.detail; dualShowForm = true; navigate("add"); }} />
   {:else if page === "grid"}
     <GridMap bind:value={gridMapValue} on:select={e => { gridMapValue = e.detail; }} />
   {:else if page === "export"}
