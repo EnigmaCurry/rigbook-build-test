@@ -738,7 +738,8 @@
       {#if showGridPicker}
         <!-- svelte-ignore a11y-click-events-have-key-events -->
         <!-- svelte-ignore a11y-no-static-element-interactions -->
-        <div class="grid-picker-overlay" on:click|self={() => showGridPicker = false}>
+        <!-- svelte-ignore a11y-no-noninteractive-tabindex -->
+        <div class="grid-picker-overlay" on:click|self={() => showGridPicker = false} on:keydown={e => e.key === "Escape" && (showGridPicker = false)} tabindex="0" use:focusOverlay>
           <div class="grid-picker-modal">
             <div class="grid-picker-header">
               <span>Grid Square</span>
