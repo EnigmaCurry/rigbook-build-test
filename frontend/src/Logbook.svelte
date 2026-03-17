@@ -244,8 +244,11 @@
   let prefillSource = null; // tracks if prefill came from hunting
 
   async function lookupCallsign(callsign) {
-    if (!callsign || callsign.length < 3 || callsign === lastQrzCall) return;
-    lastQrzCall = callsign;
+    // Strip portable indicators (e.g. JK1JXP/1, JR2NTC/P)
+    const baseCall = callsign.split("/")[0];
+    if (!baseCall || baseCall.length < 3 || baseCall === lastQrzCall) return;
+    lastQrzCall = baseCall;
+    callsign = baseCall;
 
     // SKCC lookup
     try {
