@@ -95,13 +95,14 @@
     if (hash === "/logbook") return { page: "log", editId: null };
     if (hash === "/export") return { page: "export", editId: null };
     if (hash === "/add") return { page: "add", editId: null };
+    if (hash === "/hunting") return { page: "hunting", editId: null };
     const match = hash.match(/^\/log\/(\d+)$/);
     if (match) return { page: "add", editId: parseInt(match[1], 10) };
-    return { page: "hunting", editId: null };
+    return { page: "log", editId: null };
   }
 
   let { page, editId } = parseHash();
-  let previousPage = "hunting";
+  let previousPage = "log";
   let prefill = null;
   let gridMapValue = "";
   let menuOpen = false;
@@ -267,7 +268,7 @@
     page = p;
     editId = null;
     menuOpen = false;
-    const paths = { hunting: "/", log: "/logbook", add: "/add", grid: "/grid", parks: "/parks", export: "/export", settings: "/settings", links: "/links", about: "/about" };
+    const paths = { hunting: "/hunting", log: "/logbook", add: "/add", grid: "/grid", parks: "/parks", export: "/export", settings: "/settings", links: "/links", about: "/about" };
     window.location.hash = paths[p] || "/";
     fetchCallsign();
   }
@@ -402,7 +403,7 @@
     <div class="header-left">
       <!-- svelte-ignore a11y-click-events-have-key-events -->
       <!-- svelte-ignore a11y-no-noninteractive-element-interactions -->
-      <h1 class="app-title" on:click={() => navigate("hunting")} style="cursor: pointer"><span class="title-full">Rigbook</span><span class="title-short">RB</span></h1>
+      <h1 class="app-title" on:click={() => navigate("log")} style="cursor: pointer"><span class="title-full">Logbook</span><span class="title-short">LB</span></h1>
       {#if myCallsign}
         <!-- svelte-ignore a11y-click-events-have-key-events -->
         <!-- svelte-ignore a11y-no-static-element-interactions -->
@@ -453,6 +454,7 @@
     <!-- svelte-ignore a11y-no-static-element-interactions -->
     <span class="utc-clock" on:click={copyUtcTimestamp} title="Click to copy">{clockCopied ? "Copied!" : utcNow}</span>
     <div class="hamburger-wrap">
+      <button class="add-btn" on:click={() => window.open("#/hunting", "_blank")} title="Hunting">🧭</button>
       <button class="add-btn parks-btn" on:click={() => navigate("parks")} title="My Parks">🌲</button>
       <button class="add-btn" on:click={() => navigate("add")} title="Add QSO">+</button>
       <button class="hamburger" on:click={() => menuOpen = !menuOpen} aria-label="Menu">
