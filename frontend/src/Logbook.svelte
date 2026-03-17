@@ -270,7 +270,11 @@
   }
 
   $: stripCall = () => { call = call.replace(/\s/g, ""); };
-  $: stripGrid = () => { grid = grid.replace(/[^A-Za-z0-9]/g, ""); };
+  $: stripGrid = () => {
+    grid = grid.replace(/[^A-Za-z0-9]/g, "");
+    if (grid.length >= 2) grid = grid.substring(0, 2).toUpperCase() + grid.substring(2);
+    if (grid.length >= 5) grid = grid.substring(0, 4) + grid.substring(4).toLowerCase();
+  };
   $: stripSkcc = () => { skcc = skcc.replace(/[^A-Za-z0-9]/g, ""); };
 
   // POTA park autocomplete
@@ -725,7 +729,7 @@
     <div class="field">
       <label for="grid">Grid</label>
       <div class="grid-input-row">
-        <input id="grid" type="text" bind:value={grid} on:input={stripGrid} style="text-transform: uppercase" />
+        <input id="grid" type="text" bind:value={grid} on:input={stripGrid} />
         <button type="button" class="grid-picker-btn" on:click={() => showGridPicker = !showGridPicker} title="Pick from map">🌍</button>
       </div>
       {#if showGridPicker}
