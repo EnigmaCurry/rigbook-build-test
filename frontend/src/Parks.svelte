@@ -3,6 +3,7 @@
   import L from "leaflet";
   import "leaflet/dist/leaflet.css";
   import { parkAward, parkAwardTitle } from "./parkAward.js";
+  import { countryFlag, prefixFromRef } from "./countryFlag.js";
 
   const dispatch = createEventDispatcher();
 
@@ -478,6 +479,7 @@
             <!-- svelte-ignore a11y-no-static-element-interactions -->
             <!-- svelte-ignore a11y-no-noninteractive-element-interactions -->
             <div class="tree-row park-row clickable" class:selected-park={selectedPark === park.reference} on:click={() => selectPark(park.reference)} on:mouseenter={() => highlightPark(park.reference)} on:mouseleave={() => unhighlightPark(park.reference)}>
+              <span class="park-flag">{countryFlag(prefixFromRef(park.reference))}</span>
               <span class="park-ref">{park.reference}</span>
               <span class="park-name">{park.name || park.reference}</span>
               {#if park.grid}
@@ -976,6 +978,11 @@
 
   .chevron.expanded {
     transform: rotate(90deg);
+  }
+
+  .park-flag {
+    flex-shrink: 0;
+    font-size: 0.9rem;
   }
 
   .park-ref {
