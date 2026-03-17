@@ -516,6 +516,8 @@
     --accent-hover: #00cc6a;
     --accent-callsign: #ffcc00;
     --accent-vfo: #00ccff;
+    --vfo-bg: #111218;
+    --vfo-border: #555;
     --accent-delete: #cc3333;
     --accent-delete-hover: #aa2222;
     --accent-error: #ff6b6b;
@@ -542,7 +544,9 @@
     --accent: #00994d;
     --accent-hover: #007a3d;
     --accent-callsign: #b8860b;
-    --accent-vfo: #0077aa;
+    --accent-vfo: #fbfbfb;
+    --vfo-bg: #0c1e88;
+    --vfo-border: #0c1e88;
     --accent-delete: #cc3333;
     --accent-delete-hover: #aa2222;
     --accent-error: #cc2222;
@@ -608,8 +612,8 @@
     display: inline-flex;
     align-items: center;
     gap: 0;
-    background: #111218;
-    border: 2px solid #555;
+    background: var(--vfo-bg);
+    border: 2px solid var(--vfo-border);
     border-radius: 6px;
     padding: 0.15rem 0.5rem;
     box-shadow: inset 0 1px 3px rgba(0,0,0,0.5), 0 1px 0 rgba(255,255,255,0.05);
