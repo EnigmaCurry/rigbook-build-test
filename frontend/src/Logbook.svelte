@@ -3,7 +3,7 @@
   import Autocomplete from "./Autocomplete.svelte";
   import GridMap from "./GridMap.svelte";
   import { bandColor, bandTextColor } from "./bandColors.js";
-  import { parkAward } from "./parkAward.js";
+  import { parkAward, parkAwardTitle } from "./parkAward.js";
 
   export let editId = null;
   export let prefill = null;
@@ -900,7 +900,7 @@
           {/if}
           <div class="park-overlay-row">
             <span class="park-overlay-label">My QSOs</span>
-            <span>{parkOverlay.my_qsos || 0} {parkAward(parkOverlay.my_qsos || 0)}</span>
+            <span>{parkOverlay.my_qsos || 0} <span title="{parkAwardTitle(parkOverlay.my_qsos || 0)}">{parkAward(parkOverlay.my_qsos || 0)}</span></span>
           </div>
         </div>
         {#if parkOverlay.latitude != null && parkOverlay.longitude != null}

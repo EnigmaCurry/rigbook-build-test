@@ -2,7 +2,7 @@
   import { onMount, onDestroy, tick } from "svelte";
   import L from "leaflet";
   import "leaflet/dist/leaflet.css";
-  import { parkAward } from "./parkAward.js";
+  import { parkAward, parkAwardTitle } from "./parkAward.js";
 
   // --- Tab routing ---
   const TABS = ["my-qsos", "by-country", "download"];
@@ -310,7 +310,7 @@
       const ll = [p.latitude, p.longitude];
       bounds.push(ll);
       const m = L.marker(ll, { icon: normalIcon })
-        .bindPopup(`<b>${p.reference}</b><br>${p.name || ""}<br>${p.qso_count} QSO${p.qso_count !== 1 ? "s" : ""} ${parkAward(p.qso_count)}<br><a href="#/parks/park/${encodeURIComponent(p.reference)}">View details</a>`)
+        .bindPopup(`<b>${p.reference}</b><br>${p.name || ""}<br>${p.qso_count} QSO${p.qso_count !== 1 ? "s" : ""} <span title="${parkAwardTitle(p.qso_count)}">${parkAward(p.qso_count)}</span><br><a href="#/parks/park/${encodeURIComponent(p.reference)}">View details</a>`)
         .addTo(leafletMap);
       markersByRef[p.reference] = m;
     }
@@ -384,7 +384,7 @@
               {#if park.grid}
                 <span class="park-grid">{park.grid}</span>
               {/if}
-              <span class="park-stat">{park.qso_count} QSO{park.qso_count !== 1 ? "s" : ""} {parkAward(park.qso_count)}</span>
+              <span class="park-stat">{park.qso_count} QSO{park.qso_count !== 1 ? "s" : ""} <span title="{parkAwardTitle(park.qso_count)}">{parkAward(park.qso_count)}</span></span>
               <span class="park-date">{park.last_contact ? park.last_contact.slice(0, 10) : ""}</span>
             </div>
           {/each}
@@ -552,7 +552,7 @@
                 {/if}
                 <div class="detail-row">
                   <span class="detail-label">My QSOs</span>
-                  <span>{parkDetail.my_qsos || 0} {parkAward(parkDetail.my_qsos || 0)}</span>
+                  <span>{parkDetail.my_qsos || 0} <span title="{parkAwardTitle(parkDetail.my_qsos || 0)}">{parkAward(parkDetail.my_qsos || 0)}</span></span>
                 </div>
               </div>
               <div class="park-detail-links">

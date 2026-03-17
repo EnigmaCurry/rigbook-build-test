@@ -2,7 +2,7 @@
   import { onMount, onDestroy } from "svelte";
   import { createEventDispatcher } from "svelte";
   import { bandColor, bandTextColor } from "./bandColors.js";
-  import { parkAward } from "./parkAward.js";
+  import { parkAward, parkAwardTitle } from "./parkAward.js";
 
   const dispatch = createEventDispatcher();
 
@@ -163,7 +163,7 @@
             <span class="badge mode">{spot.mode || "?"}</span>
             <span class="badge band" style="background: {bandColor(freqToBand(spot.frequency))}; color: {bandTextColor(freqToBand(spot.frequency))}">{freqToBand(spot.frequency) || "?"}</span>
           </div>
-          <div class="park-name">{spot.name || spot.reference}{#if myParkQsos[spot.reference]} {parkAward(myParkQsos[spot.reference])}{/if}</div>
+          <div class="park-name">{spot.name || spot.reference}{#if myParkQsos[spot.reference]} <span title="{parkAwardTitle(myParkQsos[spot.reference])}">{parkAward(myParkQsos[spot.reference])}</span>{/if}</div>
           <div class="park-ref">{spot.reference} — {spot.locationDesc}</div>
           <div class="card-details">
             <span class="freq">{formatFreq(spot.frequency)} KHz</span>
