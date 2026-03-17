@@ -9,6 +9,7 @@
   let flrig_host = "localhost";
   let flrig_port = "12345";
   let wide_breakpoint = "1200";
+  let wide_mode_enabled = true;
   let theme = localStorage.getItem("rigbook-theme") || (window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark");
   let saving = false;
   let message = "";
@@ -48,7 +49,15 @@
           if (s.key === "qrz_password") hasQrzPassword = !!s.value && s.value !== "";
           if (s.key === "flrig_host") flrig_host = s.value || "localhost";
           if (s.key === "flrig_port") flrig_port = s.value || "12345";
-          if (s.key === "wide_breakpoint") wide_breakpoint = s.value || "1200";
+          if (s.key === "wide_breakpoint") {
+            if (s.value === "0") {
+              wide_mode_enabled = false;
+              wide_breakpoint = "1200";
+            } else {
+              wide_mode_enabled = true;
+              wide_breakpoint = s.value || "1200";
+            }
+          }
         }
       }
     } catch {}
@@ -95,7 +104,7 @@
       await fetch("/api/settings/wide_breakpoint", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ value: wide_breakpoint.trim() }),
+        body: JSON.stringify({ value: wide_mode_enabled ? wide_breakpoint.trim() : "0" }),
       });
       message = "Settings saved.";
     } catch (e) {
@@ -177,10 +186,16 @@
     </button>
   </div>
 
+  <div class="setting-row toggle-row">
+    <label>
+      <input type="checkbox" bind:checked={wide_mode_enabled} />
+      Wide Mode
+    </label>
+  </div>
+
   <div class="setting-row">
-    <label for="wide_breakpoint">Wide Mode Breakpoint (px)</label>
-    <input id="wide_breakpoint" type="text" bind:value={wide_breakpoint} autocomplete="off" inputmode="numeric" />
-    <span class="hint">Minimum window width to show dual-pane layout (default: 1200)</span>
+    <label for="wide_breakpoint">Breakpoint: {wide_breakpoint}px</label>
+    <input id="wide_breakpoint" type="range" min="1200" max="2500" step="50" bind:value={wide_breakpoint} disabled={!wide_mode_enabled} />
   </div>
 
   <h3>flrig Connection</h3>
@@ -239,7 +254,7 @@
     color: var(--text-muted);
   }
 
-  input {
+  input:not([type="range"]):not([type="checkbox"]) {
     background: var(--bg-input);
     border: 1px solid var(--border-input);
     color: var(--text);
@@ -250,9 +265,22 @@
     width: 100%;
   }
 
-  input:focus {
+  input:not([type="range"]):not([type="checkbox"]):focus {
     outline: none;
     border-color: var(--accent);
+  }
+
+  input[type="range"] {
+    width: 100%;
+    accent-color: var(--accent);
+  }
+
+  input[type="range"]:disabled {
+    opacity: 0.4;
+  }
+
+  input[type="checkbox"] {
+    accent-color: var(--accent);
   }
 
   button {

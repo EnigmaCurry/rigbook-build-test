@@ -279,7 +279,8 @@
       if (res.ok) {
         const data = await res.json();
         const v = parseInt(data.value, 10);
-        if (v > 0) wideBreakpoint = v;
+        if (v === 0) wideBreakpoint = Infinity;
+        else if (v > 0) wideBreakpoint = v;
       }
     } catch {}
     wide = isWide();
