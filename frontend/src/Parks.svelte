@@ -16,6 +16,7 @@
   let mapEl;
   let leafletMap = null;
   let markersByRef = {};
+  let selectedPark = null;
 
   function parseTab() {
     const hash = window.location.hash.slice(1) || "";
@@ -248,6 +249,7 @@
   function destroyMap() {
     if (leafletMap) { leafletMap.remove(); leafletMap = null; }
     markersByRef = {};
+    selectedPark = null;
   }
 
   const highlightIcon = L.divIcon({
@@ -265,13 +267,37 @@
   });
 
   function highlightPark(ref) {
+    if (selectedPark) return;
     const m = markersByRef[ref];
     if (m) { m.setIcon(highlightIcon); m.openPopup(); }
   }
 
   function unhighlightPark(ref) {
+    if (selectedPark) return;
     const m = markersByRef[ref];
     if (m) { m.setIcon(normalIcon); m.closePopup(); }
+  }
+
+  function selectPark(ref) {
+    // Deselect if clicking the same park
+    if (selectedPark === ref) {
+      const m = markersByRef[ref];
+      if (m) { m.setIcon(normalIcon); m.closePopup(); }
+      selectedPark = null;
+      return;
+    }
+    // Unhighlight previous selection
+    if (selectedPark) {
+      const prev = markersByRef[selectedPark];
+      if (prev) { prev.setIcon(normalIcon); prev.closePopup(); }
+    }
+    selectedPark = ref;
+    const m = markersByRef[ref];
+    if (m) {
+      m.setIcon(highlightIcon);
+      m.openPopup();
+      leafletMap?.panTo(m.getLatLng());
+    }
   }
 
   async function renderMap() {
@@ -293,7 +319,7 @@
       const ll = [p.latitude, p.longitude];
       bounds.push(ll);
       const m = L.marker(ll, { icon: normalIcon })
-        .bindPopup(`<b>${p.reference}</b><br>${p.name || ""}<br>${p.qso_count} QSO${p.qso_count !== 1 ? "s" : ""} ${parkAward(p.qso_count)}`)
+        .bindPopup(`<b>${p.reference}</b><br>${p.name || ""}<br>${p.qso_count} QSO${p.qso_count !== 1 ? "s" : ""} ${parkAward(p.qso_count)}<br><a href="#/parks/park/${encodeURIComponent(p.reference)}">View details</a>`)
         .addTo(leafletMap);
       markersByRef[p.reference] = m;
     }
@@ -361,7 +387,7 @@
             <!-- svelte-ignore a11y-click-events-have-key-events -->
             <!-- svelte-ignore a11y-no-static-element-interactions -->
             <!-- svelte-ignore a11y-no-noninteractive-element-interactions -->
-            <div class="tree-row park-row clickable" on:click={() => viewPark(park.reference)} on:mouseenter={() => highlightPark(park.reference)} on:mouseleave={() => unhighlightPark(park.reference)}>
+            <div class="tree-row park-row clickable" class:selected-park={selectedPark === park.reference} on:click={() => selectPark(park.reference)} on:mouseenter={() => highlightPark(park.reference)} on:mouseleave={() => unhighlightPark(park.reference)}>
               <span class="park-ref">{park.reference}</span>
               <span class="park-name">{park.name || park.reference}</span>
               {#if park.grid}
@@ -734,6 +760,11 @@
   .my-parks-list .tree-row {
     padding: 0.4rem 0.4rem;
     line-height: 1.6;
+  }
+
+  .my-parks-list .selected-park {
+    background: var(--bg-deep);
+    border-left: 3px solid var(--accent);
   }
 
   .park-date {
