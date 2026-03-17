@@ -462,8 +462,12 @@
 
   {#if tab === "my-qsos"}
     <div class="tab-content">
-      {#if myParksLoading}
+      {#if myParksLoading || loading}
         <p class="loading">Loading...</p>
+      {:else if totalParks === 0}
+        <!-- svelte-ignore a11y-click-events-have-key-events -->
+        <!-- svelte-ignore a11y-no-static-element-interactions -->
+        <p class="empty">No POTA park data cached. Go to the <span class="link" on:click={() => switchTab("download")}>Cache</span> tab to download parks for your countries.</p>
       {:else if myParks.length === 0}
         <p class="empty">No POTA parks contacted yet.</p>
       {:else}
@@ -796,6 +800,16 @@
   .empty {
     color: var(--text-dim);
     font-style: italic;
+  }
+
+  .empty .link {
+    color: var(--accent);
+    cursor: pointer;
+    font-style: normal;
+  }
+
+  .empty .link:hover {
+    text-decoration: underline;
   }
 
   .loading {
