@@ -46,11 +46,6 @@
     }
   }
 
-  function fillNow() {
-    if (datePart && timePart && !confirm("Update timestamp to now?")) return;
-    datePart = utcNowDate();
-    timePart = utcNowTime();
-  }
   let datePart = "";
   let timePart = "";
   let comments = "";
@@ -270,8 +265,6 @@
 
   function onCallBlur() {
     if (call.length >= 3) {
-      if (!datePart) datePart = utcNowDate();
-      if (!timePart) timePart = utcNowTime();
       lookupCallsign(call.toUpperCase());
     }
   }
@@ -523,12 +516,14 @@
   }
 
   async function submitContact() {
-    const required = { call, freq, mode, date: datePart, time: timePart };
+    const required = { call, freq, mode };
     const missing = Object.entries(required).filter(([, v]) => !v || !String(v).trim());
     if (missing.length) {
       errorMsg = `Required: ${missing.map(([k]) => k).join(", ")}`;
       return;
     }
+    if (!datePart.trim()) datePart = utcNowDate();
+    if (!timePart.trim()) timePart = utcNowTime();
     submitting = true;
     errorMsg = "";
     try {
@@ -787,10 +782,7 @@
     </div>
     <div class="field">
       <label for="time">Time (UTC)</label>
-      <div class="time-input-row">
-        <input id="time" type="text" bind:value={timePart} on:blur={normalizeTime} placeholder="HH:MM:SS" maxlength="8" />
-        <button type="button" class="now-btn" on:click={fillNow} title="Set to now">&#128339;</button>
-      </div>
+      <input id="time" type="text" bind:value={timePart} on:blur={normalizeTime} placeholder="HH:MM:SS" maxlength="8" />
     </div>
     <div class="field wide">
       <label for="notes">Notes (private)</label>
@@ -1234,31 +1226,6 @@
     border-radius: 8px;
     margin-left: 0.3rem;
     vertical-align: middle;
-  }
-
-  .time-input-row {
-    display: flex;
-    gap: 0.3rem;
-    align-items: center;
-  }
-
-  .time-input-row input {
-    flex: 1;
-  }
-
-  .now-btn {
-    background: var(--btn-secondary);
-    color: var(--text);
-    border: none;
-    font-size: 1rem;
-    cursor: pointer;
-    border-radius: 3px;
-    padding: 0.25rem 0.4rem;
-    line-height: 1;
-  }
-
-  .now-btn:hover {
-    background: var(--btn-secondary-hover);
   }
 
   .pota-park-name {
