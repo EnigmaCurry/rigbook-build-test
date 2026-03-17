@@ -1075,7 +1075,6 @@
     flex-direction: column;
     flex: 1;
     min-width: 120px;
-    overflow: hidden;
   }
 
   .field.wide {
