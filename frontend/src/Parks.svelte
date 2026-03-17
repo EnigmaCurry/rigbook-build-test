@@ -1021,6 +1021,7 @@
     color: var(--text-muted);
     font-size: 0.85rem;
     flex-shrink: 0;
+    margin-left: auto;
   }
 
   .park-stat {
