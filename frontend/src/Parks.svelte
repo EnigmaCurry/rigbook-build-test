@@ -327,7 +327,7 @@
   {#if tab === "park"}
     <!-- svelte-ignore a11y-click-events-have-key-events -->
     <!-- svelte-ignore a11y-no-static-element-interactions -->
-    <span class="back-link" on:click={() => switchTab("my-qsos")}>&larr; Back</span>
+    <span class="back-link" on:click={() => history.back()}>&larr; Back</span>
   {:else}
     <div class="stats">
       <span>{programs.length} countries</span>
