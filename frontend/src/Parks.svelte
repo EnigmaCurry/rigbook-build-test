@@ -483,13 +483,13 @@
             <!-- svelte-ignore a11y-no-static-element-interactions -->
             <!-- svelte-ignore a11y-no-noninteractive-element-interactions -->
             <div class="tree-row park-row clickable" class:selected-park={selectedPark === park.reference} on:click={() => selectPark(park.reference)} on:mouseenter={() => highlightPark(park.reference)} on:mouseleave={() => unhighlightPark(park.reference)}>
+              <span class="park-award" title="{parkAwardTitle(park.qso_count)}">{parkAward(park.qso_count)}</span>
               <span class="park-flag">{countryFlag(prefixFromRef(park.reference))}</span>
               <span class="park-ref">{park.reference}</span>
               <span class="park-name">{park.name || park.reference}</span>
               {#if park.grid}
                 <span class="park-grid">{park.grid}</span>
               {/if}
-              <span class="park-stat">{park.qso_count} QSO{park.qso_count !== 1 ? "s" : ""} <span title="{parkAwardTitle(park.qso_count)}">{parkAward(park.qso_count)}</span></span>
               <span class="park-date">{park.last_contact ? park.last_contact.slice(0, 10) : ""}</span>
             </div>
           {/each}
