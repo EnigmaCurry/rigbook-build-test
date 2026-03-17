@@ -34,7 +34,7 @@
   }
 
   function displayLabel(item) {
-    if (typeof item === "object" && item.display) return item.display;
+    if (item && typeof item === "object" && item.display) return item.display;
     return label(item);
   }
 
