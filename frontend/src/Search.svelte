@@ -220,7 +220,7 @@
           <span class="result-detail">{qrzResult.name || ""} {qrzResult.qth || ""} {qrzResult.state || ""}</span>
         </div>
       {:else if query.length >= 3 && !qrzLoading}
-        <div class="qrz-hint">Press Enter to look up on QRZ</div>
+        <div class="qrz-hint">Press Enter to show results from QRZ</div>
       {/if}
 
       {#if qrzLoading}
