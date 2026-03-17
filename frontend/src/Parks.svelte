@@ -75,11 +75,12 @@
 
   function exitFullscreen() {
     if (!fullscreenMap) return;
+    const map = fullscreenMap;
     fullscreenWrap.classList.remove("map-fullscreen");
     document.body.style.overflow = "";
-    setTimeout(() => fullscreenMap.invalidateSize(), 100);
     fullscreenMap = null;
     fullscreenWrap = null;
+    setTimeout(() => map.invalidateSize(), 100);
   }
 
   function onFullscreenKey(e) {
