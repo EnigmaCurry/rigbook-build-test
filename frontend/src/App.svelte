@@ -886,6 +886,11 @@
 
   main.dual-mode {
     max-width: 100%;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    padding-bottom: 0;
   }
 
   main.wide-mode {
@@ -895,14 +900,14 @@
   .dual-layout {
     display: flex;
     gap: 1.5rem;
-    align-items: flex-start;
+    flex: 1;
+    min-height: 0;
   }
 
   .dual-pane {
     flex: 1;
     min-width: 0;
     overflow-y: auto;
-    max-height: calc(100vh - 80px);
   }
 
   @media (max-width: 600px) {
