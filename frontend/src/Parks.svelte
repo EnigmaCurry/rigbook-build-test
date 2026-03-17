@@ -14,6 +14,25 @@
   // --- My QSOs state ---
   let myParks = [];
   let myParksLoading = false;
+  let mySort = "date"; // "date", "name", "qsos"
+  let mySortAsc = false;
+
+  $: myParksSorted = [...myParks].sort((a, b) => {
+    let cmp = 0;
+    if (mySort === "date") {
+      cmp = (a.last_contact || "").localeCompare(b.last_contact || "");
+    } else if (mySort === "name") {
+      cmp = (a.name || a.reference).localeCompare(b.name || b.reference);
+    } else if (mySort === "qsos") {
+      cmp = (a.qso_count || 0) - (b.qso_count || 0);
+    }
+    return mySortAsc ? cmp : -cmp;
+  });
+
+  function toggleMySort(col) {
+    if (mySort === col) mySortAsc = !mySortAsc;
+    else { mySort = col; mySortAsc = col === "name"; }
+  }
   let mapEl;
   let leafletMap = null;
   let markersByRef = {};
@@ -357,7 +376,7 @@
     </div>
 
     <div class="tabs">
-      <button class="tab" class:active={tab === "my-qsos"} on:click={() => switchTab("my-qsos")}>My QSOs</button>
+      <button class="tab" class:active={tab === "my-qsos"} on:click={() => switchTab("my-qsos")}>My Parks</button>
       <button class="tab" class:active={tab === "by-country"} on:click={() => switchTab("by-country")}>By Country</button>
       <button class="tab" class:active={tab === "download"} on:click={() => switchTab("download")}>Download</button>
     </div>
@@ -368,13 +387,19 @@
       {#if myParksLoading}
         <p class="loading">Loading...</p>
       {:else if myParks.length === 0}
-        <p class="empty">No POTA QSOs logged yet.</p>
+        <p class="empty">No POTA parks contacted yet.</p>
       {:else}
         <div class="my-map-wrap">
           <div class="my-map" bind:this={mapEl}></div>
         </div>
+        <div class="my-sort-bar">
+          <span class="my-sort-label">Sort:</span>
+          <button class="my-sort-btn" class:active={mySort === "date"} on:click={() => toggleMySort("date")}>Date {mySort === "date" ? (mySortAsc ? "▲" : "▼") : ""}</button>
+          <button class="my-sort-btn" class:active={mySort === "name"} on:click={() => toggleMySort("name")}>Name {mySort === "name" ? (mySortAsc ? "▲" : "▼") : ""}</button>
+          <button class="my-sort-btn" class:active={mySort === "qsos"} on:click={() => toggleMySort("qsos")}>QSOs {mySort === "qsos" ? (mySortAsc ? "▲" : "▼") : ""}</button>
+        </div>
         <div class="my-parks-list">
-          {#each myParks as park}
+          {#each myParksSorted as park}
             <!-- svelte-ignore a11y-click-events-have-key-events -->
             <!-- svelte-ignore a11y-no-static-element-interactions -->
             <!-- svelte-ignore a11y-no-noninteractive-element-interactions -->
@@ -783,6 +808,38 @@
     border: 1px solid var(--border);
     border-radius: 3px;
     padding: 0.25rem;
+  }
+
+  .my-sort-bar {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    margin-bottom: 0.4rem;
+  }
+
+  .my-sort-label {
+    color: var(--text-dim);
+    font-size: 0.8rem;
+  }
+
+  .my-sort-btn {
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    font-family: inherit;
+    font-size: 0.8rem;
+    padding: 0.15rem 0.5rem;
+    border-radius: 3px;
+    cursor: pointer;
+  }
+
+  .my-sort-btn:hover {
+    background: var(--row-hover);
+  }
+
+  .my-sort-btn.active {
+    color: var(--accent);
+    border-color: var(--accent);
   }
 
   .my-parks-list .tree-row {
