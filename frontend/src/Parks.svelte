@@ -1022,6 +1022,8 @@
     font-size: 0.85rem;
     flex-shrink: 0;
     margin-left: auto;
+    width: 7ch;
+    text-align: right;
   }
 
   .park-stat {
