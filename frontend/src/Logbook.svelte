@@ -68,7 +68,10 @@
   let subdivisions = [];
   let availableModes = [];
   $: countryItems = countries.map(c => ({ name: c.name, aliases: c.aliases || [], display: `${c.code} — ${c.name}` }));
-  $: subdivisionNames = subdivisions.map(s => s.name);
+  $: subdivisionNames = subdivisions.map(s => {
+    const shortCode = s.code.includes("-") ? s.code.split("-")[1] : s.code;
+    return { name: s.name, aliases: [shortCode, s.code], display: `${shortCode} — ${s.name}` };
+  });
 
   function normalizeCountry() {
     if (!country || !countries.length) return;
