@@ -1002,6 +1002,9 @@
   .park-flag {
     flex-shrink: 0;
     font-size: 0.9rem;
+    display: inline-block;
+    width: 1.2em;
+    text-align: center;
   }
 
   .park-ref {
