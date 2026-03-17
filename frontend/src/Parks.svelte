@@ -1198,4 +1198,8 @@
   .qso-row:hover {
     background: var(--row-hover);
   }
+
+  :global(.leaflet-attribution-flag) {
+    display: none !important;
+  }
 </style>
