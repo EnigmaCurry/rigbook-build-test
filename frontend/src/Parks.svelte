@@ -1275,7 +1275,7 @@
     background: #f4f4f4;
   }
 
-  .map-fullscreen {
+  :global(.map-fullscreen) {
     position: fixed !important;
     top: 0;
     left: 0;
@@ -1287,10 +1287,11 @@
     max-width: none !important;
     border-radius: 0 !important;
     margin: 0 !important;
+    padding: 0 !important;
   }
 
-  .map-fullscreen .my-map,
-  .map-fullscreen .park-detail-map {
+  :global(.map-fullscreen .my-map),
+  :global(.map-fullscreen .park-detail-map) {
     height: 100% !important;
   }
 </style>
