@@ -386,6 +386,7 @@
 
     if (e.key === "n" || e.key === "N") {
       e.preventDefault();
+      dualShowForm = true; prefill = null; editId = null;
       navigate("add");
     } else if (e.key === "/") {
       e.preventDefault();
