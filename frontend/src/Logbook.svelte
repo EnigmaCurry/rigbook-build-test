@@ -672,7 +672,7 @@
   $: if (editId && editId !== handledEditId && contacts.length > 0) {
     handledEditId = editId;
     const c = contacts.find(x => x.id === editId);
-    if (c) editContact(c);
+    if (c) setTimeout(() => editContact(c), 0);
     else loadEditFromId(editId);
   } else if (!editId) {
     handledEditId = null;
@@ -902,7 +902,7 @@
 <section class="log">
   <div class="log-title-row">
     <h2>Log ({displayedContacts.length})</h2>
-    {#if prevContactCount > 0 && showForm}
+    {#if prevContactCount > 0 && (showForm || editingId)}
       <div class="log-tabs">
         <button class="log-tab" class:active={logFilter === "all"} on:click={() => logFilter = "all"}>All</button>
         <button class="log-tab" class:active={logFilter === "call"} on:click={() => logFilter = "call"}>{call.trim().toUpperCase()}</button>
