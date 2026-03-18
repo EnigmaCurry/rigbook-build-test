@@ -104,7 +104,7 @@ just run
 Open http://localhost:8073 in your browser. The server binds to
 localhost only because Rigbook has no built-in authentication.
 
-### First-time setup
+## First-time setup
 
 1. Click the hamburger menu (top right) and go to **Settings**
 2. Enter your callsign and grid square
