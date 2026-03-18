@@ -1,5 +1,8 @@
 # 📻️ Rigbook
 
+<img width="1100" height="541" alt="image" src="https://github.com/user-attachments/assets/a747aa5b-3afd-49ee-8ae7-6f626d9037e2" />
+
+
 A ham radio logbook app. Log amateur radio contacts (QSOs)
 with a local web UI, optionally connected to your radio via
 [flrig](http://www.w1hkj.com/flrig-help/).
