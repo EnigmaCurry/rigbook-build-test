@@ -1,6 +1,8 @@
 import logging
 import os
+import sys
 from contextlib import asynccontextmanager
+from importlib.metadata import version
 from pathlib import Path
 
 import uvicorn
@@ -20,6 +22,15 @@ from rigbook.routes.geo import router as geo_router
 from rigbook.routes.settings import router as settings_router
 
 logger = logging.getLogger("rigbook")
+
+
+def _resource_path(relative: str) -> Path:
+    """Resolve path to bundled resource (works in both dev and PyInstaller)."""
+    if getattr(sys, "frozen", False):
+        base = Path(sys._MEIPASS)
+    else:
+        base = Path(__file__).parent
+    return base / relative
 
 
 @asynccontextmanager
@@ -45,6 +56,11 @@ async def log_errors(request: Request, call_next):
     return response
 
 
+@app.get("/api/version")
+async def get_version():
+    return {"version": version("rigbook")}
+
+
 app.include_router(contacts_router)
 app.include_router(settings_router)
 app.include_router(flrig_router)
@@ -56,7 +72,7 @@ app.include_router(search_router)
 app.include_router(skcc_router)
 app.include_router(tiles_router)
 
-static_dir = Path(__file__).parent / "static"
+static_dir = _resource_path("static")
 if static_dir.is_dir():
     app.mount("/", StaticFiles(directory=static_dir, html=True), name="static")
 
@@ -77,7 +93,7 @@ def run() -> None:
     logging.getLogger("httpx").setLevel(logging.WARNING)
 
     uvicorn.run(
-        "rigbook.main:app",
+        app,
         host=os.environ.get("RIGBOOK_HOST", "127.0.0.1"),
         port=int(os.environ.get("RIGBOOK_PORT", "8073")),
         access_log=False,
