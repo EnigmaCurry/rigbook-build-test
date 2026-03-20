@@ -91,7 +91,7 @@ localhost only because Rigbook has no built-in authentication.
 git clone https://github.com/EnigmaCurry/rigbook.git
 cd rigbook
 
-# Install all dependencies
+# Install all dependencies:
 just deps
 
 ```
@@ -99,9 +99,11 @@ just deps
 ### Dev Usage
 
 ```bash
-# Build frontend and start the server
+# Build frontend and start the server:
 just run
 
+# Create "rigbook" alias to run from any directory:
+alias rigbook="just -f ~/git/vendor/enigmacurry/rigbook/Justfile run"
 ```
 
 Open http://localhost:8073 in your browser. The server binds to
