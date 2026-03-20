@@ -95,7 +95,7 @@ cd ~/git/vendor/enigmacurry/rigbook
 # Install all dependencies:
 just deps
 
-# Create optional "rigbook" alias:
+# Create optional "rigbook" alias in your ~/.bashrc:
 alias rigbook="just -f ~/git/vendor/enigmacurry/rigbook/Justfile run"
 ```
 
