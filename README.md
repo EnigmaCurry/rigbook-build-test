@@ -94,6 +94,8 @@ cd rigbook
 # Install all dependencies:
 just deps
 
+# Create optional "rigbook" alias:
+alias rigbook="just -f ~/git/vendor/enigmacurry/rigbook/Justfile run"
 ```
 
 ### Dev Usage
@@ -102,8 +104,8 @@ just deps
 # Build frontend and start the server:
 just run
 
-# Create "rigbook" alias to run from any directory:
-alias rigbook="just -f ~/git/vendor/enigmacurry/rigbook/Justfile run"
+# Run alias from any directory:
+rigbook
 ```
 
 Open http://localhost:8073 in your browser. The server binds to
