@@ -585,6 +585,7 @@
         dispatch("editchange", null);
         clearForm();
         await fetchContacts();
+        dispatch("navigate", "back");
       } else {
         const data = await res.json().catch(() => null);
         errorMsg = data?.detail || `Error: ${res.status} ${res.statusText}`;
