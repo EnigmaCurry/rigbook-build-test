@@ -10,6 +10,7 @@
   import About from "./About.svelte";
   import Parks from "./Parks.svelte";
   import Links from "./Links.svelte";
+  import Spots from "./Spots.svelte";
   import { bandColor, bandTextColor } from "./bandColors.js";
 
   const BANDS = [
@@ -91,6 +92,7 @@
     if (hash === "/parks" || hash.startsWith("/parks/")) return { page: "parks", editId: null };
     if (hash === "/about") return { page: "about", editId: null };
     if (hash === "/links") return { page: "links", editId: null };
+    if (hash === "/spots" || hash.startsWith("/spots?")) return { page: "spots", editId: null };
     if (hash === "/settings") return { page: "settings", editId: null };
     if (hash === "/logbook") return { page: isWide() ? "dual" : "log", editId: null };
     if (hash === "/export") return { page: "export", editId: null };
@@ -295,9 +297,16 @@
     page = p;
     editId = null;
     menuOpen = false;
-    const paths = { hunting: "/hunting", log: "/logbook", dual: "/dual", add: "/add", grid: "/grid", parks: "/parks", export: "/export", settings: "/settings", links: "/links", about: "/about" };
+    const paths = { hunting: "/hunting", log: "/logbook", dual: "/dual", add: "/add", grid: "/grid", parks: "/parks", spots: "/spots", export: "/export", settings: "/settings", links: "/links", about: "/about" };
     window.location.hash = paths[p] || "/";
     fetchCallsign();
+  }
+
+  function spotFreqHz(spot) {
+    // POTA spots: frequency in MHz (e.g. 14.074)
+    // SKCC/RBN spots: frequency in KHz (e.g. 14074)
+    const f = parseFloat(spot.frequency);
+    return String(f >= 1000 ? f * 1000 : f * 1000000);
   }
 
   async function tuneOnly(spot) {
@@ -305,28 +314,37 @@
       await fetch("/api/flrig/vfo", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ freq: String(parseFloat(spot.frequency) * 1000), mode: spot.mode }),
+        body: JSON.stringify({ freq: spotFreqHz(spot), mode: spot.mode }),
       });
       pollFlrig();
     } catch {}
   }
 
   async function tuneAndPrefill(spot) {
-    try {
-      await fetch("/api/flrig/vfo", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ freq: String(parseFloat(spot.frequency) * 1000), mode: spot.mode }),
-      });
-      pollFlrig();
-    } catch {}
+    await tuneOnly(spot);
+
+    // SKCC/RBN spot (has callsign field, no activator)
+    if (spot.callsign && !spot.activator) {
+      prefill = {
+        call: String(spot.callsign || ""),
+        freq: String(spot.frequency || ""),
+        mode: String(spot.mode || ""),
+        skcc: String(spot.skcc || ""),
+        country: String(spot.country || ""),
+        state: String(spot.qrz_state || ""),
+      };
+      if (page === "dual") dualShowForm = true;
+      else navigate("add");
+      return;
+    }
+
+    // POTA spot
     const loc = spot.locationDesc || "";
     let spotCountry = "";
     let spotState = "";
     if (loc.startsWith("US-")) {
       spotCountry = "United States";
     }
-    // Resolve state from local park cache
     if (spot.reference) {
       try {
         const res = await fetch(`/api/pota/park/${encodeURIComponent(spot.reference)}`);
@@ -562,6 +580,7 @@
           <button class="menu-item" class:active={page === "hunting"} on:click={() => navigate("hunting")}>Hunting</button>
           <button class="menu-item" class:active={page === "grid"} on:click={() => navigate("grid")}>Grid Map</button>
           <button class="menu-item" class:active={page === "parks"} on:click={() => navigate("parks")}>Parks</button>
+          <button class="menu-item" class:active={page === "spots"} on:click={() => navigate("spots")}>Spots</button>
           <button class="menu-item" class:active={page === "export"} on:click={() => navigate("export")}>Export / Import</button>
           <button class="menu-item" class:active={page === "settings"} on:click={() => navigate("settings")}>Settings</button>
           <button class="menu-item" class:active={page === "links"} on:click={() => navigate("links")}>Links</button>
@@ -592,6 +611,8 @@
     <GridMap bind:value={gridMapValue} on:select={e => { gridMapValue = e.detail; }} />
   {:else if page === "export"}
     <ExportImport />
+  {:else if page === "spots"}
+    <Spots />
   {:else if page === "settings"}
     <Settings />
   {:else if page === "links"}

@@ -1,5 +1,5 @@
 <script>
-  import { onMount } from "svelte";
+  import { onMount, onDestroy } from "svelte";
 
   let my_callsign = "";
   let my_grid = "";
@@ -15,6 +15,25 @@
   let message = "";
   let qrzStatus = null; // { ok, error?, username? }
   let qrzChecking = false;
+
+  // RBN settings
+  let rbn_enabled = false;
+  let rbn_host = "telnet.reversebeacon.net";
+  let rbn_feed_cw = true;
+  let rbn_feed_digital = false;
+  let skcc_skimmer_enabled = false;
+
+  // HamAlert settings
+  let hamalert_enabled = false;
+  let hamalert_host = "hamalert.org";
+  let hamalert_port = "7300";
+  let hamalert_username = "";
+  let hamalert_password = "";
+  let hasHamalertPassword = false;
+
+  // Feed connection status
+  let spotStatus = { rbn: { connected: false, enabled: false }, hamalert: { connected: false, enabled: false } };
+  let spotStatusInterval;
 
   function toggleTheme() {
     theme = theme === "dark" ? "light" : "dark";
@@ -37,6 +56,13 @@
   $: stripCallsign = () => { my_callsign = my_callsign.replace(/\s/g, ""); };
   $: stripGrid = () => { my_grid = my_grid.replace(/[^A-Za-z0-9]/g, ""); };
 
+  async function fetchSpotStatus() {
+    try {
+      const res = await fetch("/api/spots/status");
+      if (res.ok) spotStatus = await res.json();
+    } catch {}
+  }
+
   async function fetchSettings() {
     try {
       const res = await fetch("/api/settings/");
@@ -49,6 +75,19 @@
           if (s.key === "qrz_password") hasQrzPassword = !!s.value && s.value !== "";
           if (s.key === "flrig_host") flrig_host = s.value || "localhost";
           if (s.key === "flrig_port") flrig_port = s.value || "12345";
+          if (s.key === "rbn_enabled") rbn_enabled = s.value === "true";
+          if (s.key === "rbn_host") rbn_host = s.value || "telnet.reversebeacon.net";
+          if (s.key === "rbn_feeds") {
+            const feeds = (s.value || "cw").split(",").map(f => f.trim().toLowerCase());
+            rbn_feed_cw = feeds.includes("cw");
+            rbn_feed_digital = feeds.includes("digital");
+          }
+          if (s.key === "skcc_skimmer_enabled") skcc_skimmer_enabled = s.value === "true";
+          if (s.key === "hamalert_enabled") hamalert_enabled = s.value === "true";
+          if (s.key === "hamalert_host") hamalert_host = s.value || "hamalert.org";
+          if (s.key === "hamalert_port") hamalert_port = s.value || "7300";
+          if (s.key === "hamalert_username") hamalert_username = s.value || "";
+          if (s.key === "hamalert_password") hasHamalertPassword = !!s.value && s.value !== "";
           if (s.key === "wide_breakpoint") {
             if (s.value === "0") {
               wide_mode_enabled = false;
@@ -106,6 +145,61 @@
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ value: wide_mode_enabled ? String(wide_breakpoint) : "0" }),
       });
+      // RBN settings
+      await fetch("/api/settings/rbn_enabled", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ value: rbn_enabled ? "true" : "false" }),
+      });
+      await fetch("/api/settings/rbn_host", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ value: rbn_host.trim() }),
+      });
+      const rbnFeeds = [rbn_feed_cw ? "cw" : "", rbn_feed_digital ? "digital" : ""].filter(Boolean).join(",");
+      await fetch("/api/settings/rbn_feeds", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ value: rbnFeeds || "cw" }),
+      });
+      await fetch("/api/settings/skcc_skimmer_enabled", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ value: skcc_skimmer_enabled ? "true" : "false" }),
+      });
+      // HamAlert settings
+      await fetch("/api/settings/hamalert_enabled", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ value: hamalert_enabled ? "true" : "false" }),
+      });
+      await fetch("/api/settings/hamalert_host", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ value: hamalert_host.trim() }),
+      });
+      await fetch("/api/settings/hamalert_port", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ value: hamalert_port.trim() }),
+      });
+      await fetch("/api/settings/hamalert_username", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ value: hamalert_username.trim() }),
+      });
+      if (hamalert_password.trim()) {
+        await fetch("/api/settings/hamalert_password", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ value: hamalert_password.trim() }),
+        });
+        hasHamalertPassword = true;
+        hamalert_password = "";
+      }
+      // Restart feeds to apply changes
+      await fetch("/api/spots/restart", { method: "POST" });
+      setTimeout(fetchSpotStatus, 2000);
       message = "Settings saved.";
     } catch (e) {
       message = `Error: ${e.message}`;
@@ -125,7 +219,15 @@
     qrzChecking = false;
   }
 
-  onMount(fetchSettings);
+  onMount(() => {
+    fetchSettings();
+    fetchSpotStatus();
+    spotStatusInterval = setInterval(fetchSpotStatus, 5000);
+  });
+
+  onDestroy(() => {
+    clearInterval(spotStatusInterval);
+  });
 </script>
 
 <div class="settings">
@@ -203,7 +305,64 @@
   </section>
 
   <section class="settings-section">
+    <h3>Reverse Beacon Network (RBN)</h3>
+    <div class="setting-row toggle-row">
+      <label>
+        <input type="checkbox" bind:checked={rbn_enabled} />
+        Enable RBN Feed
+      </label>
+      <span class="conn-status">
+        <span class="dot" class:green={spotStatus.rbn.connected} class:red={spotStatus.rbn.enabled && !spotStatus.rbn.connected} class:off={!spotStatus.rbn.enabled}></span>
+        {#if !spotStatus.rbn.enabled}Disabled{:else if spotStatus.rbn.connected}Connected{:else}Connecting...{/if}
+      </span>
+    </div>
+    <div class="setting-row toggle-row">
+      <label><input type="checkbox" bind:checked={rbn_feed_cw} disabled={!rbn_enabled} /> CW (port 7000)</label>
+      <label><input type="checkbox" bind:checked={rbn_feed_digital} disabled={!rbn_enabled} /> Digital (port 7001)</label>
+    </div>
+    <div class="setting-row">
+      <label for="rbn_host">RBN Host</label>
+      <input id="rbn_host" type="text" bind:value={rbn_host} autocomplete="off" disabled={!rbn_enabled} />
+    </div>
+    <div class="setting-row toggle-row">
+      <label><input type="checkbox" bind:checked={skcc_skimmer_enabled} disabled={!rbn_enabled} /> Show SKCC Skimmer on Hunting page</label>
+    </div>
+    <p class="hint">Uses your My Callsign to authenticate.</p>
+  </section>
+
+  <section class="settings-section">
+    <h3>HamAlert</h3>
+    <div class="setting-row toggle-row">
+      <label>
+        <input type="checkbox" bind:checked={hamalert_enabled} />
+        Enable HamAlert Feed
+      </label>
+      <span class="conn-status">
+        <span class="dot" class:green={spotStatus.hamalert.connected} class:red={spotStatus.hamalert.enabled && !spotStatus.hamalert.connected} class:off={!spotStatus.hamalert.enabled}></span>
+        {#if !spotStatus.hamalert.enabled}Disabled{:else if spotStatus.hamalert.connected}Connected{:else}Connecting...{/if}
+      </span>
+    </div>
+    <div class="setting-row">
+      <label for="hamalert_host">Host</label>
+      <input id="hamalert_host" type="text" bind:value={hamalert_host} autocomplete="off" disabled={!hamalert_enabled} />
+    </div>
+    <div class="setting-row">
+      <label for="hamalert_port">Port</label>
+      <input id="hamalert_port" type="text" bind:value={hamalert_port} autocomplete="off" inputmode="numeric" disabled={!hamalert_enabled} />
+    </div>
+    <div class="setting-row">
+      <label for="hamalert_username">Username</label>
+      <input id="hamalert_username" type="text" bind:value={hamalert_username} autocomplete="off" disabled={!hamalert_enabled} />
+    </div>
+    <div class="setting-row">
+      <label for="hamalert_password">{hasHamalertPassword ? "Change Password" : "Password"}</label>
+      <input id="hamalert_password" type="password" bind:value={hamalert_password} autocomplete="off" disabled={!hamalert_enabled} placeholder={hasHamalertPassword ? "Leave blank to keep current" : ""} />
+    </div>
+  </section>
+
+  <section class="settings-section">
     <h3>Cache</h3>
+    <p class="hint">Cached data: QRZ callsign lookups, SKCC member list. Clearing forces fresh lookups on next use.</p>
     <div class="setting-row toggle-row">
       <button class="theme-toggle" on:click={clearCache}>Clear Cache</button>
     </div>
@@ -284,7 +443,7 @@
     accent-color: var(--accent);
   }
 
-  input[type="range"]:disabled {
+  input:disabled, select:disabled {
     opacity: 0.4;
   }
 
@@ -355,5 +514,31 @@
   .qrz-error {
     color: var(--accent-error);
     font-size: 0.85rem;
+  }
+
+  .conn-status {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    margin-left: auto;
+  }
+
+  .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    display: inline-block;
+    background: var(--text-dim);
+  }
+  .dot.green { background: #4caf50; }
+  .dot.red { background: #f44336; }
+  .dot.off { background: var(--text-dim); opacity: 0.4; }
+
+  p.hint {
+    font-size: 0.7rem;
+    color: var(--text-dim);
+    margin: 0;
   }
 </style>
