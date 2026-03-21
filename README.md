@@ -31,9 +31,14 @@ engaged in POTA and/or SKCC activities.
   embed, personal QSO count, and award emojis
 - Sortable log table with click-to-edit
 - ADIF export and import
-- Hunting page — browse active Parks on the Air activators, filter by
-  mode/band, click to tune your radio (spots cached server-side for 30s),
-  award emojis shown for parks you've already contacted
+- Hunting page — browse active Parks on the Air activators and nearby
+  SKCC members on CW, filter by mode/band/distance, click to tune your
+  radio and add QSOs
+- Reverse Beacon Network (RBN) and HamAlert spot feeds with real-time
+  aggregation, per-spotter TTL, and distance calculation
+- Spots page — filterable, sortable table of all RBN/HamAlert spots
+  with SKCC cross-reference, QRZ location lookup, and deep-linkable
+  filter URLs
 - QRZ callsign lookup with connection test button in Settings
 - SKCC member number auto-lookup
 - All timestamps in UTC with 24-hour format
@@ -117,7 +122,8 @@ localhost only because Rigbook has no built-in authentication.
 1. Click the hamburger menu (top right) and go to **Settings**
 2. Enter your callsign and grid square
 3. If using flrig, configure the host and port (default: `localhost:12345`)
-4. Click **Save**
+4. Optionally enable **RBN** and/or **HamAlert** for real-time spot data
+5. Click **Save**
 
 ### Logging contacts
 
@@ -165,16 +171,40 @@ mode manually.
 
 ## Hunting
 
-The **Hunting** page shows a live grid of active
-[Parks on the Air](https://pota.app/) activators, sourced from the
-pota.app API.
+The **Hunting** page combines POTA spots and SKCC skimmer data into a
+single view with shared filters.
+
+- Filter by **mode**, **band**, **program**, and **distance** (100mi,
+  500mi, 1000mi, or unlimited)
+- Distance filtering uses your grid square to calculate great-circle
+  distance to activators (POTA) and closest RBN spotter (SKCC)
+
+### POTA Spots
+
+Active [Parks on the Air](https://pota.app/) activators, sourced from
+the pota.app API.
 
 - Cards show the activator callsign, park name, frequency, mode, band,
   grid square, QSO count, and how long ago the spot was posted
-- Filter by **mode** (CW, SSB, FT8, etc.) or **band** (20m, 40m, etc.)
-- **Click a card** to tune your radio to that spot's frequency and mode
-  (requires flrig)
+- **Click a callsign** to open the Add QSO form with prefilled data
+- **Click a frequency** to tune your radio (requires flrig)
+- Award emojis shown for parks you've already contacted
 - Spots refresh automatically every 30 seconds
+
+### SKCC Skimmer
+
+When enabled in Settings (requires RBN feed), shows nearby
+[SKCC](https://www.skccgroup.com/) members currently calling CQ on CW.
+
+- Cards show callsign, SKCC number, frequency, band, home location
+  (from QRZ), closest spotter distance and signal strength, and time
+  since last spotted
+- **Click a callsign** to open the Add QSO form with SKCC number
+  prefilled and QRZ lookup triggered
+- **Click a frequency** to tune your radio
+- Spots persist for 10 minutes with per-spotter TTL
+- The skimmer is hidden when no matching spots are found or when mode
+  filter excludes CW
 
 ## POTA Parks
 
@@ -242,6 +272,45 @@ can auto-fill contact details when you enter a callsign.
 [SKCC](https://www.skccgroup.com/) member numbers are auto-populated
 from the callsign. Rigbook fetches the SKCC member list and caches it
 for 24 hours. No configuration needed.
+
+## Spot Feeds (RBN and HamAlert)
+
+Rigbook can connect to the
+[Reverse Beacon Network](https://www.reversebeacon.net/) (RBN) and
+[HamAlert](https://hamalert.org/) to receive real-time spot data.
+
+### Setup
+
+1. Go to **Settings** and find the **Reverse Beacon Network** section
+2. Check **Enable RBN Feed** — your callsign is used to authenticate
+3. Select feed types: **CW** (port 7000) and/or **Digital** (port 7001
+   for FT8, FT4, RTTY, etc.)
+4. Optionally enable **Show SKCC Skimmer on Hunting page**
+5. For HamAlert, enter your username and password in the **HamAlert**
+   section
+6. Click **Save** — feeds connect automatically and show connection
+   status
+
+### Spots page
+
+The **Spots** page (in the hamburger menu) shows a live table of all
+cached spots from RBN and HamAlert.
+
+- Filter by **source**, **band**, **mode**, and **callsign**
+- Click column headers to sort — sorting is stable across refreshes
+- When filtering to CW, an **SKCC** column and filter appear to show
+  only SKCC members
+- **Home Location** column shows country/state from QRZ cache, with
+  rate-limited automatic lookups (burst 20, then 1/second)
+- **Closest Spot** column shows distance and signal strength from the
+  nearest RBN spotter to your grid square
+- Band badges use color-coded labels with luminance-based text contrast
+- Filter state is encoded in the URL for deep linking (e.g.
+  `/#/spots?mode=CW&band=20m`)
+- Cache stats show callsign count, total spots, and average
+  spots per callsign
+- Spots aggregate by callsign/mode with per-spotter TTL — spotter
+  count decays as individual observations expire
 
 ## ADIF Export / Import
 
