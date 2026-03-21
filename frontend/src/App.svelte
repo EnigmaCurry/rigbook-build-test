@@ -320,19 +320,37 @@
       });
       pollFlrig();
     } catch {}
+    const loc = spot.locationDesc || "";
+    let spotCountry = "";
+    let spotState = "";
+    if (loc.startsWith("US-")) {
+      spotCountry = "United States";
+    }
+    // Resolve state from local park cache
+    if (spot.reference) {
+      try {
+        const res = await fetch(`/api/pota/park/${encodeURIComponent(spot.reference)}`);
+        if (res.ok) {
+          const park = await res.json();
+          if (park.program_name) spotCountry = park.program_name;
+          if (park.locations && park.locations.length === 1) {
+            spotState = park.locations[0].name || "";
+          } else if (park.locations && loc) {
+            const match = park.locations.find(l => l.descriptor === loc);
+            if (match) spotState = match.name || "";
+          }
+        }
+      } catch {}
+    }
     prefill = {
       call: spot.activator || "",
       freq: spot.frequency || "",
       mode: spot.mode || "",
       pota_park: spot.reference || "",
       grid: spot.grid4 || "",
-      country: "",
-      state: "",
+      country: spotCountry,
+      state: spotState,
     };
-    const loc = spot.locationDesc || "";
-    if (loc.startsWith("US-")) {
-      prefill.country = "United States";
-    }
     if (page === "dual") dualShowForm = true;
     else navigate("add");
   }
@@ -349,6 +367,9 @@
       editId = data.id;
       window.location.hash = `/log/${data.id}`;
       fetchCallsign();
+    } else if (type === "park") {
+      navigate("parks");
+      window.location.hash = `/parks/park/${encodeURIComponent(data.reference)}`;
     } else if (type === "pota") {
       tuneAndPrefill(data);
     } else if (type === "skcc") {
