@@ -10,7 +10,7 @@ from rigbook.db import Setting, get_session
 
 router = APIRouter(prefix="/api/flrig", tags=["flrig"])
 
-DEFAULT_FLRIG_HOST = "localhost"
+DEFAULT_FLRIG_HOST = "127.0.0.1"
 DEFAULT_FLRIG_PORT = "12345"
 
 

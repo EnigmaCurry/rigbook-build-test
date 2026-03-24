@@ -126,6 +126,7 @@
   let radioModes = [];
   let vfoEditFreq = "";
   let vfoEditMode = "";
+  let flrigEnabled = false;
   let flrigInterval;
   let utcNow = new Date().toISOString().slice(0, 19).replace("T", " ") + "z";
   let clockInterval;
@@ -183,11 +184,14 @@
     }
   }
 
-  function startAppServices() {
+  async function startAppServices() {
     fetchCallsign();
-    fetchRadioModes();
-    pollFlrig();
-    flrigInterval = setInterval(pollFlrig, 2000);
+    await fetchFlrigEnabled();
+    if (flrigEnabled) {
+      fetchRadioModes();
+      pollFlrig();
+      flrigInterval = setInterval(pollFlrig, 2000);
+    }
     fetchUnreadCount();
     connectSSE();
   }
@@ -468,6 +472,16 @@
     } catch {}
   }
 
+  async function fetchFlrigEnabled() {
+    try {
+      const res = await fetch("/api/settings/flrig_enabled");
+      if (res.ok) {
+        const data = await res.json();
+        flrigEnabled = data.value === "true";
+      }
+    } catch {}
+  }
+
   function isWide() {
     return typeof window !== "undefined" && window.innerWidth >= wideBreakpoint;
   }
@@ -525,6 +539,7 @@
   }
 
   async function tuneOnly(spot) {
+    if (!flrigEnabled) return;
     try {
       await fetch("/api/flrig/vfo", {
         method: "PUT",
@@ -633,11 +648,23 @@
     }
   }
 
-  function onHashChange() {
+  async function onHashChange() {
     const parsed = parseHash();
     page = parsed.page;
     editId = parsed.editId;
     fetchCallsign();
+    const wasEnabled = flrigEnabled;
+    await fetchFlrigEnabled();
+    if (flrigEnabled && !wasEnabled) {
+      fetchRadioModes();
+      pollFlrig();
+      flrigInterval = setInterval(pollFlrig, 2000);
+    } else if (!flrigEnabled && wasEnabled) {
+      clearInterval(flrigInterval);
+      vfoFreq = "";
+      vfoMode = "";
+      vfoConnected = false;
+    }
     fetchWideBreakpoint();
   }
 
@@ -671,10 +698,10 @@
     } else if (e.key === "p" || e.key === "P") {
       e.preventDefault();
       navigate("parks");
-    } else if (e.key === "m" || e.key === "M") {
+    } else if ((e.key === "m" || e.key === "M") && flrigEnabled) {
       e.preventDefault();
       cycleMode();
-    } else if (e.key === "t" || e.key === "T") {
+    } else if ((e.key === "t" || e.key === "T") && flrigEnabled) {
       e.preventDefault();
       startVfoEdit();
     } else if (e.key === "?") {
@@ -806,7 +833,7 @@
           <!-- svelte-ignore a11y-no-static-element-interactions -->
           <span class="vfo-mode" on:click={cycleMode} title="Click or press M to cycle mode">{vfoMode}</span>
         {/if}
-      {:else}
+      {:else if flrigEnabled}
         <span class="vfo disconnected" title="Radio not connected">❌ No Radio</span>
       {/if}
     </div>
@@ -887,7 +914,7 @@
   {:else if page === "spots"}
     <Spots on:tune={e => tuneOnly(e.detail)} on:addqso={e => tuneAndPrefill(e.detail)} />
   {:else if page === "settings"}
-    <Settings logbookName={currentLogbook} pickerMode={pickerMode} {needsSetup} on:deleted={e => { if (e.detail.shutdown) { serverShutdown = true; } else { logbookOpen = false; currentLogbook = ""; page = "picker"; } }} on:setupcomplete={() => { needsSetup = false; fetchCallsign(); navigate(isWide() ? "dual" : "log"); }} on:shutdown={() => { stopAppServices(); }} />
+    <Settings logbookName={currentLogbook} pickerMode={pickerMode} {needsSetup} on:deleted={e => { if (e.detail.shutdown) { serverShutdown = true; } else { logbookOpen = false; currentLogbook = ""; page = "picker"; } }} on:setupcomplete={async () => { needsSetup = false; fetchCallsign(); await fetchFlrigEnabled(); if (flrigEnabled && !flrigInterval) { fetchRadioModes(); pollFlrig(); flrigInterval = setInterval(pollFlrig, 2000); } navigate(isWide() ? "dual" : "log"); }} on:shutdown={() => { stopAppServices(); }} />
   {:else if page === "links"}
     <Links />
   {:else if page === "about"}

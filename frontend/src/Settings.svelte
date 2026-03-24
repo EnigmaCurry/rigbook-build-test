@@ -12,7 +12,8 @@
   let default_rst = "599";
   let qrz_password = "";
   let hasQrzPassword = false;
-  let flrig_host = "localhost";
+  let flrig_enabled = false;
+  let flrig_host = "127.0.0.1";
   let flrig_port = "12345";
   let wide_breakpoint = "1200";
   let wide_mode_enabled = true;
@@ -161,7 +162,8 @@
           if (s.key === "my_grid") my_grid = s.value || "";
           if (s.key === "default_rst") default_rst = s.value || "599";
           if (s.key === "qrz_password") hasQrzPassword = !!s.value && s.value !== "";
-          if (s.key === "flrig_host") flrig_host = s.value || "localhost";
+          if (s.key === "flrig_enabled") flrig_enabled = s.value === "true";
+          if (s.key === "flrig_host") flrig_host = s.value || "127.0.0.1";
           if (s.key === "flrig_port") flrig_port = s.value || "12345";
           if (s.key === "rbn_enabled") rbn_enabled = s.value === "true";
           if (s.key === "rbn_host") rbn_host = s.value || "telnet.reversebeacon.net";
@@ -219,6 +221,11 @@
         hasQrzPassword = true;
         qrz_password = "";
       }
+      await fetch("/api/settings/flrig_enabled", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ value: flrig_enabled ? "true" : "false" }),
+      });
       await fetch("/api/settings/flrig_host", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -425,13 +432,19 @@
 
   <section class="settings-section">
     <h3>flrig Connection</h3>
+    <div class="setting-row toggle-row">
+      <label>
+        <input type="checkbox" bind:checked={flrig_enabled} />
+        Enable flrig
+      </label>
+    </div>
     <div class="setting-row">
       <label for="flrig_host">flrig Host</label>
-      <input id="flrig_host" type="text" bind:value={flrig_host} autocomplete="off" />
+      <input id="flrig_host" type="text" bind:value={flrig_host} autocomplete="off" disabled={!flrig_enabled} />
     </div>
     <div class="setting-row">
       <label for="flrig_port">flrig Port</label>
-      <input id="flrig_port" type="text" bind:value={flrig_port} autocomplete="off" inputmode="numeric" />
+      <input id="flrig_port" type="text" bind:value={flrig_port} autocomplete="off" inputmode="numeric" disabled={!flrig_enabled} />
     </div>
   </section>
 
