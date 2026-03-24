@@ -290,8 +290,9 @@ Rigbook can connect to the
 3. Select feed types: **CW** (port 7000) and/or **Digital** (port 7001
    for FT8, FT4, RTTY, etc.)
 4. Optionally enable **Show SKCC Skimmer on Hunting page**
-5. For HamAlert, enter your username and password in the **HamAlert**
-   section
+5. For HamAlert, enter your telnet username and password in the **HamAlert**
+   section.   The telnet username is different from your HamAlert login user and password.  
+   Create it in your settings at hamalert.org
 6. Click **Save** — feeds connect automatically and show connection
    status
 
