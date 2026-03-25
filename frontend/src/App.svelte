@@ -647,6 +647,14 @@
       }
       p = previousPage;
     }
+    // Block navigation away from dirty form (but allow switching dual right pane)
+    if (formDirty && (page === "add" || page === "dual")) {
+      const stayingOnDual = isWide() && (p === "add" || p === "log" || DUAL_RIGHT_PAGES.has(p));
+      if (!stayingOnDual) {
+        alert("Save or cancel your current QSO before navigating away.");
+        return;
+      }
+    }
     // Redirect disabled pages to home
     if (p === "spots" && !spotsEnabled) p = "log";
     if (p === "parks" && !potaEnabled) p = "log";
