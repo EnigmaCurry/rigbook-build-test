@@ -668,8 +668,10 @@
       previousPage = page;
       previousHash = window.location.hash.slice(1) || "/";
     }
+    const wasPage = page;
     page = p;
-    editId = null;
+    // Don't clear editId when staying on dual (switching right pane only)
+    if (!(wasPage === "dual" && p === "dual")) editId = null;
     menuOpen = false;
     if (p === "dual") {
       window.location.hash = `/dual/${dualRightPage}`;
