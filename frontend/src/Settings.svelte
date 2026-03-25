@@ -44,7 +44,7 @@
   let hasHamalertPassword = false;
 
   let settingsLoaded = false;
-  let savedSnapshot = {};
+  let savedSnapshot = null;
 
   function settingsSnapshot() {
     return {
@@ -58,10 +58,10 @@
   }
 
   $: currentSnap = settingsSnapshot();
-  $: dirty = settingsLoaded && JSON.stringify(currentSnap) !== JSON.stringify(savedSnapshot);
-  $: changed = Object.fromEntries(
-    Object.keys(currentSnap).map(k => [k, savedSnapshot[k] !== undefined && savedSnapshot[k] !== currentSnap[k]])
-  );
+  $: dirty = savedSnapshot !== null && JSON.stringify(currentSnap) !== JSON.stringify(savedSnapshot);
+  $: changed = savedSnapshot ? Object.fromEntries(
+    Object.keys(currentSnap).map(k => [k, savedSnapshot[k] !== currentSnap[k]])
+  ) : {};
 
   // Desktop notifications
   let desktopNotifPermission = typeof Notification !== "undefined" ? Notification.permission : "denied";
