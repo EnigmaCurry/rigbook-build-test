@@ -8,6 +8,8 @@
   import { timeAgo } from "./qrzLookup.js";
 
   const dispatch = createEventDispatcher();
+  export let potaEnabled = true;
+  export let spotsEnabled = false;
 
   let spots = [];
   let loading = true;
@@ -317,12 +319,14 @@
 
   onMount(async () => {
     await loadFilters();
-    fetchSpots();
-    fetchMyParks();
+    if (potaEnabled) {
+      fetchSpots();
+      fetchMyParks();
+      fetchTodayPota();
+    }
     fetchCallCounts();
-    fetchTodayPota();
     fetchTodayCw();
-    pollInterval = setInterval(fetchSpots, 30000);
+    pollInterval = setInterval(() => { if (potaEnabled) fetchSpots(); }, 30000);
   });
 
   onDestroy(() => {
@@ -331,6 +335,12 @@
 </script>
 
 <div class="hunting">
+  <!-- debug: filtersLoaded={filtersLoaded} potaEnabled={potaEnabled} skccSkimmerEnabled={skccSkimmerEnabled} spotsEnabled={spotsEnabled} -->
+  {#if filtersLoaded && !potaEnabled && !(skccSkimmerEnabled && spotsEnabled)}
+    <h2>Hunting</h2>
+    <p class="status">No hunting activities enabled. Enable POTA or SKCC Skimmer in <a href="#/settings">Settings</a>.</p>
+    <p class="status" style="font-size:0.7rem">debug: pota={potaEnabled} skcc={skccSkimmerEnabled} spots={spotsEnabled} loaded={filtersLoaded}</p>
+  {:else}
   <div class="controls">
     <h2>Hunting</h2>
     <div class="filters">
@@ -356,10 +366,11 @@
     </div>
   </div>
 
-  {#if skccSkimmerEnabled}
-    <SkccSkimmer filterMode={filterMode} filterBand={filterBand} workedTodayKeys={workedTodayCwKeys} on:tune on:addqso />
+  {#if skccSkimmerEnabled && spotsEnabled}
+    <SkccSkimmer filterMode={filterMode} filterBand={filterBand} workedTodayKeys={workedTodayCwKeys} {potaEnabled} on:tune on:addqso />
   {/if}
 
+  {#if potaEnabled}
   <h2>POTA Spots ({filteredSpots.length})</h2>
 
   {#if loading}
@@ -407,6 +418,8 @@
         </div>
       {/each}
     </div>
+  {/if}
+  {/if}
   {/if}
 </div>
 
@@ -493,6 +506,9 @@
   .status {
     color: var(--text-muted);
     font-style: italic;
+  }
+  .status a, .status a:visited {
+    color: var(--accent);
   }
 
   .status.error {

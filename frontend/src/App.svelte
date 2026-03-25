@@ -8,6 +8,7 @@
   import Search from "./Search.svelte";
   import Settings from "./Settings.svelte";
   import About from "./About.svelte";
+  import Conditions from "./Conditions.svelte";
   import Parks from "./Parks.svelte";
   import Links from "./Links.svelte";
   import Notifications from "./Notifications.svelte";
@@ -88,13 +89,14 @@
     return (n >= seg.lo + loMargin && n <= seg.hi - hiMargin) ? b.name : "";
   }
 
-  const DUAL_RIGHT_PAGES = new Set(["hunting", "spots", "parks", "notifications"]);
+  const DUAL_RIGHT_PAGES = new Set(["hunting", "spots", "parks", "notifications", "conditions"]);
 
   function parseHash() {
     const hash = window.location.hash.slice(1) || "/";
     if (hash === "/picker") return { page: "picker", editId: null, dualRight: null };
     if (hash === "/grid") return { page: "grid", editId: null, dualRight: null };
     if (hash === "/about") return { page: "about", editId: null, dualRight: null };
+    if (hash === "/conditions") return { page: isWide() ? "dual" : "conditions", editId: null, dualRight: "conditions" };
     if (hash === "/links") return { page: "links", editId: null, dualRight: null };
     if (hash === "/settings") return { page: "settings", editId: null, dualRight: null };
     if (hash === "/export") return { page: "export", editId: null, dualRight: null };
@@ -126,6 +128,38 @@
   let formDirty = false;
   let activePark = "";
   let dualShowForm = !!editId || (page === "dual" && (window.location.hash.slice(1) === "/add"));
+  let logbookRight = false;
+  let dualSplit = parseFloat(localStorage.getItem("dualSplit")) || 50;
+  let draggingSplit = false;
+
+  function onDividerDown(e) {
+    e.preventDefault();
+    draggingSplit = true;
+    const onMove = (ev) => {
+      const clientX = ev.touches ? ev.touches[0].clientX : ev.clientX;
+      const layout = e.target.closest(".dual-layout");
+      if (!layout) return;
+      const rect = layout.getBoundingClientRect();
+      let pct = logbookRight
+        ? 100 - ((clientX - rect.left) / rect.width) * 100
+        : ((clientX - rect.left) / rect.width) * 100;
+      if (pct < 10) pct = 10;
+      if (pct > 90) pct = 90;
+      dualSplit = pct;
+    };
+    const onUp = () => {
+      draggingSplit = false;
+      localStorage.setItem("dualSplit", String(dualSplit));
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+      window.removeEventListener("touchmove", onMove);
+      window.removeEventListener("touchend", onUp);
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    window.addEventListener("touchmove", onMove);
+    window.addEventListener("touchend", onUp);
+  }
   let dualHunting;
   let dualParks;
   let gridMapValue = "";
@@ -139,6 +173,9 @@
   let radioModes = [];
   let vfoEditFreq = "";
   let vfoEditMode = "";
+  let potaEnabled = true;
+  let spotsEnabled = false;
+  let solarEnabled = false;
   let flrigEnabled = false;
   let flrigInterval;
   let utcNow = new Date().toISOString().slice(0, 19).replace("T", " ") + "z";
@@ -199,6 +236,10 @@
 
   async function startAppServices() {
     fetchCallsign();
+    await fetchLogbookRight();
+    await fetchSolarEnabled();
+    await fetchSpotsEnabled();
+    await fetchPotaEnabled();
     await fetchFlrigEnabled();
     if (flrigEnabled) {
       fetchRadioModes();
@@ -507,6 +548,52 @@
     } catch {}
   }
 
+  async function fetchSolarEnabled() {
+    try {
+      const res = await fetch("/api/settings/solar_enabled");
+      if (res.ok) {
+        const data = await res.json();
+        solarEnabled = data.value === "true";
+      }
+    } catch {}
+  }
+
+  async function fetchLogbookRight() {
+    try {
+      const res = await fetch("/api/settings/logbook_right");
+      if (res.ok) {
+        const data = await res.json();
+        logbookRight = data.value === "true";
+      }
+    } catch {}
+  }
+
+  async function fetchSpotsEnabled() {
+    try {
+      const [rbnRes, haRes] = await Promise.all([
+        fetch("/api/settings/rbn_enabled"),
+        fetch("/api/settings/hamalert_enabled"),
+      ]);
+      let rbn = false, ha = false;
+      if (rbnRes.ok) { const d = await rbnRes.json(); rbn = d.value === "true"; }
+      if (haRes.ok) { const d = await haRes.json(); ha = d.value === "true"; }
+      spotsEnabled = rbn || ha;
+      console.log("[debug] fetchSpotsEnabled: rbn=" + rbn + " ha=" + ha + " spotsEnabled=" + spotsEnabled);
+    } catch (e) {
+      console.log("[debug] fetchSpotsEnabled error:", e);
+    }
+  }
+
+  async function fetchPotaEnabled() {
+    try {
+      const res = await fetch("/api/settings/pota_enabled");
+      if (res.ok) {
+        const data = await res.json();
+        potaEnabled = data.value !== "false";
+      }
+    } catch {}
+  }
+
   async function fetchFlrigEnabled() {
     try {
       const res = await fetch("/api/settings/flrig_enabled");
@@ -522,7 +609,12 @@
   }
 
   function goHome() {
-    navigate(isWide() ? "dual" : "log");
+    if (isWide()) {
+      if (potaEnabled) dualRightPage = "hunting";
+      navigate("dual");
+    } else {
+      navigate("log");
+    }
   }
 
   async function fetchWideBreakpoint() {
@@ -555,6 +647,11 @@
       }
       p = previousPage;
     }
+    // Redirect disabled pages to home
+    if (p === "spots" && !spotsEnabled) p = "log";
+    if (p === "parks" && !potaEnabled) p = "log";
+    if (p === "conditions" && !solarEnabled) p = "log";
+
     if (isWide() && (p === "add" || p === "log" || DUAL_RIGHT_PAGES.has(p))) {
       if (DUAL_RIGHT_PAGES.has(p)) dualRightPage = p;
       p = "dual";
@@ -569,7 +666,7 @@
     if (p === "dual") {
       window.location.hash = `/dual/${dualRightPage}`;
     } else {
-      const paths = { hunting: "/hunting", log: "/logbook", add: "/add", grid: "/grid", parks: "/parks", spots: "/spots", export: "/export", notifications: "/notifications", settings: "/settings", links: "/links", about: "/about", picker: "/picker" };
+      const paths = { hunting: "/hunting", log: "/logbook", add: "/add", grid: "/grid", parks: "/parks", spots: "/spots", export: "/export", notifications: "/notifications", conditions: "/conditions", settings: "/settings", links: "/links", about: "/about", picker: "/picker" };
       window.location.hash = paths[p] || "/";
     }
     fetchCallsign();
@@ -711,9 +808,20 @@
 
   async function onHashChange() {
     const parsed = parseHash();
-    page = parsed.page;
+    let p = parsed.page;
+    // Redirect disabled pages
+    if (p === "spots" && !spotsEnabled) p = isWide() ? "dual" : "log";
+    if (p === "parks" && !potaEnabled) p = isWide() ? "dual" : "log";
+    if (p === "conditions" && !solarEnabled) p = isWide() ? "dual" : "log";
+    page = p;
     editId = parsed.editId;
-    if (parsed.dualRight) dualRightPage = parsed.dualRight;
+    if (parsed.dualRight) {
+      if ((parsed.dualRight === "spots" && !spotsEnabled) || (parsed.dualRight === "parks" && !potaEnabled) || (parsed.dualRight === "conditions" && !solarEnabled)) {
+        // Don't set disabled right page
+      } else {
+        dualRightPage = parsed.dualRight;
+      }
+    }
     fetchCallsign();
     const wasEnabled = flrigEnabled;
     await fetchFlrigEnabled();
@@ -782,7 +890,7 @@
     window.addEventListener("resize", onResize);
     await checkLogbookMode();
     if (logbookOpen) {
-      startAppServices();
+      await startAppServices();
       await checkNeedsSetup();
     } else if (pickerMode) {
       page = "picker";
@@ -864,7 +972,7 @@
       {#if myCallsign}
         <!-- svelte-ignore a11y-click-events-have-key-events -->
         <!-- svelte-ignore a11y-no-static-element-interactions -->
-        <span class="callsign" on:click={goHome} style="cursor: pointer">{myCallsign}</span>
+        <span class="callsign" on:click={() => navigate("settings")} style="cursor: pointer">{myCallsign}</span>
       {/if}
       {#if vfoEditing}
         <span class="vfo-edit">
@@ -912,15 +1020,17 @@
     <span class="utc-clock" on:click={copyUtcTimestamp} title="Click to copy">{clockCopied ? "Copied!" : utcNow}</span>
     <div class="hamburger-wrap">
       {#if wide}
-        <button class="add-btn dual-btn" class:active-nav={dualRightPage === "hunting"} on:click={() => navigate("hunting")} title="Logbook & Hunting">{#if dualRightPage === "hunting"}📖{/if}🧭</button>
-        <button class="add-btn dual-btn" class:active-nav={dualRightPage === "spots"} on:click={() => navigate("spots")} title="Logbook & Spots">{#if dualRightPage === "spots"}📖{/if}🗺️</button>
-        <button class="add-btn dual-btn parks-btn" class:active-nav={dualRightPage === "parks"} on:click={() => navigate("parks")} title="Logbook & Parks">{#if dualRightPage === "parks"}📖{/if}🌲</button>
-        <button class="add-btn dual-btn notification-btn" class:active-nav={dualRightPage === "notifications"} on:click={handleNotificationClick} title="Logbook & Notifications">{#if dualRightPage === "notifications"}📖{/if}{#if unreadCount > 0}<span class="notif-badge">{unreadCount > 99 ? "99+" : unreadCount}</span>{:else}✉️{/if}</button>
+        <button class="add-btn dual-btn" class:active-nav={dualRightPage === "hunting"} on:click={() => navigate("hunting")} title="Logbook & Hunting">{#if dualRightPage === "hunting" && !logbookRight}📖{/if}🧭{#if dualRightPage === "hunting" && logbookRight}📖{/if}</button>
+        {#if spotsEnabled}<button class="add-btn dual-btn" class:active-nav={dualRightPage === "spots"} on:click={() => navigate("spots")} title="Logbook & Spots">{#if dualRightPage === "spots" && !logbookRight}📖{/if}🗺️{#if dualRightPage === "spots" && logbookRight}📖{/if}</button>{/if}
+        {#if potaEnabled}<button class="add-btn dual-btn parks-btn" class:active-nav={dualRightPage === "parks"} on:click={() => navigate("parks")} title="Logbook & Parks">{#if dualRightPage === "parks" && !logbookRight}📖{/if}🌲{#if dualRightPage === "parks" && logbookRight}📖{/if}</button>{/if}
+        <button class="add-btn dual-btn notification-btn" class:active-nav={dualRightPage === "notifications"} on:click={handleNotificationClick} title="Logbook & Notifications">{#if dualRightPage === "notifications" && !logbookRight}📖{/if}{#if unreadCount > 0}<span class="notif-badge">{unreadCount > 99 ? "99+" : unreadCount}</span>{:else}✉️{/if}{#if dualRightPage === "notifications" && logbookRight}📖{/if}</button>
+        {#if solarEnabled}<button class="add-btn dual-btn" class:active-nav={dualRightPage === "conditions"} on:click={() => navigate("conditions")} title="Logbook & Conditions">{#if dualRightPage === "conditions" && !logbookRight}📖{/if}🌤️{#if dualRightPage === "conditions" && logbookRight}📖{/if}</button>{/if}
       {:else}
         <button class="add-btn" on:click={() => navigate("log")} title="Logbook">📖</button>
         <button class="add-btn" on:click={() => navigate("hunting")} title="Hunting">🧭</button>
-        <button class="add-btn parks-btn" on:click={() => navigate("parks")} title="My Parks">🌲</button>
-        <button class="add-btn" on:click={() => navigate("spots")} title="Spots">🗺️</button>
+        {#if potaEnabled}<button class="add-btn parks-btn" on:click={() => navigate("parks")} title="My Parks">🌲</button>{/if}
+        {#if spotsEnabled}<button class="add-btn" on:click={() => navigate("spots")} title="Spots">🗺️</button>{/if}
+        {#if solarEnabled}<button class="add-btn" on:click={() => navigate("conditions")} title="Conditions">🌤️</button>{/if}
         <button class="add-btn notification-btn" class:has-unread={unreadCount > 0} on:click={handleNotificationClick} title="Notifications">
           {#if unreadCount > 0}
             <span class="notif-badge">{unreadCount > 99 ? "99+" : unreadCount}</span>
@@ -944,9 +1054,10 @@
           <button class="menu-item" class:active={page === "add"} on:click={() => navigate("add")}>Add QSO</button>
           <button class="menu-item" class:active={page === "hunting" || (page === "dual" && dualRightPage === "hunting")} on:click={() => navigate("hunting")}>Hunting</button>
           <button class="menu-item" class:active={page === "grid"} on:click={() => navigate("grid")}>Grid Map</button>
-          <button class="menu-item" class:active={page === "parks" || (page === "dual" && dualRightPage === "parks")} on:click={() => navigate("parks")}>Parks</button>
-          <button class="menu-item" class:active={page === "spots" || (page === "dual" && dualRightPage === "spots")} on:click={() => navigate("spots")}>Spots</button>
+          {#if potaEnabled}<button class="menu-item" class:active={page === "parks" || (page === "dual" && dualRightPage === "parks")} on:click={() => navigate("parks")}>Parks</button>{/if}
+          {#if spotsEnabled}<button class="menu-item" class:active={page === "spots" || (page === "dual" && dualRightPage === "spots")} on:click={() => navigate("spots")}>Spots</button>{/if}
           <button class="menu-item" class:active={page === "notifications" || (page === "dual" && dualRightPage === "notifications")} on:click={() => navigate("notifications")}>Notifications{#if unreadCount > 0} ({unreadCount}){/if}</button>
+          {#if solarEnabled}<button class="menu-item" class:active={page === "conditions" || (page === "dual" && dualRightPage === "conditions")} on:click={() => navigate("conditions")}>Conditions</button>{/if}
           <button class="menu-item" class:active={page === "export"} on:click={() => navigate("export")}>Export / Import</button>
           <button class="menu-item" class:active={page === "settings"} on:click={() => navigate("settings")}>Settings</button>
           <button class="menu-item" class:active={page === "links"} on:click={() => navigate("links")}>Links</button>
@@ -965,21 +1076,25 @@
   {:else if page === "add"}
     <Logbook showForm={true} {editId} {prefill} {vfoFreq} {vfoMode} bind:formDirty bind:activePark on:editchange={e => { editId = e.detail; window.location.hash = e.detail ? `/log/${e.detail}` : "/add"; }} on:navigate={e => navigate(e.detail)} on:prefillconsumed={() => prefill = null} on:parkschanged={() => dualParks?.refreshParks()} />
   {:else if page === "hunting"}
-    <Hunting on:tune={e => tuneOnly(e.detail)} on:addqso={e => tuneAndPrefill(e.detail)} />
+    <Hunting {potaEnabled} {spotsEnabled} on:tune={e => tuneOnly(e.detail)} on:addqso={e => tuneAndPrefill(e.detail)} />
   {:else if page === "dual"}
-    <div class="dual-layout" class:dual-narrow={!wide}>
-      <div class="dual-pane">
+    <div class="dual-layout" class:dual-narrow={!wide} class:dragging={draggingSplit} class:dual-reversed={logbookRight}>
+      <div class="dual-pane" style="flex: 0 0 {dualSplit}%">
         <Logbook showForm={dualShowForm || !!prefill || !!editId} {prefill} {editId} {vfoFreq} {vfoMode} bind:formDirty bind:activePark on:editchange={e => { editId = e.detail; dualShowForm = !!e.detail; }} on:navigate={e => { if (e.detail === "hunting" || e.detail === "log" || e.detail === "back") { prefill = null; editId = null; dualShowForm = false; dualHunting?.refreshAwards(); if (!wide) navigate(dualRightPage); } else navigate(e.detail); }} on:prefillconsumed={() => prefill = null} on:parkschanged={() => dualParks?.refreshParks()} />
       </div>
-      <div class="dual-pane">
+      <!-- svelte-ignore a11y-no-static-element-interactions -->
+      <div class="dual-divider" on:mousedown={onDividerDown} on:touchstart={onDividerDown}></div>
+      <div class="dual-pane" style="flex: 1">
         {#if dualRightPage === "hunting"}
-          <Hunting bind:this={dualHunting} on:tune={e => tuneOnly(e.detail)} on:addqso={e => tuneAndPrefill(e.detail)} />
+          <Hunting bind:this={dualHunting} {potaEnabled} {spotsEnabled} on:tune={e => tuneOnly(e.detail)} on:addqso={e => tuneAndPrefill(e.detail)} />
         {:else if dualRightPage === "spots"}
-          <Spots on:tune={e => tuneOnly(e.detail)} on:addqso={e => tuneAndPrefill(e.detail)} />
+          <Spots {potaEnabled} on:tune={e => tuneOnly(e.detail)} on:addqso={e => tuneAndPrefill(e.detail)} />
         {:else if dualRightPage === "parks"}
           <Parks bind:this={dualParks} {activePark} on:addqso={e => { if (formDirty) { alert("Save or cancel your current QSO before selecting a new spot."); return; } prefill = e.detail; dualShowForm = true; }} />
         {:else if dualRightPage === "notifications"}
           <Notifications on:countchange={() => fetchUnreadCount()} on:tune={e => tuneOnly(e.detail)} on:addqso={e => tuneAndPrefill(e.detail)} />
+        {:else if dualRightPage === "conditions"}
+          <Conditions />
         {/if}
       </div>
     </div>
@@ -992,11 +1107,13 @@
   {:else if page === "notifications"}
     <Notifications on:countchange={() => fetchUnreadCount()} on:tune={e => tuneOnly(e.detail)} on:addqso={e => tuneAndPrefill(e.detail)} />
   {:else if page === "spots"}
-    <Spots on:tune={e => tuneOnly(e.detail)} on:addqso={e => tuneAndPrefill(e.detail)} />
+    <Spots {potaEnabled} on:tune={e => tuneOnly(e.detail)} on:addqso={e => tuneAndPrefill(e.detail)} />
   {:else if page === "settings"}
-    <Settings logbookName={currentLogbook} pickerMode={pickerMode} {needsSetup} on:deleted={e => { if (e.detail.shutdown) { serverShutdown = true; } else { logbookOpen = false; currentLogbook = ""; page = "picker"; } }} on:setupcomplete={async () => { needsSetup = false; fetchCallsign(); await fetchFlrigEnabled(); if (flrigEnabled && !flrigInterval) { fetchRadioModes(); pollFlrig(); flrigInterval = setInterval(pollFlrig, 2000); } navigate(isWide() ? "dual" : "log"); }} on:shutdown={() => { stopAppServices(); }} />
+    <Settings logbookName={currentLogbook} pickerMode={pickerMode} {needsSetup} on:deleted={e => { if (e.detail.shutdown) { serverShutdown = true; } else { logbookOpen = false; currentLogbook = ""; page = "picker"; } }} on:setupcomplete={async () => { needsSetup = false; fetchCallsign(); await fetchLogbookRight(); await fetchSolarEnabled(); await fetchSpotsEnabled(); await fetchPotaEnabled(); await fetchFlrigEnabled(); if (flrigEnabled && !flrigInterval) { fetchRadioModes(); pollFlrig(); flrigInterval = setInterval(pollFlrig, 2000); } navigate(isWide() ? "dual" : "log"); }} on:saved={async () => { await fetchLogbookRight(); await fetchSolarEnabled(); await fetchSpotsEnabled(); await fetchPotaEnabled(); await fetchFlrigEnabled(); if (flrigEnabled && !flrigInterval) { fetchRadioModes(); pollFlrig(); flrigInterval = setInterval(pollFlrig, 2000); } else if (!flrigEnabled && flrigInterval) { clearInterval(flrigInterval); flrigInterval = null; } }} on:shutdown={() => { stopAppServices(); }} />
   {:else if page === "links"}
     <Links />
+  {:else if page === "conditions"}
+    <Conditions />
   {:else if page === "about"}
     <About />
   {/if}
@@ -1527,8 +1644,25 @@
     overflow-y: auto;
     padding: 0 0.75rem;
   }
-  .dual-pane + .dual-pane {
-    border-left: 1px solid var(--border);
+  .dual-reversed {
+    flex-direction: row-reverse;
+  }
+  .dual-divider {
+    width: 5px;
+    cursor: col-resize;
+    background: var(--border);
+    flex-shrink: 0;
+    transition: background 0.15s;
+  }
+  .dual-divider:hover, .dual-layout.dragging .dual-divider {
+    background: var(--accent);
+  }
+  .dual-layout.dragging {
+    user-select: none;
+    cursor: col-resize;
+  }
+  .dual-narrow .dual-divider {
+    display: none;
   }
   .dual-narrow .dual-pane:last-child {
     display: none;

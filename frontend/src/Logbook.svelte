@@ -94,6 +94,7 @@
   let editingId = null;
   let editOriginal = null;
   let addOriginal = null;
+  let userTouched = false;
   let showGridPicker = false;
   $: if (typeof document !== "undefined") {
     document.body.style.overflow = showGridPicker ? "hidden" : "";
@@ -150,21 +151,63 @@
   $: orig = editingId ? editOriginal : addOriginal;
   $: activePark = showForm ? pota_park.trim().toUpperCase() : "";
 
-  let sortCol = "timestamp";
-  let sortAsc = false;
+  let sortCol = localStorage.getItem("logSortCol") || "timestamp";
+  let sortAsc = localStorage.getItem("logSortAsc") === "true";
 
-  const columns = [
-    { key: "timestamp", label: "UTC" },
-    { key: "call", label: "Call" },
-    { key: "name", label: "Name" },
-    { key: "freq", label: "Freq" },
-    { key: "mode", label: "Mode" },
-    { key: "pota_park", label: "POTA" },
-    { key: "qth", label: "QTH" },
-    { key: "rst_sent", label: "RST S" },
-    { key: "rst_recv", label: "RST R" },
-    { key: "comments", label: "Comments" },
-  ];
+  const defaultColumnOrder = ["timestamp", "call", "name", "freq", "mode", "pota_park", "qth", "rst_sent", "rst_recv", "comments"];
+  const columnDefs = {
+    timestamp: { key: "timestamp", label: "UTC" },
+    call: { key: "call", label: "Call" },
+    name: { key: "name", label: "Name" },
+    freq: { key: "freq", label: "Freq" },
+    mode: { key: "mode", label: "Mode" },
+    pota_park: { key: "pota_park", label: "POTA" },
+    qth: { key: "qth", label: "QTH" },
+    rst_sent: { key: "rst_sent", label: "RST S" },
+    rst_recv: { key: "rst_recv", label: "RST R" },
+    comments: { key: "comments", label: "Comments" },
+  };
+
+  function loadColumnOrder() {
+    try {
+      const saved = JSON.parse(localStorage.getItem("logColumnOrder"));
+      if (Array.isArray(saved) && saved.length === defaultColumnOrder.length && saved.every(k => columnDefs[k])) return saved;
+    } catch {}
+    return [...defaultColumnOrder];
+  }
+
+  let columnOrder = loadColumnOrder();
+  $: columns = columnOrder.map(k => columnDefs[k]);
+
+  let dragCol = null;
+  let dragOverCol = null;
+
+  function onColDragStart(e, key) {
+    dragCol = key;
+    e.dataTransfer.effectAllowed = "move";
+  }
+  function onColDragOver(e, key) {
+    e.preventDefault();
+    dragOverCol = key;
+  }
+  function onColDrop(e, key) {
+    e.preventDefault();
+    if (dragCol && dragCol !== key) {
+      const from = columnOrder.indexOf(dragCol);
+      const to = columnOrder.indexOf(key);
+      const newOrder = [...columnOrder];
+      newOrder.splice(from, 1);
+      newOrder.splice(to, 0, dragCol);
+      columnOrder = newOrder;
+      localStorage.setItem("logColumnOrder", JSON.stringify(columnOrder));
+    }
+    dragCol = null;
+    dragOverCol = null;
+  }
+  function onColDragEnd() {
+    dragCol = null;
+    dragOverCol = null;
+  }
 
   function toggleSort(key) {
     if (sortCol === key) {
@@ -173,6 +216,8 @@
       sortCol = key;
       sortAsc = key === "timestamp" ? false : true;
     }
+    localStorage.setItem("logSortCol", sortCol);
+    localStorage.setItem("logSortAsc", String(sortAsc));
   }
 
   $: prevContactCount = call.trim() ? contacts.filter(c => c.call?.toUpperCase() === call.trim().toUpperCase()).length : 0;
@@ -312,18 +357,19 @@
     }
     if (prefill.state) state = prefill.state;
     if (prefill.skcc) skcc = prefill.skcc;
+    userTouched = false;
     addOriginal = formSnapshot();
     dispatch("prefillconsumed");
     // Lookup name from QRZ
     if (prefill.call) lookupCallsign(prefill.call.toUpperCase());
   }
 
-  // Auto-fill freq/mode from VFO when not editing and no prefill
-  $: if (!editingId && !prefill && vfoFreq) {
+  // Auto-fill freq/mode from VFO when not editing, no prefill, and user hasn't typed
+  $: if (!editingId && !prefill && !userTouched && vfoFreq) {
     freq = String(parseFloat(vfoFreq) / 1000);
     if (addOriginal) addOriginal = { ...addOriginal, freq };
   }
-  $: if (!editingId && !prefill && vfoMode) {
+  $: if (!editingId && !prefill && !userTouched && vfoMode) {
     mode = vfoMode;
     if (addOriginal) addOriginal = { ...addOriginal, mode };
   }
@@ -678,6 +724,7 @@
     datePart = "";
     timePart = "";
     subdivisions = [];
+    userTouched = false;
     addOriginal = formSnapshot();
   }
 
@@ -847,7 +894,7 @@
 
 <div class="logbook-layout">
 {#if showForm}
-<form on:submit|preventDefault={editingId ? saveEdit : submitContact} on:keydown={e => { if (e.key === "Enter" && e.target.tagName !== "TEXTAREA") e.preventDefault(); if (e.key === "Escape") { e.target.blur(); if (editingId) cancelEdit(); else { dispatch("navigate", "back"); clearForm(); } } }}>
+<form on:submit|preventDefault={editingId ? saveEdit : submitContact} on:input={() => { if (!editingId) userTouched = true; }} on:keydown={e => { if (e.key === "Enter" && e.target.tagName !== "TEXTAREA") e.preventDefault(); if (e.key === "Escape") { e.target.blur(); if (editingId) cancelEdit(); else { dispatch("navigate", "back"); clearForm(); } } }}>
   <h3 class="form-heading">{editingId ? "Edit QSO" : "New QSO"}{#if call.trim()} <a class="form-callsign-text" href="https://www.qrz.com/db/{call.trim().toUpperCase()}" target="_blank" rel="noopener" title="View {call.trim().toUpperCase()} on QRZ.com">{call.trim().toUpperCase()}</a>{/if}{#if callCountryCode} <span class="form-callsign-flag">{countryFlag(callCountryCode)}</span>{/if}{#if editingId} <span class="prev-contact">({relativeTime(`${datePart}T${timePart || "00:00:00"}Z`)})</span>{:else if prevContactCount > 0} <span class="prev-contact">(contacted {prevContactCount} time{prevContactCount === 1 ? "" : "s"} before)</span>{/if}</h3>
   <div class="form-row">
     <div class="field" class:changed={orig && call !== orig.call}>
@@ -1010,8 +1057,8 @@
       <table>
         <thead>
           <tr>
-            {#each columns as col}
-              <th class="sortable" on:click={() => toggleSort(col.key)}>
+            {#each columns as col (col.key)}
+              <th class="sortable" class:drag-over={dragOverCol === col.key && dragCol !== col.key} draggable="true" on:dragstart={e => onColDragStart(e, col.key)} on:dragover={e => onColDragOver(e, col.key)} on:drop={e => onColDrop(e, col.key)} on:dragend={onColDragEnd} on:click={() => toggleSort(col.key)}>
                 {col.label}{#if sortCol === col.key}{sortAsc ? " ▲" : " ▼"}{/if}
               </th>
             {/each}
@@ -1020,16 +1067,19 @@
         <tbody>
           {#each displayedContacts as c}
             <tr class="clickable" class:editing={editingId === c.id} title={relativeTime(c.timestamp)} on:click={() => editContact(c)}>
-              <td>{formatTimestamp(c.timestamp)}</td>
-              <td class="call">{c.call}</td>
-              <td class="truncate truncate-wide">{c.name || ""}</td>
-              <td>{formatFreq(c.freq)} {#if freqToBand(c.freq)}<span class="band-tag" style="background: {bandColor(freqToBand(c.freq))}; color: {bandTextColor(freqToBand(c.freq))}">{freqToBand(c.freq)}</span>{/if}</td>
-              <td>{c.mode || ""}</td>
-              <td class="truncate">{c.pota_park || ""}</td>
-              <td class="truncate">{c.qth || ""}</td>
-              <td>{c.rst_sent || ""}</td>
-              <td>{c.rst_recv || ""}</td>
-              <td class="truncate">{c.comments || ""}</td>
+              {#each columns as col (col.key)}
+                {#if col.key === "timestamp"}<td>{formatTimestamp(c.timestamp)}</td>
+                {:else if col.key === "call"}<td class="call">{c.call}</td>
+                {:else if col.key === "name"}<td class="truncate truncate-wide">{c.name || ""}</td>
+                {:else if col.key === "freq"}<td>{formatFreq(c.freq)} {#if freqToBand(c.freq)}<span class="band-tag" style="background: {bandColor(freqToBand(c.freq))}; color: {bandTextColor(freqToBand(c.freq))}">{freqToBand(c.freq)}</span>{/if}</td>
+                {:else if col.key === "mode"}<td>{c.mode || ""}</td>
+                {:else if col.key === "pota_park"}<td class="truncate">{c.pota_park || ""}</td>
+                {:else if col.key === "qth"}<td class="truncate">{c.qth || ""}</td>
+                {:else if col.key === "rst_sent"}<td>{c.rst_sent || ""}</td>
+                {:else if col.key === "rst_recv"}<td>{c.rst_recv || ""}</td>
+                {:else if col.key === "comments"}<td class="truncate">{c.comments || ""}</td>
+                {/if}
+              {/each}
             </tr>
           {/each}
         </tbody>
@@ -1420,6 +1470,9 @@
 
   th.sortable:hover {
     color: var(--accent);
+  }
+  th.drag-over {
+    border-left: 2px solid var(--accent);
   }
 
   td {

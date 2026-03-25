@@ -4,6 +4,7 @@
   import { QrzLookup, formatFreq, locationStr } from "./qrzLookup.js";
 
   const dispatch = createEventDispatcher();
+  export let potaEnabled = true;
 
   let spots = [];
   let status = { rbn: { connected: false, enabled: false }, hamalert: { connected: false, enabled: false }, callsigns: 0, entries: 0, total_spots: 0, avg_spots_per_callsign: 0 };
@@ -85,6 +86,7 @@
   }
 
   async function fetchPotaSpots() {
+    if (!potaEnabled) { potaKeys = new Set(); potaByKey = {}; return; }
     try {
       const res = await fetch("/api/pota/spots");
       if (res.ok) {
@@ -93,7 +95,7 @@
         const byKey = {};
         for (const s of pota) {
           const call = (s.activator || "").toUpperCase();
-          const band = freqToBand(parseFloat(s.frequency) * 1000);
+          const band = freqToBand(parseFloat(s.frequency));
           if (call && band) {
             const key = `${call}|${band}`;
             keys.add(key);
@@ -122,7 +124,15 @@
   function addQsoWithPota(spot) {
     const pota = getPotaSpot(spot);
     if (pota) {
-      dispatch("addqso", { ...spot, activator: spot.callsign, reference: pota.reference, grid4: pota.grid4, locationDesc: pota.locationDesc });
+      dispatch("addqso", {
+        activator: String(spot.callsign || ""),
+        frequency: String(spot.frequency || ""),
+        mode: String(spot.mode || ""),
+        reference: String(pota.reference || ""),
+        grid4: String(pota.grid4 || ""),
+        locationDesc: String(pota.locationDesc || ""),
+        skcc: String(spot.skcc || ""),
+      });
     } else {
       dispatch("addqso", spot);
     }
@@ -371,9 +381,6 @@
       {status.total_spots} spot{status.total_spots !== 1 ? "s" : ""} &middot;
       {status.avg_spots_per_callsign} avg/call
     </div>
-    <button class="restart-btn" on:click={restart} disabled={restarting}>
-      {restarting ? "Restarting..." : "Restart Feeds"}
-    </button>
   </div>
 
   <div class="filters">

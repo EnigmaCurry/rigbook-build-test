@@ -8,6 +8,7 @@
   export let filterMode = "";
   export let filterBand = "";
   export let workedTodayKeys = new Set();
+  export let potaEnabled = true;
 
   let spots = [];
   let loading = true;
@@ -35,6 +36,7 @@
   }
 
   async function fetchPotaSpots() {
+    if (!potaEnabled) { potaKeys = new Set(); potaByKey = {}; return; }
     try {
       const res = await fetch("/api/pota/spots");
       if (res.ok) {
@@ -43,7 +45,7 @@
         const byKey = {};
         for (const s of pota) {
           const call = (s.activator || "").toUpperCase();
-          const band = freqToBand(parseFloat(s.frequency) * 1000);
+          const band = freqToBand(parseFloat(s.frequency));
           if (call && band) {
             const key = `${call}|${band}`;
             keys.add(key);
@@ -65,7 +67,15 @@
     const call = (spot.callsign || "").toUpperCase();
     const pota = potaByKey[`${call}|${spot.band}`];
     if (pota) {
-      dispatch("addqso", { ...spot, activator: spot.callsign, reference: pota.reference, grid4: pota.grid4, locationDesc: pota.locationDesc });
+      dispatch("addqso", {
+        activator: String(spot.callsign || ""),
+        frequency: String(spot.frequency || ""),
+        mode: String(spot.mode || "CW"),
+        reference: String(pota.reference || ""),
+        grid4: String(pota.grid4 || ""),
+        locationDesc: String(pota.locationDesc || ""),
+        skcc: String(spot.skcc || ""),
+      });
     } else {
       dispatch("addqso", spot);
     }

@@ -12,9 +12,13 @@
   let default_rst = "599";
   let qrz_password = "";
   let hasQrzPassword = false;
+  let pota_enabled = true;
+  let solar_enabled = false;
   let flrig_enabled = false;
+  let flrig_simulate = false;
   let flrig_host = "127.0.0.1";
   let flrig_port = "12345";
+  let logbook_right = false;
   let wide_breakpoint = "1200";
   let wide_mode_enabled = true;
   let theme = localStorage.getItem("rigbook-theme") || (window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark");
@@ -162,7 +166,10 @@
           if (s.key === "my_grid") my_grid = s.value || "";
           if (s.key === "default_rst") default_rst = s.value || "599";
           if (s.key === "qrz_password") hasQrzPassword = !!s.value && s.value !== "";
+          if (s.key === "pota_enabled") pota_enabled = s.value !== "false";
+          if (s.key === "solar_enabled") solar_enabled = s.value === "true";
           if (s.key === "flrig_enabled") flrig_enabled = s.value === "true";
+          if (s.key === "flrig_simulate") flrig_simulate = s.value === "true";
           if (s.key === "flrig_host") flrig_host = s.value || "127.0.0.1";
           if (s.key === "flrig_port") flrig_port = s.value || "12345";
           if (s.key === "rbn_enabled") rbn_enabled = s.value === "true";
@@ -186,6 +193,7 @@
             } else {
               wide_mode_enabled = true;
               wide_breakpoint = s.value || "1500";
+          if (s.key === "logbook_right") logbook_right = s.value === "true";
             }
           }
         }
@@ -221,10 +229,25 @@
         hasQrzPassword = true;
         qrz_password = "";
       }
+      await fetch("/api/settings/pota_enabled", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ value: pota_enabled ? "true" : "false" }),
+      });
+      await fetch("/api/settings/solar_enabled", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ value: solar_enabled ? "true" : "false" }),
+      });
       await fetch("/api/settings/flrig_enabled", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ value: flrig_enabled ? "true" : "false" }),
+      });
+      await fetch("/api/settings/flrig_simulate", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ value: flrig_simulate ? "true" : "false" }),
       });
       await fetch("/api/settings/flrig_host", {
         method: "PUT",
@@ -240,6 +263,11 @@
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ value: wide_mode_enabled ? String(wide_breakpoint) : "0" }),
+      });
+      await fetch("/api/settings/logbook_right", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ value: logbook_right ? "true" : "false" }),
       });
       // RBN settings
       await fetch("/api/settings/rbn_enabled", {
@@ -301,6 +329,7 @@
       // Restart feeds to apply changes
       await fetch("/api/spots/restart", { method: "POST" });
       setTimeout(fetchSpotStatus, 2000);
+      dispatch("saved");
       message = "Settings saved.";
       if (my_callsign.trim() && my_grid.trim()) {
         dispatch("setupcomplete");
@@ -398,6 +427,12 @@
       <label for="wide_breakpoint">Breakpoint: {wide_breakpoint}px</label>
       <input id="wide_breakpoint" type="range" min="1200" max="2500" step="50" bind:value={wide_breakpoint} disabled={!wide_mode_enabled} />
     </div>
+    <div class="setting-row toggle-row">
+      <label>
+        <input type="checkbox" bind:checked={logbook_right} disabled={!wide_mode_enabled} />
+        Logbook on right side
+      </label>
+    </div>
   </section>
 
   <section class="settings-section">
@@ -431,6 +466,26 @@
   </section>
 
   <section class="settings-section">
+    <h3>Parks on the Air (POTA)</h3>
+    <div class="setting-row toggle-row">
+      <label>
+        <input type="checkbox" bind:checked={pota_enabled} />
+        Enable POTA
+      </label>
+    </div>
+  </section>
+
+  <section class="settings-section">
+    <h3>Solar / Band Conditions</h3>
+    <div class="setting-row toggle-row">
+      <label>
+        <input type="checkbox" bind:checked={solar_enabled} />
+        Enable band conditions (N0NBH / hamqsl.com)
+      </label>
+    </div>
+  </section>
+
+  <section class="settings-section">
     <h3>flrig Connection</h3>
     <div class="setting-row toggle-row">
       <label>
@@ -438,13 +493,19 @@
         Enable flrig
       </label>
     </div>
+    <div class="setting-row toggle-row">
+      <label>
+        <input type="checkbox" bind:checked={flrig_simulate} disabled={!flrig_enabled} />
+        Simulate flrig (no real radio)
+      </label>
+    </div>
     <div class="setting-row">
       <label for="flrig_host">flrig Host</label>
-      <input id="flrig_host" type="text" bind:value={flrig_host} autocomplete="off" disabled={!flrig_enabled} />
+      <input id="flrig_host" type="text" bind:value={flrig_host} autocomplete="off" disabled={!flrig_enabled || flrig_simulate} />
     </div>
     <div class="setting-row">
       <label for="flrig_port">flrig Port</label>
-      <input id="flrig_port" type="text" bind:value={flrig_port} autocomplete="off" inputmode="numeric" disabled={!flrig_enabled} />
+      <input id="flrig_port" type="text" bind:value={flrig_port} autocomplete="off" inputmode="numeric" disabled={!flrig_enabled || flrig_simulate} />
     </div>
   </section>
 
