@@ -57,7 +57,14 @@
     };
   }
 
-  $: currentSnap = settingsSnapshot();
+  $: currentSnap = {
+    my_callsign, my_grid, default_rst, pota_enabled, solar_enabled,
+    flrig_enabled, flrig_simulate, flrig_host, flrig_port,
+    logbook_right, wide_breakpoint, wide_mode_enabled,
+    rbn_enabled, rbn_host, rbn_feed_cw, rbn_feed_digital,
+    skcc_skimmer_enabled, skcc_skimmer_distance,
+    hamalert_enabled, hamalert_host, hamalert_port, hamalert_username,
+  };
   $: dirty = savedSnapshot !== null && JSON.stringify(currentSnap) !== JSON.stringify(savedSnapshot);
   $: if (dirty && savedSnapshot) {
     const diffs = Object.keys(currentSnap).filter(k => currentSnap[k] !== savedSnapshot[k]);
