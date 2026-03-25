@@ -631,6 +631,7 @@
   }
 
   let previousHash = "";
+  let navigating = false;
 
   function navigate(p) {
     if (p === "back") {
@@ -673,12 +674,14 @@
     // Don't clear editId when staying on dual (switching right pane only)
     if (!(wasPage === "dual" && p === "dual")) editId = null;
     menuOpen = false;
+    navigating = true;
     if (p === "dual") {
       window.location.hash = `/dual/${dualRightPage}`;
     } else {
       const paths = { hunting: "/hunting", log: "/logbook", add: "/add", grid: "/grid", parks: "/parks", spots: "/spots", export: "/export", notifications: "/notifications", conditions: "/conditions", settings: "/settings", links: "/links", about: "/about", picker: "/picker" };
       window.location.hash = paths[p] || "/";
     }
+    setTimeout(() => { navigating = false; }, 0);
     fetchCallsign();
   }
 
@@ -817,14 +820,18 @@
   }
 
   async function onHashChange() {
+    if (navigating) return;
     const parsed = parseHash();
     let p = parsed.page;
     // Redirect disabled pages
     if (p === "spots" && !spotsEnabled) p = isWide() ? "dual" : "log";
     if (p === "parks" && !potaEnabled) p = isWide() ? "dual" : "log";
     if (p === "conditions" && !solarEnabled) p = isWide() ? "dual" : "log";
+    // Don't clear editId when staying on dual (e.g. switching right pane)
+    if (!(page === "dual" && p === "dual" && editId && !parsed.editId)) {
+      editId = parsed.editId;
+    }
     page = p;
-    editId = parsed.editId;
     if (parsed.dualRight) {
       if ((parsed.dualRight === "spots" && !spotsEnabled) || (parsed.dualRight === "parks" && !potaEnabled) || (parsed.dualRight === "conditions" && !solarEnabled)) {
         // Don't set disabled right page
