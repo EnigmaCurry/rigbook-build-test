@@ -1,5 +1,5 @@
 <script>
-  import { onMount, onDestroy } from "svelte";
+  import { onMount, onDestroy, tick } from "svelte";
   import Logbook from "./Logbook.svelte";
   import ExportImport from "./ExportImport.svelte";
   import Hunting from "./Hunting.svelte";
@@ -88,31 +88,42 @@
     return (n >= seg.lo + loMargin && n <= seg.hi - hiMargin) ? b.name : "";
   }
 
+  const DUAL_RIGHT_PAGES = new Set(["hunting", "spots", "parks", "notifications"]);
+
   function parseHash() {
     const hash = window.location.hash.slice(1) || "/";
-    if (hash === "/picker") return { page: "picker", editId: null };
-    if (hash === "/grid") return { page: "grid", editId: null };
-    if (hash === "/parks" || hash.startsWith("/parks/")) return { page: "parks", editId: null };
-    if (hash === "/about") return { page: "about", editId: null };
-    if (hash === "/links") return { page: "links", editId: null };
-    if (hash === "/spots" || hash.startsWith("/spots?")) return { page: "spots", editId: null };
-    if (hash === "/notifications") return { page: "notifications", editId: null };
-    if (hash === "/settings") return { page: "settings", editId: null };
-    if (hash === "/logbook") return { page: isWide() ? "dual" : "log", editId: null };
-    if (hash === "/export") return { page: "export", editId: null };
-    if (hash === "/add") return { page: isWide() ? "dual" : "add", editId: null };
-    if (hash === "/hunting") return { page: isWide() ? "dual" : "hunting", editId: null };
-    if (hash === "/dual") return { page: "dual", editId: null };
-    const match = hash.match(/^\/log\/(\d+)$/);
-    if (match) return { page: isWide() ? "dual" : "add", editId: parseInt(match[1], 10) };
-    return { page: isWide() ? "dual" : "log", editId: null };
+    if (hash === "/picker") return { page: "picker", editId: null, dualRight: null };
+    if (hash === "/grid") return { page: "grid", editId: null, dualRight: null };
+    if (hash === "/about") return { page: "about", editId: null, dualRight: null };
+    if (hash === "/links") return { page: "links", editId: null, dualRight: null };
+    if (hash === "/settings") return { page: "settings", editId: null, dualRight: null };
+    if (hash === "/export") return { page: "export", editId: null, dualRight: null };
+    if (hash === "/logbook") return { page: isWide() ? "dual" : "log", editId: null, dualRight: null };
+    if (hash === "/add") return { page: isWide() ? "dual" : "add", editId: null, dualRight: null };
+    // Right-pane-eligible pages
+    if (hash === "/hunting") return { page: isWide() ? "dual" : "hunting", editId: null, dualRight: "hunting" };
+    if (hash === "/spots" || hash.startsWith("/spots?")) return { page: isWide() ? "dual" : "spots", editId: null, dualRight: "spots" };
+    if (hash === "/parks" || hash.startsWith("/parks/")) return { page: isWide() ? "dual" : "parks", editId: null, dualRight: "parks" };
+    if (hash === "/notifications") return { page: isWide() ? "dual" : "notifications", editId: null, dualRight: "notifications" };
+    // Dual with subpage
+    const dualMatch = hash.match(/^\/dual(?:\/(\w+))?$/);
+    if (dualMatch) {
+      const sub = dualMatch[1] || "hunting";
+      return { page: "dual", editId: null, dualRight: DUAL_RIGHT_PAGES.has(sub) ? sub : "hunting" };
+    }
+    const logMatch = hash.match(/^\/log\/(\d+)$/);
+    if (logMatch) return { page: isWide() ? "dual" : "add", editId: parseInt(logMatch[1], 10), dualRight: null };
+    return { page: isWide() ? "dual" : "log", editId: null, dualRight: null };
   }
 
   let wideBreakpoint = 1200;
   let wide = typeof window !== "undefined" && window.innerWidth >= 1200;
-  let { page, editId } = parseHash();
+  let _parsed = parseHash();
+  let { page, editId } = _parsed;
+  let dualRightPage = _parsed.dualRight || "hunting";
   let previousPage = "log";
   let prefill = null;
+  let formDirty = false;
   let dualShowForm = !!editId || (page === "dual" && (window.location.hash.slice(1) === "/add"));
   let dualHunting;
   let gridMapValue = "";
@@ -510,7 +521,9 @@
       if (previousHash) {
         window.location.hash = previousHash;
         previousHash = "";
-        page = parseHash().page;
+        const parsed = parseHash();
+        page = parsed.page;
+        if (parsed.dualRight) dualRightPage = parsed.dualRight;
         editId = null;
         menuOpen = false;
         fetchCallsign();
@@ -518,7 +531,10 @@
       }
       p = previousPage;
     }
-    if ((p === "add" || p === "hunting" || p === "log") && isWide()) p = "dual";
+    if (isWide() && (p === "add" || p === "log" || DUAL_RIGHT_PAGES.has(p))) {
+      if (DUAL_RIGHT_PAGES.has(p)) dualRightPage = p;
+      p = "dual";
+    }
     if (page !== p) {
       previousPage = page;
       previousHash = window.location.hash.slice(1) || "/";
@@ -526,8 +542,12 @@
     page = p;
     editId = null;
     menuOpen = false;
-    const paths = { hunting: "/hunting", log: "/logbook", dual: "/dual", add: "/add", grid: "/grid", parks: "/parks", spots: "/spots", export: "/export", notifications: "/notifications", settings: "/settings", links: "/links", about: "/about", picker: "/picker" };
-    window.location.hash = paths[p] || "/";
+    if (p === "dual") {
+      window.location.hash = `/dual/${dualRightPage}`;
+    } else {
+      const paths = { hunting: "/hunting", log: "/logbook", add: "/add", grid: "/grid", parks: "/parks", spots: "/spots", export: "/export", notifications: "/notifications", settings: "/settings", links: "/links", about: "/about", picker: "/picker" };
+      window.location.hash = paths[p] || "/";
+    }
     fetchCallsign();
   }
 
@@ -551,7 +571,18 @@
   }
 
   async function tuneAndPrefill(spot) {
+    if (formDirty) {
+      alert("Save or cancel your current QSO before selecting a new spot.");
+      return;
+    }
+
     await tuneOnly(spot);
+
+    // If in edit mode but clean, clear edit to accept new spot
+    if (editId) {
+      editId = null;
+      await tick();
+    }
 
     // SKCC/RBN spot (has callsign field, no activator)
     if (spot.callsign && !spot.activator) {
@@ -563,8 +594,8 @@
         country: String(spot.country || ""),
         state: String(spot.qrz_state || ""),
       };
-      if (page === "dual") dualShowForm = true;
-      else navigate("add");
+      dualShowForm = true;
+      if (page !== "dual") navigate("add");
       return;
     }
 
@@ -599,13 +630,14 @@
       country: spotCountry,
       state: spotState,
     };
-    if (page === "dual") dualShowForm = true;
-    else navigate("add");
+    dualShowForm = true;
+    if (page !== "dual") navigate("add");
   }
 
   function handleSearchAction(e) {
     const { type, data } = e.detail;
     if (type === "logbook") {
+      if (formDirty) { alert("Save or cancel your current QSO before selecting a new spot."); return; }
       const target = isWide() ? "dual" : "add";
       if ((target === "add" || target === "hunting" || target === "log") && isWide()) { /* already dual */ }
       if (page !== target) previousPage = page;
@@ -621,6 +653,7 @@
     } else if (type === "pota") {
       tuneAndPrefill(data);
     } else if (type === "skcc") {
+      if (formDirty) { alert("Save or cancel your current QSO before selecting a new spot."); return; }
       prefill = {
         call: data.call || "",
         freq: "",
@@ -652,6 +685,7 @@
     const parsed = parseHash();
     page = parsed.page;
     editId = parsed.editId;
+    if (parsed.dualRight) dualRightPage = parsed.dualRight;
     fetchCallsign();
     const wasEnabled = flrigEnabled;
     await fetchFlrigEnabled();
@@ -730,8 +764,14 @@
   function onResize() {
     wide = isWide();
     if (page === "dual" && !wide) {
-      navigate("log");
-    } else if ((page === "log" || page === "hunting") && wide) {
+      if (formDirty || dualShowForm || editId) {
+        // Keep dual page alive so Logbook component isn't destroyed;
+        // the right pane is hidden via CSS when not wide
+      } else {
+        navigate(dualRightPage);
+      }
+    } else if (wide && (page === "log" || DUAL_RIGHT_PAGES.has(page))) {
+      if (DUAL_RIGHT_PAGES.has(page)) dualRightPage = page;
       navigate("dual");
     }
   }
@@ -843,21 +883,24 @@
     <span class="utc-clock" on:click={copyUtcTimestamp} title="Click to copy">{clockCopied ? "Copied!" : utcNow}</span>
     <div class="hamburger-wrap">
       {#if wide}
-        <button class="add-btn dual-btn" on:click={() => navigate("dual")} title="Logbook & Hunting">📖🧭</button>
+        <button class="add-btn dual-btn" class:active-nav={dualRightPage === "hunting"} on:click={() => navigate("hunting")} title="Logbook & Hunting">{#if dualRightPage === "hunting"}📖{/if}🧭</button>
+        <button class="add-btn dual-btn" class:active-nav={dualRightPage === "spots"} on:click={() => navigate("spots")} title="Logbook & Spots">{#if dualRightPage === "spots"}📖{/if}🗺️</button>
+        <button class="add-btn dual-btn parks-btn" class:active-nav={dualRightPage === "parks"} on:click={() => navigate("parks")} title="Logbook & Parks">{#if dualRightPage === "parks"}📖{/if}🌲</button>
+        <button class="add-btn dual-btn notification-btn" class:active-nav={dualRightPage === "notifications"} on:click={handleNotificationClick} title="Logbook & Notifications">{#if dualRightPage === "notifications"}📖{/if}{#if unreadCount > 0}<span class="notif-badge">{unreadCount > 99 ? "99+" : unreadCount}</span>{:else}✉️{/if}</button>
       {:else}
         <button class="add-btn" on:click={() => navigate("log")} title="Logbook">📖</button>
         <button class="add-btn" on:click={() => navigate("hunting")} title="Hunting">🧭</button>
+        <button class="add-btn parks-btn" on:click={() => navigate("parks")} title="My Parks">🌲</button>
+        <button class="add-btn" on:click={() => navigate("spots")} title="Spots">🗺️</button>
+        <button class="add-btn notification-btn" class:has-unread={unreadCount > 0} on:click={handleNotificationClick} title="Notifications">
+          {#if unreadCount > 0}
+            <span class="notif-badge">{unreadCount > 99 ? "99+" : unreadCount}</span>
+          {:else}
+            ✉️
+          {/if}
+        </button>
       {/if}
-      <button class="add-btn parks-btn" on:click={() => navigate("parks")} title="My Parks">🌲</button>
-      <button class="add-btn" on:click={() => navigate("spots")} title="Spots">🗺️</button>
       <button class="add-btn" on:click={() => { dualShowForm = true; prefill = null; editId = null; if (page === "dual") { /* already on dual */ } else navigate("add"); }} title="Add QSO">+</button>
-      <button class="add-btn notification-btn" class:has-unread={unreadCount > 0} on:click={handleNotificationClick} title="Notifications">
-        {#if unreadCount > 0}
-          <span class="notif-badge">{unreadCount > 99 ? "99+" : unreadCount}</span>
-        {:else}
-          ✉️
-        {/if}
-      </button>
       <button class="hamburger" on:click={() => menuOpen = !menuOpen} aria-label="Menu">
         <span class="bar"></span>
         <span class="bar"></span>
@@ -868,13 +911,13 @@
         <!-- svelte-ignore a11y-no-static-element-interactions -->
         <div class="menu-backdrop" on:click={() => menuOpen = false}></div>
         <nav class="menu">
-          <button class="menu-item" class:active={page === "log"} on:click={() => navigate("log")}>Logbook</button>
+          <button class="menu-item" class:active={page === "log" || page === "dual"} on:click={() => navigate("log")}>Logbook</button>
           <button class="menu-item" class:active={page === "add"} on:click={() => navigate("add")}>Add QSO</button>
-          <button class="menu-item" class:active={page === "hunting"} on:click={() => navigate("hunting")}>Hunting</button>
+          <button class="menu-item" class:active={page === "hunting" || (page === "dual" && dualRightPage === "hunting")} on:click={() => navigate("hunting")}>Hunting</button>
           <button class="menu-item" class:active={page === "grid"} on:click={() => navigate("grid")}>Grid Map</button>
-          <button class="menu-item" class:active={page === "parks"} on:click={() => navigate("parks")}>Parks</button>
-          <button class="menu-item" class:active={page === "spots"} on:click={() => navigate("spots")}>Spots</button>
-          <button class="menu-item" class:active={page === "notifications"} on:click={() => navigate("notifications")}>Notifications{#if unreadCount > 0} ({unreadCount}){/if}</button>
+          <button class="menu-item" class:active={page === "parks" || (page === "dual" && dualRightPage === "parks")} on:click={() => navigate("parks")}>Parks</button>
+          <button class="menu-item" class:active={page === "spots" || (page === "dual" && dualRightPage === "spots")} on:click={() => navigate("spots")}>Spots</button>
+          <button class="menu-item" class:active={page === "notifications" || (page === "dual" && dualRightPage === "notifications")} on:click={() => navigate("notifications")}>Notifications{#if unreadCount > 0} ({unreadCount}){/if}</button>
           <button class="menu-item" class:active={page === "export"} on:click={() => navigate("export")}>Export / Import</button>
           <button class="menu-item" class:active={page === "settings"} on:click={() => navigate("settings")}>Settings</button>
           <button class="menu-item" class:active={page === "links"} on:click={() => navigate("links")}>Links</button>
@@ -891,20 +934,28 @@
   {#if page === "log"}
     <Logbook showForm={false} {vfoFreq} {vfoMode} on:editchange={e => { editId = e.detail; navigate("add"); window.location.hash = `/log/${e.detail}`; }} on:navigate={e => navigate(e.detail)} />
   {:else if page === "add"}
-    <Logbook showForm={true} {editId} {prefill} {vfoFreq} {vfoMode} on:editchange={e => { editId = e.detail; window.location.hash = e.detail ? `/log/${e.detail}` : "/add"; }} on:navigate={e => navigate(e.detail)} on:prefillconsumed={() => prefill = null} />
+    <Logbook showForm={true} {editId} {prefill} {vfoFreq} {vfoMode} bind:formDirty on:editchange={e => { editId = e.detail; window.location.hash = e.detail ? `/log/${e.detail}` : "/add"; }} on:navigate={e => navigate(e.detail)} on:prefillconsumed={() => prefill = null} />
   {:else if page === "hunting"}
     <Hunting on:tune={e => tuneOnly(e.detail)} on:addqso={e => tuneAndPrefill(e.detail)} />
   {:else if page === "dual"}
-    <div class="dual-layout">
+    <div class="dual-layout" class:dual-narrow={!wide}>
       <div class="dual-pane">
-        <Logbook showForm={dualShowForm || !!prefill || !!editId} {prefill} {editId} {vfoFreq} {vfoMode} on:editchange={e => { editId = e.detail; dualShowForm = !!e.detail; }} on:navigate={e => { if (e.detail === "hunting" || e.detail === "log" || e.detail === "back") { prefill = null; editId = null; dualShowForm = false; dualHunting?.refreshAwards(); } else navigate(e.detail); }} on:prefillconsumed={() => prefill = null} />
+        <Logbook showForm={dualShowForm || !!prefill || !!editId} {prefill} {editId} {vfoFreq} {vfoMode} bind:formDirty on:editchange={e => { editId = e.detail; dualShowForm = !!e.detail; }} on:navigate={e => { if (e.detail === "hunting" || e.detail === "log" || e.detail === "back") { prefill = null; editId = null; dualShowForm = false; dualHunting?.refreshAwards(); if (!wide) navigate(dualRightPage); } else navigate(e.detail); }} on:prefillconsumed={() => prefill = null} />
       </div>
       <div class="dual-pane">
-        <Hunting bind:this={dualHunting} on:tune={e => tuneOnly(e.detail)} on:addqso={e => tuneAndPrefill(e.detail)} />
+        {#if dualRightPage === "hunting"}
+          <Hunting bind:this={dualHunting} on:tune={e => tuneOnly(e.detail)} on:addqso={e => tuneAndPrefill(e.detail)} />
+        {:else if dualRightPage === "spots"}
+          <Spots on:tune={e => tuneOnly(e.detail)} on:addqso={e => tuneAndPrefill(e.detail)} />
+        {:else if dualRightPage === "parks"}
+          <Parks on:addqso={e => { if (formDirty) { alert("Save or cancel your current QSO before selecting a new spot."); return; } prefill = e.detail; dualShowForm = true; }} />
+        {:else if dualRightPage === "notifications"}
+          <Notifications on:countchange={() => fetchUnreadCount()} on:tune={e => tuneOnly(e.detail)} on:addqso={e => tuneAndPrefill(e.detail)} />
+        {/if}
       </div>
     </div>
   {:else if page === "parks"}
-    <Parks on:addqso={e => { prefill = e.detail; dualShowForm = true; navigate(isWide() ? "dual" : "add"); }} />
+    <Parks on:addqso={e => { if (formDirty) { alert("Save or cancel your current QSO before selecting a new spot."); return; } prefill = e.detail; dualShowForm = true; navigate(isWide() ? "dual" : "add"); }} />
   {:else if page === "grid"}
     <GridMap bind:value={gridMapValue} on:select={e => { gridMapValue = e.detail; }} />
   {:else if page === "export"}
@@ -1248,6 +1299,9 @@
     padding: 0 0.4rem;
     font-size: 0.9rem;
   }
+  .add-btn.dual-btn.active-nav {
+    border-bottom: 2px solid var(--border);
+  }
 
   .add-btn:hover {
     background: #4a5f55;
@@ -1433,7 +1487,7 @@
 
   .dual-layout {
     display: flex;
-    gap: 1.5rem;
+    gap: 0;
     flex: 1;
     min-height: 0;
   }
@@ -1442,6 +1496,13 @@
     flex: 1;
     min-width: 0;
     overflow-y: auto;
+    padding: 0 0.75rem;
+  }
+  .dual-pane + .dual-pane {
+    border-left: 1px solid var(--border);
+  }
+  .dual-narrow .dual-pane:last-child {
+    display: none;
   }
 
   @media (max-width: 600px) {
