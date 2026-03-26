@@ -1115,12 +1115,14 @@
 
 <svelte:window on:keydown={e => {
   if ((parkOverlay || parkOverlayLoading) && e.key === "Escape") closeParkOverlay();
-  if (tableWrapEl && (e.key === "PageDown" || e.key === "PageUp")) {
+  if (tableWrapEl && (e.key === "PageDown" || e.key === "PageUp" || e.key === "Home" || e.key === "End")) {
     const active = document.activeElement;
     const inForm = active && (active.tagName === "INPUT" || active.tagName === "TEXTAREA" || active.tagName === "SELECT");
     if (!inForm) {
       e.preventDefault();
-      tableWrapEl.scrollBy({ top: e.key === "PageDown" ? tableWrapEl.clientHeight : -tableWrapEl.clientHeight, behavior: "smooth" });
+      if (e.key === "Home") tableWrapEl.scrollTo({ top: 0, behavior: "smooth" });
+      else if (e.key === "End") tableWrapEl.scrollTo({ top: tableWrapEl.scrollHeight, behavior: "smooth" });
+      else tableWrapEl.scrollBy({ top: e.key === "PageDown" ? tableWrapEl.clientHeight : -tableWrapEl.clientHeight, behavior: "smooth" });
     }
   }
 }} />

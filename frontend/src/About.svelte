@@ -32,6 +32,10 @@
       <tr><td class="key">T</td><td>Tune radio</td></tr>
       <tr><td class="key">M</td><td>Cycle radio mode</td></tr>
       <tr><td class="key">?</td><td>This page</td></tr>
+      <tr><td class="key">PgUp</td><td>Scroll logbook up</td></tr>
+      <tr><td class="key">PgDn</td><td>Scroll logbook down</td></tr>
+      <tr><td class="key">Home</td><td>Scroll logbook to top</td></tr>
+      <tr><td class="key">End</td><td>Scroll logbook to bottom</td></tr>
       <tr><td class="key">Esc</td><td>Close search / menu</td></tr>
     </tbody>
   </table>
