@@ -535,6 +535,18 @@
     drawTriangleForSpot(spot);
   }
 
+  function onMapHomeClick(call) {
+    const spot = spots.find(s => s.callsign === call);
+    if (!spot) return;
+    if (lockedSpot && spotKey(lockedSpot) === spotKey(spot)) {
+      clearAll();
+      return;
+    }
+    lockedSpot = spot;
+    selectedSpotter = null;
+    drawTriangleForSpot(spot);
+  }
+
   function onMapSpotterClick(call) {
     if (selectedSpotter === call) {
       clearAll();
@@ -611,9 +623,11 @@
       if (homeMarkers[call]) continue;
       const pos = gridToLatLon(grid);
       if (!pos) continue;
-      homeMarkers[call] = L.marker([pos.lat, pos.lon], { icon: homeLocIcon })
+      const hm = L.marker([pos.lat, pos.lon], { icon: homeLocIcon })
         .bindPopup(`Station: ${call}<br>Grid: ${grid}`)
         .addTo(leafletMap);
+      hm.on("click", () => onMapHomeClick(call));
+      homeMarkers[call] = hm;
     }
 
     // Fit bounds on first load only
