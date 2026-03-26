@@ -32,6 +32,7 @@
   let grid = "";
   let skcc = "";
   let skcc_exch = false;
+  let tableWrapEl;
   function utcNowDate() { return new Date().toISOString().slice(0, 10); }
   function utcNowTime() { return new Date().toISOString().slice(11, 19); }
   function normalizeTime() {
@@ -1054,7 +1055,7 @@
   {#if contacts.length === 0}
     <p class="empty">No contacts logged yet.</p>
   {:else}
-    <div class="table-wrap">
+    <div class="table-wrap" bind:this={tableWrapEl}>
       <table>
         <thead>
           <tr>
@@ -1112,7 +1113,17 @@
   </div>
 {/if}
 
-<svelte:window on:keydown={e => { if ((parkOverlay || parkOverlayLoading) && e.key === "Escape") closeParkOverlay(); }} />
+<svelte:window on:keydown={e => {
+  if ((parkOverlay || parkOverlayLoading) && e.key === "Escape") closeParkOverlay();
+  if (tableWrapEl && (e.key === "PageDown" || e.key === "PageUp")) {
+    const active = document.activeElement;
+    const inForm = active && (active.tagName === "INPUT" || active.tagName === "TEXTAREA" || active.tagName === "SELECT");
+    if (!inForm) {
+      e.preventDefault();
+      tableWrapEl.scrollBy({ top: e.key === "PageDown" ? tableWrapEl.clientHeight : -tableWrapEl.clientHeight, behavior: "smooth" });
+    }
+  }
+}} />
 
 <style>
   .logbook-layout {
