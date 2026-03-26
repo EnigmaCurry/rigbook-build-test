@@ -12,37 +12,16 @@
   let spots = [];
   let myGrid = "";
   let showMap = localStorage.getItem("spotsMapEnabled") !== "false";
+  let mapHeight = parseInt(localStorage.getItem("spotsMapHeight")) || 350;
+  const MIN_MAP_HEIGHT = 60;
   let status = { rbn: { connected: false, enabled: false }, hamalert: { connected: false, enabled: false }, callsigns: 0, entries: 0, total_spots: 0, avg_spots_per_callsign: 0 };
   let bands = {};
   let modes = {};
-  // Parse initial filter state from URL hash query params
-  function parseFiltersFromHash() {
-    const hash = window.location.hash.slice(1) || "";
-    const qIdx = hash.indexOf("?");
-    if (qIdx < 0) return {};
-    const params = new URLSearchParams(hash.slice(qIdx + 1));
-    return Object.fromEntries(params.entries());
-  }
-
-  function updateHash() {
-    const params = new URLSearchParams();
-    if (filterSource) params.set("source", filterSource);
-    if (filterBand) params.set("band", filterBand);
-    if (filterMode) params.set("mode", filterMode);
-    if (filterCallsign) params.set("callsign", filterCallsign);
-    if (filterSkcc) params.set("skcc", filterSkcc);
-    const qs = params.toString();
-    window.location.hash = qs ? `/spots?${qs}` : "/spots";
-  }
-
-  const initFilters = parseFiltersFromHash();
-  const hasHashFilters = Object.keys(initFilters).length > 0;
-  let filterSource = initFilters.source || "";
-  let filterBand = initFilters.band || "";
-  let filterMode = initFilters.mode || "";
-  let filterCallsign = initFilters.callsign || "";
-  let filterSkcc = initFilters.skcc || "";
-  let savedFilters = null; // what's stored as the default
+  let filterSource = "";
+  let filterBands = new Set();
+  let filterMode = "";
+  let filterCallsign = "";
+  let filterSkcc = "";
   let filtersLoaded = false;
   let restarting = false;
   let workedTodayKeys = new Set();
@@ -221,8 +200,37 @@
     if (!showMap) { destroyMap(); }
   }
 
+  function onDragStart(e) {
+    e.preventDefault();
+    const startY = e.type === "touchstart" ? e.touches[0].clientY : e.clientY;
+    const startH = mapHeight;
+    function onMove(ev) {
+      const clientY = ev.type === "touchmove" ? ev.touches[0].clientY : ev.clientY;
+      const newH = startH + (clientY - startY);
+      if (newH < MIN_MAP_HEIGHT) {
+        showMap = false;
+        localStorage.setItem("spotsMapEnabled", "false");
+        destroyMap();
+        cleanup();
+        return;
+      }
+      mapHeight = newH;
+      if (leafletMap) leafletMap.invalidateSize();
+    }
+    function cleanup() {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", cleanup);
+      window.removeEventListener("touchmove", onMove);
+      window.removeEventListener("touchend", cleanup);
+      localStorage.setItem("spotsMapHeight", String(mapHeight));
+    }
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", cleanup);
+    window.addEventListener("touchmove", onMove);
+    window.addEventListener("touchend", cleanup);
+  }
+
   function onFilterChange() {
-    updateHash();
     fetchSpots();
   }
 
@@ -230,7 +238,7 @@
     try {
       const params = new URLSearchParams();
       if (filterSource) params.set("source", filterSource);
-      if (filterBand) params.set("band", filterBand);
+      if (filterBandsStr) params.set("band", filterBandsStr);
       if (filterMode) params.set("mode", filterMode);
       if (filterCallsign) params.set("callsign", filterCallsign);
       if (filterSkcc) params.set("skcc", filterSkcc);
@@ -278,69 +286,55 @@
     }
   }
 
-  function currentFilters() {
-    return {
-      source: filterSource,
-      band: filterBand,
-      mode: filterMode,
-      callsign: filterCallsign,
-      skcc: filterSkcc,
-    };
+  $: filterBandsStr = [...filterBands].sort().join(",");
+
+  function toggleBand(b) {
+    if (filterBands.has(b)) filterBands.delete(b);
+    else filterBands.add(b);
+    filterBands = new Set(filterBands);
   }
 
-  function filtersMatch(a, b) {
-    if (!a || !b) return false;
-    return a.source === b.source && a.band === b.band && a.mode === b.mode
-      && a.callsign === b.callsign && a.skcc === b.skcc;
-  }
+  const FILTER_SETTINGS_KEY = "spot_filters";
 
-  const factoryFilters = { source: "", band: "", mode: "", callsign: "", skcc: "" };
-  $: isDefault = filtersLoaded && filtersMatch(
-    { source: filterSource, band: filterBand, mode: filterMode, callsign: filterCallsign, skcc: filterSkcc },
-    savedFilters || factoryFilters
-  );
-
-  async function loadDefaultFilters() {
+  async function loadFilters() {
     try {
-      const res = await fetch("/api/settings/spot_filters");
+      const res = await fetch(`/api/settings/${FILTER_SETTINGS_KEY}`);
       if (res.ok) {
         const data = await res.json();
         if (data.value) {
-          savedFilters = JSON.parse(data.value);
-          if (!hasHashFilters && savedFilters) {
-            filterSource = savedFilters.source || "";
-            filterBand = savedFilters.band || "";
-            filterMode = savedFilters.mode || "";
-            filterCallsign = savedFilters.callsign || "";
-            filterSkcc = savedFilters.skcc || "";
-            updateHash();
-          }
+          const saved = JSON.parse(data.value);
+          filterSource = saved.source || "";
+          filterBands = saved.band ? new Set(saved.band.split(",")) : new Set();
+          filterMode = saved.mode || "";
+          filterCallsign = saved.callsign || "";
+          filterSkcc = saved.skcc || "";
         }
       }
     } catch {}
     filtersLoaded = true;
   }
 
-  async function saveDefaultFilters() {
-    savedFilters = currentFilters();
+  async function saveFilters() {
+    if (!filtersLoaded) return;
     try {
-      await fetch("/api/settings/spot_filters", {
+      await fetch(`/api/settings/${FILTER_SETTINGS_KEY}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ value: JSON.stringify(savedFilters) }),
+        body: JSON.stringify({ value: JSON.stringify({
+          source: filterSource,
+          band: [...filterBands].sort().join(","),
+          mode: filterMode,
+          callsign: filterCallsign,
+          skcc: filterSkcc,
+        }) }),
       });
     } catch {}
   }
 
-  async function clearDefaultFilters() {
-    savedFilters = null;
-    try {
-      await fetch("/api/settings/spot_filters", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ value: "" }),
-      });
-    } catch {}
+  // Auto-save filters whenever they change (after initial load)
+  $: if (filtersLoaded) {
+    const _filters = { s: filterSource, b: filterBandsStr, m: filterMode, c: filterCallsign, k: filterSkcc };
+    saveFilters();
   }
 
   onMount(async () => {
@@ -350,13 +344,19 @@
     fetchModes();
     fetchWorkedToday();
     fetchPotaSpots();
-    await loadDefaultFilters();
+    await loadFilters();
     await fetchSpots();
     if (myGrid && showMap) { await initMap(); updateMap(); }
     statusInterval = setInterval(() => { fetchStatus(); fetchBands(); fetchModes(); fetchWorkedToday(); fetchPotaSpots(); }, 5000);
     spotsInterval = setInterval(fetchSpots, 3000);
     window.addEventListener("keydown", onFullscreenKey);
+    window.addEventListener("resize", onWindowResize);
   });
+
+  let mapResizeObserver;
+  function onWindowResize() {
+    if (leafletMap) leafletMap.invalidateSize();
+  }
 
   onDestroy(() => {
     clearInterval(statusInterval);
@@ -364,6 +364,7 @@
     qrz.destroy();
     destroyMap();
     window.removeEventListener("keydown", onFullscreenKey);
+    window.removeEventListener("resize", onWindowResize);
   });
 
   $: bandList = Object.keys(bands).sort((a, b) => {
@@ -580,6 +581,8 @@
     }).addTo(leafletMap);
     leafletMap.on("click", clearAll);
     addExpandControl(leafletMap, mapEl.parentElement);
+    mapResizeObserver = new ResizeObserver(() => { leafletMap?.invalidateSize(); });
+    mapResizeObserver.observe(mapEl);
   }
 
   function updateMap() {
@@ -655,6 +658,7 @@
   }
 
   function destroyMap() {
+    if (mapResizeObserver) { mapResizeObserver.disconnect(); mapResizeObserver = null; }
     if (leafletMap) { leafletMap.remove(); leafletMap = null; }
     spotterMarkers = {};
     homeMarkers = {};
@@ -711,16 +715,28 @@
   </div>
 
   <div class="filters">
+    {#if bandList.length > 0}
+      {#each bandList as b}
+        <span
+          class="band-badge"
+          class:active={filterBands.has(b)}
+          style="background: {bandColor(b)}; color: {bandTextColor(b)}; opacity: {filterBands.size > 0 && !filterBands.has(b) ? 0.3 : 1}"
+          on:click={() => { toggleBand(b); onFilterChange(); }}
+          on:keydown={(e) => { if (e.key === 'Enter') { toggleBand(b); onFilterChange(); } }}
+          role="button"
+          tabindex="0"
+        >
+          {b}
+        </span>
+      {/each}
+    {/if}
+    {#if filterBands.size > 0}
+      <button class="default-btn clear-bands" on:click={() => { filterBands = new Set(); onFilterChange(); }}>Clear bands</button>
+    {/if}
     <select bind:value={filterSource} on:change={onFilterChange}>
       <option value="">All Sources</option>
       <option value="rbn">RBN</option>
       <option value="hamalert">HamAlert</option>
-    </select>
-    <select bind:value={filterBand} on:change={onFilterChange} style={filterBand ? `background: ${bandColor(filterBand)}; color: ${bandTextColor(filterBand)}` : ""}>
-      <option value="">All Bands</option>
-      {#each bandList as b}
-        <option value={b} style="background: {bandColor(b)}; color: {bandTextColor(b)}">{b} ({bands[b]})</option>
-      {/each}
     </select>
     <select bind:value={filterMode} on:change={() => { if (filterMode !== "CW") filterSkcc = ""; onFilterChange(); }}>
       <option value="">All Modes</option>
@@ -728,46 +744,25 @@
         <option value={m}>{m} ({modes[m]})</option>
       {/each}
     </select>
-    <input type="text" placeholder="Callsign" bind:value={filterCallsign} on:input={onFilterChange} style="text-transform: uppercase" />
+    <input type="text" placeholder="Callsign" bind:value={filterCallsign} on:input={onFilterChange} style="text-transform: uppercase; width: 10ch" />
     {#if filterMode === "CW"}
       <select bind:value={filterSkcc} on:change={onFilterChange}>
         <option value="">SKCC: Any</option>
         <option value="required">SKCC: Required</option>
       </select>
     {/if}
-    {#if filtersLoaded}
-      {#if !isDefault}
-        <button class="default-btn save" on:click={saveDefaultFilters} title="Save current filters as default">Save as default</button>
-      {:else if savedFilters}
-        <button class="default-btn clear" on:click={clearDefaultFilters} title="Clear saved default filters">Clear default</button>
-      {/if}
-    {/if}
     {#if myGrid}
       <button class="default-btn map-toggle" class:active={showMap} on:click={toggleMap} title="{showMap ? 'Hide' : 'Show'} map">Map</button>
     {/if}
   </div>
 
-  {#if bandList.length > 0}
-    <div class="band-badges">
-      {#each bandList as b}
-        <span
-          class="band-badge"
-          class:active={filterBand === b}
-          style="background: {bandColor(b)}; color: {bandTextColor(b)}; opacity: {filterBand && filterBand !== b ? 0.3 : 1}"
-          on:click={() => { filterBand = filterBand === b ? "" : b; onFilterChange(); }}
-          on:keydown={(e) => { if (e.key === 'Enter') { filterBand = filterBand === b ? "" : b; onFilterChange(); } }}
-          role="button"
-          tabindex="0"
-        >
-          {b}: {bands[b]}
-        </span>
-      {/each}
-    </div>
-  {/if}
-
   {#if myGrid && showMap}
     <div class="spots-map-wrap">
-      <div class="spots-map" bind:this={mapEl}></div>
+      <div class="spots-map" bind:this={mapEl} style="height: {mapHeight}px"></div>
+    </div>
+    <!-- svelte-ignore a11y-no-static-element-interactions -->
+    <div class="map-drag-handle" on:mousedown={onDragStart} on:touchstart={onDragStart}>
+      <div class="drag-grip"></div>
     </div>
   {/if}
 
@@ -823,7 +818,7 @@
           </tr>
         {/each}
         {#if spots.length === 0}
-          <tr><td colspan={filterMode === "CW" ? 13 : 12} class="empty">No spots{filterSource || filterBand || filterMode || filterCallsign ? " matching filters" : ""}. {status.rbn.enabled || status.hamalert.enabled ? "Waiting for data..." : "Enable RBN or HamAlert in Settings."}</td></tr>
+          <tr><td colspan={filterMode === "CW" ? 13 : 12} class="empty">No spots{filterSource || filterBands.size > 0 || filterMode || filterCallsign ? " matching filters" : ""}. {status.rbn.enabled || status.hamalert.enabled ? "Waiting for data..." : "Enable RBN or HamAlert in Settings."}</td></tr>
         {/if}
       </tbody>
     </table>
@@ -832,7 +827,7 @@
 
 <style>
   .spots-page {
-    max-width: 1200px;
+    max-width: none;
     display: flex;
     flex-direction: column;
     flex: 1;
@@ -895,6 +890,8 @@
     gap: 0.5rem;
     margin-bottom: 0.75rem;
     flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
   }
 
   .filters select,
@@ -925,18 +922,7 @@
     white-space: nowrap;
   }
   .default-btn:hover { background: var(--btn-secondary-hover); }
-  .default-btn.save { background: var(--accent); color: var(--bg); }
-  .default-btn.save:hover { opacity: 0.85; }
-  .default-btn.clear { opacity: 0.7; font-size: 0.75rem; }
-  .default-btn.map-toggle { margin-left: auto; }
   .default-btn.map-toggle.active { background: var(--accent); color: var(--bg); }
-
-  .band-badges {
-    display: flex;
-    gap: 0.4rem;
-    margin-bottom: 0.75rem;
-    flex-wrap: wrap;
-  }
 
   .band-badge {
     padding: 0.15rem 0.5rem;
@@ -1084,14 +1070,35 @@
   }
 
   .spots-map-wrap {
-    margin-bottom: 0.75rem;
+    margin-bottom: 0;
   }
 
   .spots-map {
     width: 100%;
-    height: 350px;
     border: 1px solid var(--border);
     border-radius: 3px;
+  }
+
+  .map-drag-handle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 10px;
+    cursor: row-resize;
+    user-select: none;
+    touch-action: none;
+    margin-bottom: 0.5rem;
+  }
+
+  .drag-grip {
+    width: 40px;
+    height: 4px;
+    border-radius: 2px;
+    background: var(--border);
+  }
+
+  .map-drag-handle:hover .drag-grip {
+    background: var(--accent);
   }
 
   :global(.spot-marker-dot) {
