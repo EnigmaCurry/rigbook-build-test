@@ -750,8 +750,8 @@
     border: 1px solid var(--border);
     border-radius: 6px;
     padding: 1rem;
-    width: min(90vw, 600px);
-    max-height: 90vh;
+    width: 95vw;
+    height: 90vh;
     overflow: auto;
   }
   .grid-picker-header {
