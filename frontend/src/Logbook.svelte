@@ -155,7 +155,7 @@
   let sortCol = localStorage.getItem("logSortCol") || "timestamp";
   let sortAsc = localStorage.getItem("logSortAsc") === "true";
 
-  const defaultColumnOrder = ["timestamp", "call", "name", "freq", "mode", "pota_park", "qth", "rst_sent", "rst_recv", "comments"];
+  const defaultColumnOrder = ["timestamp", "call", "name", "freq", "mode", "pota_park", "qth", "rst_sent", "rst_recv", "comments", "updated_at"];
   const columnDefs = {
     timestamp: { key: "timestamp", label: "UTC" },
     call: { key: "call", label: "Call" },
@@ -167,12 +167,17 @@
     rst_sent: { key: "rst_sent", label: "RST S" },
     rst_recv: { key: "rst_recv", label: "RST R" },
     comments: { key: "comments", label: "Comments" },
+    updated_at: { key: "updated_at", label: "Edited" },
   };
 
   function loadColumnOrder() {
     try {
       const saved = JSON.parse(localStorage.getItem("logColumnOrder"));
-      if (Array.isArray(saved) && saved.length === defaultColumnOrder.length && saved.every(k => columnDefs[k])) return saved;
+      if (Array.isArray(saved) && saved.every(k => columnDefs[k])) {
+        const missing = defaultColumnOrder.filter(k => !saved.includes(k));
+        const merged = [...saved.filter(k => columnDefs[k]), ...missing];
+        if (merged.length === defaultColumnOrder.length) return merged;
+      }
     } catch {}
     return [...defaultColumnOrder];
   }
@@ -1080,6 +1085,7 @@
                 {:else if col.key === "rst_sent"}<td>{c.rst_sent || ""}</td>
                 {:else if col.key === "rst_recv"}<td>{c.rst_recv || ""}</td>
                 {:else if col.key === "comments"}<td class="truncate">{c.comments || ""}</td>
+                {:else if col.key === "updated_at"}<td>{c.updated_at ? formatTimestamp(c.updated_at) : ""}</td>
                 {/if}
               {/each}
             </tr>

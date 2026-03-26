@@ -45,6 +45,7 @@ class Contact(Base):
     timestamp: Mapped[datetime] = mapped_column(
         DateTime, default=lambda: datetime.now(timezone.utc)
     )
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
 
 class Cache(Base):
@@ -175,6 +176,11 @@ class DatabaseManager:
         async with self.engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
             await conn.run_sync(_add_missing_columns)
+            await conn.execute(
+                text(
+                    "UPDATE contacts SET updated_at = timestamp WHERE updated_at IS NULL"
+                )
+            )
             await conn.execute(
                 text(
                     "UPDATE contacts SET uuid = lower(hex(randomblob(4)) || '-' || hex(randomblob(2)) || '-4' || substr(hex(randomblob(2)),2) || '-' || substr('89ab', abs(random()) % 4 + 1, 1) || substr(hex(randomblob(2)),2) || '-' || hex(randomblob(6))) WHERE uuid IS NULL"

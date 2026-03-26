@@ -118,6 +118,7 @@ class ContactResponse(BaseModel):
     comments: str | None
     notes: str | None
     timestamp: datetime
+    updated_at: datetime | None = None
 
     @model_validator(mode="before")
     @classmethod
@@ -132,6 +133,12 @@ class ContactResponse(BaseModel):
 
     @field_serializer("timestamp")
     def serialize_timestamp(self, v: datetime) -> str:
+        return v.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    @field_serializer("updated_at")
+    def serialize_updated_at(self, v: datetime | None) -> str | None:
+        if v is None:
+            return None
         return v.strftime("%Y-%m-%dT%H:%M:%SZ")
 
     model_config = {"from_attributes": True}
@@ -227,7 +234,9 @@ async def list_contacts(session: AsyncSession = Depends(get_session)):
 async def create_contact(
     data: ContactCreate, session: AsyncSession = Depends(get_session)
 ):
-    contact = Contact(**data.model_dump(exclude_unset=True))
+    fields = data.model_dump(exclude_unset=True)
+    fields["updated_at"] = fields.get("timestamp") or datetime.now(timezone.utc)
+    contact = Contact(**fields)
     session.add(contact)
     await session.commit()
     await session.refresh(contact)
@@ -253,6 +262,7 @@ async def update_contact(
         raise HTTPException(status_code=404, detail="Contact not found")
     for key, value in data.model_dump(exclude_unset=True).items():
         setattr(contact, key, value)
+    contact.updated_at = datetime.now(timezone.utc)
     await session.commit()
     await session.refresh(contact)
     return contact
