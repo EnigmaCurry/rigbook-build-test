@@ -10,6 +10,7 @@
 
   let spots = [];
   let myGrid = "";
+  let showMap = localStorage.getItem("spotsMapEnabled") !== "false";
   let status = { rbn: { connected: false, enabled: false }, hamalert: { connected: false, enabled: false }, callsigns: 0, entries: 0, total_spots: 0, avg_spots_per_callsign: 0 };
   let bands = {};
   let modes = {};
@@ -210,6 +211,15 @@
     } catch {}
   }
 
+  function toggleMap() {
+    showMap = !showMap;
+    localStorage.setItem("spotsMapEnabled", String(showMap));
+    if (showMap && myGrid && !leafletMap) {
+      tick().then(() => { initMap(); updateMap(); });
+    }
+    if (!showMap) { destroyMap(); }
+  }
+
   function onFilterChange() {
     updateHash();
     fetchSpots();
@@ -341,7 +351,7 @@
     fetchPotaSpots();
     await loadDefaultFilters();
     await fetchSpots();
-    if (myGrid) { await initMap(); updateMap(); }
+    if (myGrid && showMap) { await initMap(); updateMap(); }
     statusInterval = setInterval(() => { fetchStatus(); fetchBands(); fetchModes(); fetchWorkedToday(); fetchPotaSpots(); }, 5000);
     spotsInterval = setInterval(fetchSpots, 3000);
     window.addEventListener("keydown", onFullscreenKey);
@@ -729,6 +739,9 @@
         <button class="default-btn clear" on:click={clearDefaultFilters} title="Clear saved default filters">Clear default</button>
       {/if}
     {/if}
+    {#if myGrid}
+      <button class="default-btn map-toggle" class:active={showMap} on:click={toggleMap} title="{showMap ? 'Hide' : 'Show'} map">Map</button>
+    {/if}
   </div>
 
   {#if bandList.length > 0}
@@ -749,7 +762,7 @@
     </div>
   {/if}
 
-  {#if myGrid}
+  {#if myGrid && showMap}
     <div class="spots-map-wrap">
       <div class="spots-map" bind:this={mapEl}></div>
     </div>
@@ -912,6 +925,8 @@
   .default-btn.save { background: var(--accent); color: var(--bg); }
   .default-btn.save:hover { opacity: 0.85; }
   .default-btn.clear { opacity: 0.7; font-size: 0.75rem; }
+  .default-btn.map-toggle { margin-left: auto; }
+  .default-btn.map-toggle.active { background: var(--accent); color: var(--bg); }
 
   .band-badges {
     display: flex;
