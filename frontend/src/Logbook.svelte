@@ -754,6 +754,7 @@
         dxcc: dxcc,
         grid: grid.trim().toUpperCase() || null,
         skcc: skcc.trim().toUpperCase() || null,
+        skcc_exch: skcc_exch,
         comments: comments || null,
         notes: notes || null,
         timestamp: `${datePart}T${timePart || "00:00:00"}Z`,
