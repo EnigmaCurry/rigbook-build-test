@@ -2,6 +2,7 @@
   import { onDestroy, tick, createEventDispatcher } from "svelte";
   import L from "leaflet";
   import "leaflet/dist/leaflet.css";
+  import { getMapTileConfig } from "./mapTiles.js";
   import markerIcon2x from "leaflet/dist/images/marker-icon-2x.png";
   import markerIcon from "leaflet/dist/images/marker-icon.png";
   import markerShadow from "leaflet/dist/images/marker-shadow.png";
@@ -69,9 +70,10 @@
     destroyMap();
     if (!mapEl || !park || park.latitude == null) return;
     map = L.map(mapEl, { scrollWheelZoom: true });
-    L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
-      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com/">CARTO</a>',
-      maxZoom: 19,
+    const tiles = await getMapTileConfig();
+    L.tileLayer(tiles.url, {
+      attribution: tiles.attribution,
+      maxZoom: tiles.maxZoom,
     }).addTo(map);
     const ll = [park.latitude, park.longitude];
     L.marker(ll).addTo(map)

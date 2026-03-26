@@ -25,6 +25,8 @@
   let wide_breakpoint = "1200";
   let wide_mode_enabled = true;
   let theme = localStorage.getItem("rigbook-theme") || (window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark");
+  let map_theme = "default";
+  let map_custom_url = "";
   let saving = false;
   let message = "";
   let qrzStatus = null; // { ok, error?, username? }
@@ -53,7 +55,7 @@
     return {
       my_callsign, my_grid, default_rst, pota_enabled, solar_enabled,
       flrig_enabled, flrig_simulate, flrig_host, flrig_port,
-      logbook_right, wide_breakpoint, wide_mode_enabled,
+      logbook_right, wide_breakpoint, wide_mode_enabled, map_theme, map_custom_url,
       rbn_enabled, rbn_host, rbn_feed_cw, rbn_feed_digital,
       skcc_skimmer_enabled, skcc_skimmer_distance,
       hamalert_enabled, hamalert_host, hamalert_port, hamalert_username,
@@ -63,7 +65,7 @@
   $: currentSnap = {
     my_callsign, my_grid, default_rst, pota_enabled, solar_enabled,
     flrig_enabled, flrig_simulate, flrig_host, flrig_port,
-    logbook_right, wide_breakpoint, wide_mode_enabled,
+    logbook_right, wide_breakpoint, wide_mode_enabled, map_theme, map_custom_url,
     rbn_enabled, rbn_host, rbn_feed_cw, rbn_feed_digital,
     skcc_skimmer_enabled, skcc_skimmer_distance,
     hamalert_enabled, hamalert_host, hamalert_port, hamalert_username,
@@ -226,6 +228,8 @@
             }
           }
           if (s.key === "logbook_right") logbook_right = s.value === "true";
+          if (s.key === "map_theme") map_theme = s.value || "default";
+          if (s.key === "map_custom_url") map_custom_url = s.value || "";
         }
       }
       savedSnapshot = settingsSnapshot();
@@ -300,6 +304,16 @@
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ value: logbook_right ? "true" : "false" }),
+      });
+      await fetch("/api/settings/map_theme", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ value: map_theme }),
+      });
+      await fetch("/api/settings/map_custom_url", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ value: map_custom_url.trim() }),
       });
       // RBN settings
       await fetch("/api/settings/rbn_enabled", {
@@ -462,7 +476,7 @@
     {/if}
   </section>
 
-  <section class="settings-section" class:section-changed={changed.wide_mode_enabled || changed.wide_breakpoint || changed.logbook_right}>
+  <section class="settings-section" class:section-changed={changed.wide_mode_enabled || changed.wide_breakpoint || changed.logbook_right || changed.map_theme || changed.map_custom_url}>
     <h3>Appearance</h3>
     <div class="setting-row toggle-row">
       <label>Theme</label>
@@ -470,6 +484,21 @@
         {theme === "dark" ? "Dark" : "Light"}
       </button>
     </div>
+    <div class="setting-row">
+      <label for="map_theme">Map Tiles</label>
+      <select id="map_theme" bind:value={map_theme}>
+        <option value="default">Default (follows theme)</option>
+        <option value="light">Light</option>
+        <option value="dark">Dark</option>
+        <option value="custom">Custom URL</option>
+      </select>
+    </div>
+    {#if map_theme === "custom"}
+      <div class="setting-row">
+        <label for="map_custom_url">Tile URL</label>
+        <input id="map_custom_url" type="text" bind:value={map_custom_url} placeholder="https://{s}.tile.example.com/{z}/{x}/{y}.png" />
+      </div>
+    {/if}
     <div class="setting-row toggle-row">
       <label>
         <input type="checkbox" bind:checked={wide_mode_enabled} />

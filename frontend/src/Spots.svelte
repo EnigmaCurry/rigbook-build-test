@@ -2,6 +2,7 @@
   import { onMount, onDestroy, tick, createEventDispatcher } from "svelte";
   import { bandColor, bandTextColor } from "./bandColors.js";
   import { QrzLookup, formatFreq, locationStr } from "./qrzLookup.js";
+  import { getMapTileConfig } from "./mapTiles.js";
   import L from "leaflet";
   import "leaflet/dist/leaflet.css";
 
@@ -572,9 +573,10 @@
     await tick();
     if (leafletMap || !mapEl) return;
     leafletMap = L.map(mapEl, { scrollWheelZoom: true });
-    L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
-      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com/">CARTO</a>',
-      maxZoom: 19,
+    const tiles = await getMapTileConfig();
+    L.tileLayer(tiles.url, {
+      attribution: tiles.attribution,
+      maxZoom: tiles.maxZoom,
     }).addTo(leafletMap);
     leafletMap.on("click", clearAll);
     addExpandControl(leafletMap, mapEl.parentElement);
