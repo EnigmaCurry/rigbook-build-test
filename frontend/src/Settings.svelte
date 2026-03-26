@@ -496,7 +496,7 @@
     {#if map_theme === "custom"}
       <div class="setting-row">
         <label for="map_custom_url">Tile URL</label>
-        <input id="map_custom_url" type="text" bind:value={map_custom_url} placeholder="https://{s}.tile.example.com/{z}/{x}/{y}.png" />
+        <input id="map_custom_url" type="text" bind:value={map_custom_url} placeholder="https://&#123;s&#125;.tile.example.com/&#123;z&#125;/&#123;x&#125;/&#123;y&#125;.png" />
       </div>
     {/if}
     <div class="setting-row toggle-row">
