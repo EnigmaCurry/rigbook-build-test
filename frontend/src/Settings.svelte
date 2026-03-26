@@ -226,6 +226,7 @@
     theme = theme === "dark" ? "light" : "dark";
     localStorage.setItem("rigbook-theme", theme);
     document.documentElement.classList.toggle("light", theme === "light");
+    if (map_theme === "default") updatePreview();
   }
 
   async function clearCache() {
