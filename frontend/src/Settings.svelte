@@ -1,5 +1,6 @@
 <script>
   import { onMount, onDestroy, createEventDispatcher } from "svelte";
+  import { TILE_THEMES } from "./mapTiles.js";
   import GridMap from "./GridMap.svelte";
 
   let showGridPicker = false;
@@ -487,10 +488,9 @@
     <div class="setting-row">
       <label for="map_theme">Map Tiles</label>
       <select id="map_theme" bind:value={map_theme}>
-        <option value="default">Default (follows theme)</option>
-        <option value="light">Light</option>
-        <option value="dark">Dark</option>
-        <option value="custom">Custom URL</option>
+        {#each TILE_THEMES as t}
+          <option value={t.value}>{t.label}</option>
+        {/each}
       </select>
     </div>
     {#if map_theme === "custom"}
