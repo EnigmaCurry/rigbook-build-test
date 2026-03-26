@@ -428,6 +428,7 @@
       markersByRef[p.reference] = m;
     }
     leafletMap.fitBounds(bounds, { padding: [30, 30], maxZoom: 8 });
+    if (leafletMap.getZoom() < 3) leafletMap.setZoom(3);
     addExpandControl(leafletMap, mapEl.parentElement);
     if (activePark) showActivePark(activePark);
   }
