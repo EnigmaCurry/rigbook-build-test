@@ -934,7 +934,8 @@
   .tree {
     display: flex;
     flex-direction: column;
-    max-height: 65vh;
+    flex: 1;
+    min-height: 0;
     overflow-y: auto;
   }
 
