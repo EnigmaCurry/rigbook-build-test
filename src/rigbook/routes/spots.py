@@ -123,12 +123,14 @@ async def query_spots(
             s["closest_call"] = call
             s["distance_mi"] = dist
             s["closest_snr"] = snr
+            s["closest_grid"] = spotter_grids.get(call) if call else None
     else:
         for s in spots:
             s.pop("spotter_snrs", None)
             s["closest_call"] = None
             s["distance_mi"] = None
             s["closest_snr"] = None
+            s["closest_grid"] = None
 
     # Filter by max distance if requested
     if max_distance is not None:
@@ -150,16 +152,19 @@ async def query_spots(
                 s["country"] = country_name
                 s["country_code"] = _COUNTRY_NAME_TO_CODE.get(country_name.lower(), "")
                 s["qrz_state"] = qrz_data.get("state") or ""
+                s["qrz_grid"] = qrz_data.get("grid") or ""
             except (json.JSONDecodeError, TypeError):
                 s["country"] = ""
                 s["country_code"] = ""
                 s["qrz_state"] = ""
+                s["qrz_grid"] = ""
         else:
             s["country"] = ""
             s["country_code"] = ""
             s["qrz_state"] = ""
+            s["qrz_grid"] = ""
 
-    return spots
+    return {"my_grid": my_grid, "spots": spots}
 
 
 # Server-side SKCC skimmer snapshot cache
@@ -187,7 +192,7 @@ async def skcc_skimmer(
     max_dist = int(dist_str) if dist_str and dist_str.isdigit() else 500
 
     # Get current qualifying spots from the live cache
-    fresh = await query_spots(
+    fresh = (await query_spots(
         source=None,
         callsign=None,
         mode="CW",
@@ -198,7 +203,7 @@ async def skcc_skimmer(
         max_distance=max_dist if max_dist > 0 else None,
         limit=200,
         session=session,
-    )
+    ))["spots"]
 
     now = time.time()
     logger = logging.getLogger("rigbook.spots")

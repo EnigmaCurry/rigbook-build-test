@@ -1,12 +1,15 @@
 <script>
-  import { onMount, onDestroy, createEventDispatcher } from "svelte";
+  import { onMount, onDestroy, tick, createEventDispatcher } from "svelte";
   import { bandColor, bandTextColor } from "./bandColors.js";
   import { QrzLookup, formatFreq, locationStr } from "./qrzLookup.js";
+  import L from "leaflet";
+  import "leaflet/dist/leaflet.css";
 
   const dispatch = createEventDispatcher();
   export let potaEnabled = true;
 
   let spots = [];
+  let myGrid = "";
   let status = { rbn: { connected: false, enabled: false }, hamalert: { connected: false, enabled: false }, callsigns: 0, entries: 0, total_spots: 0, avg_spots_per_callsign: 0 };
   let bands = {};
   let modes = {};
@@ -211,7 +214,9 @@
       params.set("limit", "200");
       const res = await fetch(`/api/spots/?${params}`);
       if (res.ok) {
-        spots = await res.json();
+        const data = await res.json();
+        spots = data.spots;
+        myGrid = data.my_grid || "";
         await qrz.enqueue(spots);
       }
     } catch {}
@@ -323,15 +328,19 @@
     fetchWorkedToday();
     fetchPotaSpots();
     await loadDefaultFilters();
-    fetchSpots();
+    await fetchSpots();
+    if (myGrid) { await initMap(); updateMap(); }
     statusInterval = setInterval(() => { fetchStatus(); fetchBands(); fetchModes(); fetchWorkedToday(); fetchPotaSpots(); }, 5000);
     spotsInterval = setInterval(fetchSpots, 3000);
+    window.addEventListener("keydown", onFullscreenKey);
   });
 
   onDestroy(() => {
     clearInterval(statusInterval);
     clearInterval(spotsInterval);
     qrz.destroy();
+    destroyMap();
+    window.removeEventListener("keydown", onFullscreenKey);
   });
 
   $: bandList = Object.keys(bands).sort((a, b) => {
@@ -341,6 +350,209 @@
   });
 
   $: modeList = Object.keys(modes).sort((a, b) => (modes[b] || 0) - (modes[a] || 0));
+
+  // --- Map ---
+  let mapEl;
+  let leafletMap = null;
+  let spotterMarkers = {};   // closest_call -> marker
+  let homeMarkers = {};      // callsign -> marker
+  let spotterLines = {};     // closest_call -> polyline (to my QTH)
+  let myMarker = null;
+  let selectionLines = [];   // active triangle lines
+  let selectedSpotter = null;
+  let mapInitialFitDone = false;
+  let fullscreenMap = null;
+  let fullscreenWrap = null;
+
+  function gridToLatLon(grid) {
+    if (!grid || grid.length < 4) return null;
+    const g = grid.toUpperCase();
+    const lonField = g.charCodeAt(0) - 65;
+    const latField = g.charCodeAt(1) - 65;
+    const lonSq = parseInt(g[2]);
+    const latSq = parseInt(g[3]);
+    let lon = lonField * 20 - 180 + lonSq * 2 + 1;
+    let lat = latField * 10 - 90 + latSq * 1 + 0.5;
+    if (grid.length >= 6) {
+      const lonSub = g.charCodeAt(4) - 65;
+      const latSub = g.charCodeAt(5) - 65;
+      lon = lonField * 20 - 180 + lonSq * 2 + lonSub * (2/24) + (1/24);
+      lat = latField * 10 - 90 + latSq * 1 + latSub * (1/24) + (1/48);
+    }
+    return { lat, lon };
+  }
+
+  const spotterIcon = L.divIcon({ className: "spot-marker", html: '<div class="spot-marker-dot spotter"></div>', iconSize: [10, 10], iconAnchor: [5, 5] });
+  const homeLocIcon = L.divIcon({ className: "spot-marker", html: '<div class="spot-marker-dot home-loc"></div>', iconSize: [10, 10], iconAnchor: [5, 5] });
+  const myIcon = L.divIcon({ className: "spot-marker", html: '<div class="spot-marker-dot my-pos"></div>', iconSize: [14, 14], iconAnchor: [7, 7] });
+
+  function addExpandControl(map, wrapEl) {
+    const ExpandControl = L.Control.extend({
+      options: { position: "topright" },
+      onAdd() {
+        const btn = L.DomUtil.create("div", "leaflet-bar leaflet-control map-expand-btn");
+        btn.innerHTML = "⛶";
+        btn.title = "Toggle fullscreen";
+        btn.onclick = (e) => { e.stopPropagation(); toggleFullscreen(map, wrapEl); };
+        return btn;
+      }
+    });
+    map.addControl(new ExpandControl());
+  }
+
+  function toggleFullscreen(map, wrapEl) {
+    if (fullscreenMap) {
+      exitFullscreen();
+    } else {
+      fullscreenMap = map;
+      fullscreenWrap = wrapEl;
+      wrapEl.classList.add("map-fullscreen");
+      document.body.style.overflow = "hidden";
+      setTimeout(() => map.invalidateSize(), 100);
+    }
+  }
+
+  function exitFullscreen() {
+    if (!fullscreenMap) return;
+    const map = fullscreenMap;
+    fullscreenWrap.classList.remove("map-fullscreen");
+    document.body.style.overflow = "";
+    fullscreenMap = null;
+    fullscreenWrap = null;
+    setTimeout(() => map.invalidateSize(), 100);
+  }
+
+  function onFullscreenKey(e) {
+    if (e.key === "Escape" && fullscreenMap) exitFullscreen();
+  }
+
+  function clearSelection() {
+    for (const line of selectionLines) leafletMap.removeLayer(line);
+    selectionLines = [];
+    selectedSpotter = null;
+  }
+
+  function selectSpotter(call) {
+    if (!leafletMap) return;
+    clearSelection();
+    if (!call) return;
+    selectedSpotter = call;
+
+    const myPos = gridToLatLon(myGrid);
+    const spotterMarker = spotterMarkers[call];
+    if (!myPos || !spotterMarker) return;
+    const spotterLL = spotterMarker.getLatLng();
+    const myLL = [myPos.lat, myPos.lon];
+
+    // Find all spots using this spotter and draw triangles to their home locations
+    for (const s of spots) {
+      if (s.closest_call !== call || !s.qrz_grid) continue;
+      const homePos = gridToLatLon(s.qrz_grid);
+      if (!homePos) continue;
+      const homeLL = [homePos.lat, homePos.lon];
+
+      selectionLines.push(
+        L.polyline([spotterLL, homeLL], { color: "#00ccff", weight: 2, opacity: 0.6 }).addTo(leafletMap),
+        L.polyline([homeLL, myLL], { color: "#ffaa00", weight: 2, opacity: 0.6 }).addTo(leafletMap),
+        L.polyline([myLL, spotterLL], { color: "#ff4444", weight: 2, opacity: 0.6 }).addTo(leafletMap),
+      );
+    }
+  }
+
+  async function initMap() {
+    await tick();
+    if (leafletMap || !mapEl) return;
+    leafletMap = L.map(mapEl, { scrollWheelZoom: true });
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>',
+      maxZoom: 18,
+    }).addTo(leafletMap);
+    leafletMap.on("click", clearSelection);
+    addExpandControl(leafletMap, mapEl.parentElement);
+  }
+
+  function updateMap() {
+    if (!leafletMap || !myGrid) return;
+    const myPos = gridToLatLon(myGrid);
+    if (!myPos) return;
+
+    // User's home marker
+    if (!myMarker) {
+      myMarker = L.marker([myPos.lat, myPos.lon], { icon: myIcon })
+        .bindPopup(`My QTH: ${myGrid}`)
+        .addTo(leafletMap);
+    }
+
+    // Collect current spotters and home locations
+    const currentSpotters = new Map();
+    const currentHomes = new Map();
+    for (const s of spots) {
+      if (s.closest_call && s.closest_grid) currentSpotters.set(s.closest_call, s.closest_grid);
+      if (s.callsign && s.qrz_grid) currentHomes.set(s.callsign, s.qrz_grid);
+    }
+
+    // Remove stale spotter markers
+    for (const call of Object.keys(spotterMarkers)) {
+      if (!currentSpotters.has(call)) {
+        leafletMap.removeLayer(spotterMarkers[call]);
+        delete spotterMarkers[call];
+      }
+    }
+    // Remove stale home markers
+    for (const call of Object.keys(homeMarkers)) {
+      if (!currentHomes.has(call)) {
+        leafletMap.removeLayer(homeMarkers[call]);
+        delete homeMarkers[call];
+      }
+    }
+
+    // Add new spotter markers
+    for (const [call, grid] of currentSpotters) {
+      if (spotterMarkers[call]) continue;
+      const pos = gridToLatLon(grid);
+      if (!pos) continue;
+      const m = L.marker([pos.lat, pos.lon], { icon: spotterIcon })
+        .bindPopup(`Spotter: ${call}<br>Grid: ${grid}`)
+        .addTo(leafletMap);
+      m.on("click", () => selectSpotter(call));
+      spotterMarkers[call] = m;
+    }
+
+    // Add new home location markers
+    for (const [call, grid] of currentHomes) {
+      if (homeMarkers[call]) continue;
+      const pos = gridToLatLon(grid);
+      if (!pos) continue;
+      homeMarkers[call] = L.marker([pos.lat, pos.lon], { icon: homeLocIcon })
+        .bindPopup(`Station: ${call}<br>Grid: ${grid}`)
+        .addTo(leafletMap);
+    }
+
+    // Fit bounds on first load only
+    if (!mapInitialFitDone) {
+      const allLatLngs = [[myPos.lat, myPos.lon]];
+      for (const m of Object.values(spotterMarkers)) { const ll = m.getLatLng(); allLatLngs.push([ll.lat, ll.lng]); }
+      for (const m of Object.values(homeMarkers)) { const ll = m.getLatLng(); allLatLngs.push([ll.lat, ll.lng]); }
+      if (allLatLngs.length > 1) {
+        leafletMap.fitBounds(allLatLngs, { padding: [30, 30], maxZoom: 8 });
+        mapInitialFitDone = true;
+      }
+    }
+  }
+
+  function destroyMap() {
+    if (leafletMap) { leafletMap.remove(); leafletMap = null; }
+    spotterMarkers = {};
+    homeMarkers = {};
+    selectionLines = [];
+    myMarker = null;
+    selectedSpotter = null;
+    mapInitialFitDone = false;
+  }
+
+  $: if (leafletMap && spots.length > 0 && myGrid) {
+    updateMap();
+  }
 
   $: sortedSpots = [...spots].sort((a, b) => {
     let va, vb;
@@ -432,6 +644,12 @@
           {b}: {bands[b]}
         </span>
       {/each}
+    </div>
+  {/if}
+
+  {#if myGrid}
+    <div class="spots-map-wrap">
+      <div class="spots-map" bind:this={mapEl}></div>
     </div>
   {/if}
 
@@ -712,5 +930,60 @@
     text-align: center;
     color: var(--text-dim);
     padding: 2rem 0.5rem !important;
+  }
+
+  .spots-map-wrap {
+    margin-bottom: 0.75rem;
+  }
+
+  .spots-map {
+    width: 100%;
+    height: 350px;
+    border: 1px solid var(--border);
+    border-radius: 3px;
+  }
+
+  :global(.spot-marker-dot) {
+    border-radius: 50%;
+    transition: all 0.15s;
+  }
+
+  :global(.spot-marker-dot.spotter) {
+    width: 8px;
+    height: 8px;
+    background: #00ccff;
+    border: 2px solid #006688;
+  }
+
+  :global(.spot-marker-dot.home-loc) {
+    width: 8px;
+    height: 8px;
+    background: #ffaa00;
+    border: 2px solid #885500;
+  }
+
+  :global(.spot-marker-dot.my-pos) {
+    width: 12px;
+    height: 12px;
+    background: #ff4444;
+    border: 2px solid #880000;
+    box-shadow: 0 0 8px rgba(255, 68, 68, 0.6);
+  }
+
+  :global(.map-fullscreen) {
+    position: fixed !important;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 9999;
+    margin: 0 !important;
+    border-radius: 0 !important;
+    border: none !important;
+    padding: 0 !important;
+  }
+
+  :global(.map-fullscreen .spots-map) {
+    height: 100% !important;
   }
 </style>
