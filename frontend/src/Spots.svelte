@@ -141,6 +141,18 @@
     }
   }
 
+  function spotHomeGrid(spot) {
+    const pota = getPotaSpot(spot);
+    if (pota) return pota.grid6 || pota.grid4 || "";
+    return spot.qrz_grid || "";
+  }
+
+  function spotHomeLabel(spot) {
+    const pota = getPotaSpot(spot);
+    if (pota) return pota.reference || "";
+    return locationStr(spot);
+  }
+
   function isWorkedToday(spot) {
     if (workedTodayKeys.size === 0) return false;
     const band = spot.band || freqToBand(parseFloat(spot.frequency));
@@ -452,7 +464,7 @@
     const myLL = [myPos.lat, myPos.lon];
 
     const spotterGrid = spot.closest_grid;
-    const homeGrid = spot.qrz_grid;
+    const homeGrid = spotHomeGrid(spot);
     const spotterPos = spotterGrid ? gridToLatLon(spotterGrid) : null;
     const homePos = homeGrid ? gridToLatLon(homeGrid) : null;
 
@@ -486,8 +498,9 @@
     const spotterLL = spotterMarker.getLatLng();
 
     for (const s of spots) {
-      if (s.closest_call !== call || !s.qrz_grid) continue;
-      const homePos = gridToLatLon(s.qrz_grid);
+      const hg = spotHomeGrid(s);
+      if (s.closest_call !== call || !hg) continue;
+      const homePos = gridToLatLon(hg);
       if (!homePos) continue;
       const homeLL = [homePos.lat, homePos.lon];
       selectionLines.push(
@@ -562,7 +575,8 @@
     const currentHomes = new Map();
     for (const s of spots) {
       if (s.closest_call && s.closest_grid) currentSpotters.set(s.closest_call, s.closest_grid);
-      if (s.callsign && s.qrz_grid) currentHomes.set(s.callsign, s.qrz_grid);
+      const hg = spotHomeGrid(s);
+      if (s.callsign && hg) currentHomes.set(s.callsign, hg);
     }
 
     // Remove stale spotter markers
@@ -772,7 +786,7 @@
             <td class="mono" title={spot.spotters ? spot.spotters.join(", ") : ""}>{spot.spotter_count}</td>
             <td class="mono">{spot.best_snr ?? ""}</td>
             <td class="mono">{spot.wpm ?? ""}</td>
-            <td class="location">{#if spot.country || spot.qrz_state}{locationStr(spot)}{:else if !qrzConfigured}<span class="fetch-hint">(Configure QRZ account)</span>{:else if qrz.skipped}<span class="fetch-hint">(filter more to fetch)</span>{:else if qrz.pending > 0}<span class="fetch-hint">(fetching... {qrz.pending} left)</span>{/if}</td>
+            <td class="location">{#if isPotaActivator(spot)}<span class="pota-loc">{spotHomeLabel(spot)}</span>{:else if spot.country || spot.qrz_state}{locationStr(spot)}{:else if !qrzConfigured}<span class="fetch-hint">(Configure QRZ account)</span>{:else if qrz.skipped}<span class="fetch-hint">(filter more to fetch)</span>{:else if qrz.pending > 0}<span class="fetch-hint">(fetching... {qrz.pending} left)</span>{/if}</td>
             <td class="source-tag {spot.source}">{spot.source}</td>
             <td class="mono">{spot.closest_call || ""}{spot.distance_mi != null ? ` ${spot.distance_mi}mi` : ""}{spot.closest_snr != null ? ` ${spot.closest_snr}dB` : ""}</td>
             <td class="info">{spot.state}{spot.wwff_ref ? ` ${spot.wwff_ref}` : ""}{spot.comment ? ` ${spot.comment}` : ""}</td>
@@ -997,6 +1011,12 @@
     max-width: 150px;
     overflow: hidden;
     text-overflow: ellipsis;
+  }
+
+  .pota-loc {
+    color: var(--accent, #00ff88);
+    font-weight: bold;
+    font-size: 0.8rem;
   }
 
   .fetch-hint {
