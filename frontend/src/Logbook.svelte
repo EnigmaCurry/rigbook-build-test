@@ -127,11 +127,11 @@
     datePart !== editOriginal.datePart ||
     timePart !== editOriginal.timePart
   );
-  $: if (editingId && editOriginal) {
-    const current = { call, freq, mode, rst_sent, rst_recv, pota_park, name, qth, state, country, grid, skcc, skcc_exch, comments, notes, datePart, timePart };
-    const diffs = Object.keys(current).filter(k => current[k] !== editOriginal[k]);
-    console.log("editHasChanges:", editHasChanges, "diffs:", diffs, "current:", current, "original:", editOriginal);
-  }
+  $: missingFields = [
+    !call.trim() && "Call",
+    !freq.trim() && "Freq",
+    !mode.trim() && "Mode",
+  ].filter(Boolean);
 
   $: addHasChanges = !addOriginal ? false : (
     call !== addOriginal.call ||
@@ -1045,7 +1045,9 @@
     {:else}
       <button type="button" class="btn-clear" on:click={() => { dispatch("navigate", "back"); clearForm(); }}>Cancel</button>
     {/if}
-    {#if errorMsg}
+    {#if missingFields.length}
+      <span class="error">Required: {missingFields.join(", ")}</span>
+    {:else if errorMsg}
       <span class="error">{errorMsg}</span>
     {/if}
   </div>
