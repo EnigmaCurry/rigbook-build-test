@@ -1096,7 +1096,8 @@
   .program-list {
     display: flex;
     flex-direction: column;
-    max-height: 60vh;
+    flex: 1;
+    min-height: 0;
     overflow-y: auto;
   }
 
