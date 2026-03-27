@@ -99,7 +99,11 @@
 
   function onKeydown(e) {
     if (e.key === "Escape") {
-      open = false;
+      if (open) {
+        open = false;
+      } else {
+        inputEl?.blur();
+      }
       return;
     }
     if (e.key === "Enter") {
