@@ -585,6 +585,7 @@
     if (window.visualViewport) window.visualViewport.addEventListener("resize", onWindowResize);
   });
 
+  let mapResizeObserver;
   function onWindowResize() {
     const maxH = Math.floor(document.documentElement.clientHeight * MAX_MAP_FRAC);
     if (mapHeight > maxH) {
