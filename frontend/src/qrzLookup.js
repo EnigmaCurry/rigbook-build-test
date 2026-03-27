@@ -30,7 +30,7 @@ export class QrzLookup {
 
     const visibleCalls = new Set(spots.map(s => s.callsign));
     const allMissing = [...new Set(
-      spots.filter(s => !s.country).map(s => s.callsign)
+      spots.filter(s => !s.country && !s.callsign.includes("/")).map(s => s.callsign)
     )];
     this.skipped = allMissing.length >= 100;
 
