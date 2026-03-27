@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.1.18
+
+### QSO Form
+
+- Fill country, state, and grid when a POTA park code is typed and field is blurred, not just on autocomplete selection
+- Populate QTH from QRZ for non-portable stations on hunting prefill
+
 ## v0.1.17
 
 ### Import / Export Layout
