@@ -504,6 +504,8 @@
     window.addEventListener("keydown", onFullscreenKey);
     window.addEventListener("keydown", onSpotsKeydown);
     window.addEventListener("resize", onWindowResize);
+    document.addEventListener("fullscreenchange", onFullscreenChange);
+    document.addEventListener("webkitfullscreenchange", onFullscreenChange);
     if (window.visualViewport) window.visualViewport.addEventListener("resize", onWindowResize);
   });
 
@@ -529,6 +531,8 @@
     window.removeEventListener("keydown", onFullscreenKey);
     window.removeEventListener("keydown", onSpotsKeydown);
     window.removeEventListener("resize", onWindowResize);
+    document.removeEventListener("fullscreenchange", onFullscreenChange);
+    document.removeEventListener("webkitfullscreenchange", onFullscreenChange);
     if (window.visualViewport) window.visualViewport.removeEventListener("resize", onWindowResize);
   });
 
@@ -631,7 +635,8 @@
       fullscreenMap = map;
       fullscreenWrap = wrapEl;
       wrapEl.classList.add("map-fullscreen");
-      document.body.style.overflow = "hidden";
+      if (wrapEl.requestFullscreen) wrapEl.requestFullscreen();
+      else if (wrapEl.webkitRequestFullscreen) wrapEl.webkitRequestFullscreen();
       setTimeout(() => map.invalidateSize(), 100);
     }
   }
@@ -640,10 +645,21 @@
     if (!fullscreenMap) return;
     const map = fullscreenMap;
     fullscreenWrap.classList.remove("map-fullscreen");
-    document.body.style.overflow = "";
+    if (document.fullscreenElement) document.exitFullscreen();
+    else if (document.webkitFullscreenElement) document.webkitExitFullscreen();
     fullscreenMap = null;
     fullscreenWrap = null;
     setTimeout(() => map.invalidateSize(), 100);
+  }
+
+  function onFullscreenChange() {
+    if (!document.fullscreenElement && !document.webkitFullscreenElement && fullscreenMap) {
+      const map = fullscreenMap;
+      fullscreenWrap.classList.remove("map-fullscreen");
+      fullscreenMap = null;
+      fullscreenWrap = null;
+      setTimeout(() => map.invalidateSize(), 100);
+    }
   }
 
   function onFullscreenKey(e) {
