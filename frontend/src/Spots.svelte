@@ -1567,6 +1567,7 @@
 
   :global(.map-fullscreen .spots-map) {
     height: 100% !important;
+    max-height: 100% !important;
   }
 
   :global(.spots-map .leaflet-popup-content-wrapper),
