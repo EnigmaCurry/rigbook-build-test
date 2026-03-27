@@ -478,18 +478,21 @@
       markersByRef[p.reference] = m;
     }
     leafletMap.invalidateSize();
-    leafletMap.fitBounds(bounds, { padding: [30, 30], maxZoom: 8 });
-    if (leafletMap.getZoom() < 5) leafletMap.setZoom(5);
+    // Pick the initial park to focus on
+    const initRef = activePark || (myParksSorted.length > 0 ? myParksSorted[0].reference : null);
+    const initMarker = initRef ? markersByRef[initRef] : null;
+    if (initMarker) {
+      leafletMap.setView(initMarker.getLatLng(), 7);
+    } else {
+      leafletMap.fitBounds(bounds, { padding: [30, 30], maxZoom: 8 });
+      if (leafletMap.getZoom() < 5) leafletMap.setZoom(5);
+    }
     addExpandControl(leafletMap, mapEl.parentElement);
     mapResizeObserver = new ResizeObserver(() => { leafletMap?.invalidateSize(); });
     mapResizeObserver.observe(mapEl);
-    leafletMap.whenReady(() => {
-      setTimeout(() => {
-        if (activePark) showActivePark(activePark);
-        else if (myParksSorted.length > 0) selectPark(myParksSorted[0].reference);
-        renderingMap = false;
-      }, 100);
-    });
+    if (activePark) showActivePark(activePark);
+    else if (initRef) selectPark(initRef);
+    renderingMap = false;
   }
 
   export async function refreshParks() {
