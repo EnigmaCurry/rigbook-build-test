@@ -481,7 +481,6 @@
     mapResizeObserver = new ResizeObserver(() => { leafletMap?.invalidateSize(); });
     mapResizeObserver.observe(mapEl);
     if (activePark) showActivePark(activePark);
-    else if (myParksSorted.length > 0) selectPark(myParksSorted[0].reference);
     renderingMap = false;
   }
 
