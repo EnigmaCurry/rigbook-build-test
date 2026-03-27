@@ -367,7 +367,7 @@
     showMap = !showMap;
     storageSet("parksMapEnabled", String(showMap));
     if (showMap) {
-      const maxH = Math.floor(document.documentElement.clientHeight * 0.5);
+      const maxH = Math.floor(document.documentElement.clientHeight * 0.25);
       if (mapHeight > maxH) {
         mapHeight = maxH;
         storageSet("parksMapHeight", String(mapHeight));

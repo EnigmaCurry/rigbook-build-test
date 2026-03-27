@@ -325,7 +325,7 @@
     showMap = !showMap;
     storageSet("spotsMapEnabled", String(showMap));
     if (showMap) {
-      const maxH = Math.floor(document.documentElement.clientHeight * 0.5);
+      const maxH = Math.floor(document.documentElement.clientHeight * 0.25);
       if (mapHeight > maxH) {
         mapHeight = maxH;
         storageSet("spotsMapHeight", String(mapHeight));
