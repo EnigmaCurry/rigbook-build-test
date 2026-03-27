@@ -549,6 +549,7 @@
   let leafletMap = null;
   let spotterMarkers = {};   // closest_call -> marker
   let homeMarkers = {};      // callsign -> marker
+  let homeSpotterCounts = new Map();
   let spotterLines = {};     // closest_call -> polyline (to my QTH)
   let myMarker = null;
   let selectionLines = [];   // active triangle lines
@@ -612,6 +613,12 @@
       iconAnchor: [half, half],
     });
   }
+  const homeActiveIcon = L.divIcon({
+    className: "spot-marker",
+    html: '<div class="spot-marker-dot" style="width:13px;height:13px;background:#ffee00;border:2px solid #997700;border-radius:50%"></div>',
+    iconSize: [15, 15],
+    iconAnchor: [7, 7],
+  });
   const myIcon = L.divIcon({ className: "spot-marker", html: '<div class="spot-marker-dot my-pos"></div>', iconSize: [14, 14], iconAnchor: [7, 7] });
 
   function addExpandControl(map, wrapEl) {
@@ -735,7 +742,9 @@
       }
     }
     for (const [call, marker] of Object.entries(homeMarkers)) {
-      setMarkerVisible(marker, call === spot.callsign);
+      const active = call === spot.callsign;
+      setMarkerVisible(marker, active);
+      if (active) marker.setIcon(homeActiveIcon);
     }
   }
 
@@ -753,7 +762,11 @@
       setMarkerVisible(m, true);
       m.setIcon(closest.has(call) ? spotterIcon : spotterSecondaryIcon);
     }
-    for (const m of Object.values(homeMarkers)) setMarkerVisible(m, true);
+    for (const [call, m] of Object.entries(homeMarkers)) {
+      setMarkerVisible(m, true);
+      const count = homeSpotterCounts.get(call) || 1;
+      m.setIcon(homeLocIcon(count));
+    }
   }
 
   function spotKey(s) {
@@ -956,7 +969,7 @@
     const currentSpotters = new Map();
     const closestCalls = new Set();
     const currentHomes = new Map();
-    const homeSpotterCounts = new Map();
+    homeSpotterCounts = new Map();
     for (const s of spots) {
       if (s.closest_call && s.closest_grid) {
         currentSpotters.set(s.closest_call, s.closest_grid);
