@@ -635,7 +635,7 @@
       {:else}
         {#if showMap}
           <div class="my-map-wrap">
-            <div class="my-map" bind:this={mapEl} style="height: {mapHeight}px"></div>
+            <div class="my-map" bind:this={mapEl} style="height: {mapHeight}px; max-height: 70vh"></div>
           </div>
           <!-- svelte-ignore a11y-no-static-element-interactions -->
           <div class="map-drag-handle" on:mousedown={onDragStart} on:touchstart={onDragStart}>

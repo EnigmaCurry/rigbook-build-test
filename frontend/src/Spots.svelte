@@ -1107,7 +1107,7 @@
 
   {#if myGrid && showMap}
     <div class="spots-map-wrap">
-      <div class="spots-map" bind:this={mapEl} style="height: {mapHeight}px"></div>
+      <div class="spots-map" bind:this={mapEl} style="height: {mapHeight}px; max-height: 70vh"></div>
     </div>
     <!-- svelte-ignore a11y-no-static-element-interactions -->
     <div class="map-drag-handle" on:mousedown={onDragStart} on:touchstart={onDragStart}>
