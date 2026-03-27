@@ -771,35 +771,36 @@
         <div class="empty-preview">No contacts match filters</div>
       {/if}
 
-      <div class="action-bar">
-        {#if activeTab === "export"}
-          <span class="action-summary">
-            {#if exportPreview}
-              Exporting {exportPreview.included} of {exportPreview.total} contacts
-              {#if exportPreview.excluded > 0}({exportPreview.excluded} excluded by filters){/if}
-            {/if}
-          </span>
-          <button class="action-btn" on:click={exportAdif} disabled={!exportPreview || exportPreview.included === 0}>
-            Download ADIF
-          </button>
-        {:else}
-          <span class="action-summary">
-            {#if importPreview}
-              Importing {importPreview.new_count} new QSOs
-              {#if importPreview.duplicate_count > 0}({importPreview.duplicate_count} duplicates skipped){/if}
-              {#if importPreview.skipped_count > 0}({importPreview.skipped_count} invalid skipped){/if}
-              {#if warningCount > 0}<span class="action-error">— {warningCount} error{warningCount !== 1 ? "s" : ""} must be resolved</span>{/if}
-            {/if}
-          </span>
-          {#if importPreview}
-            <button class="action-btn cancel-btn" on:click={cancelImport}>Cancel</button>
-          {/if}
-          <button class="action-btn" on:click={executeImport} disabled={!importPreview || importPreview.new_count === 0 || importing || warningCount > 0}>
-            {importing ? "Importing..." : "Import"}
-          </button>
-        {/if}
-      </div>
     </div>
+  </div>
+
+  <div class="action-bar">
+    {#if activeTab === "export"}
+      <span class="action-summary">
+        {#if exportPreview}
+          Exporting {exportPreview.included} of {exportPreview.total} contacts
+          {#if exportPreview.excluded > 0}({exportPreview.excluded} excluded by filters){/if}
+        {/if}
+      </span>
+      <button class="action-btn" on:click={exportAdif} disabled={!exportPreview || exportPreview.included === 0}>
+        Download ADIF
+      </button>
+    {:else}
+      <span class="action-summary">
+        {#if importPreview}
+          Importing {importPreview.new_count} new QSOs
+          {#if importPreview.duplicate_count > 0}({importPreview.duplicate_count} duplicates skipped){/if}
+          {#if importPreview.skipped_count > 0}({importPreview.skipped_count} invalid skipped){/if}
+          {#if warningCount > 0}<span class="action-error">— {warningCount} error{warningCount !== 1 ? "s" : ""} must be resolved</span>{/if}
+        {/if}
+      </span>
+      {#if importPreview}
+        <button class="action-btn cancel-btn" on:click={cancelImport}>Cancel</button>
+      {/if}
+      <button class="action-btn" on:click={executeImport} disabled={!importPreview || importPreview.new_count === 0 || importing || warningCount > 0}>
+        {importing ? "Importing..." : "Import"}
+      </button>
+    {/if}
   </div>
 </div>
 
@@ -808,7 +809,9 @@
     width: 100%;
     display: flex;
     flex-direction: column;
-    height: 100%;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
   }
 
   .tab-bar {
@@ -846,40 +849,39 @@
   .main-layout {
     display: flex;
     gap: 1.5rem;
-    align-items: flex-start;
     flex: 1;
     min-height: 0;
+    overflow: hidden;
   }
 
   .sidebar {
-    flex: 0 0 auto;
-    min-width: 0;
-    max-width: 315px;
+    flex: 0 0 315px;
+    overflow-y: auto;
+    align-self: stretch;
   }
 
   .preview-pane {
-    flex: 1 1 0;
-    min-width: 0;
+    flex: 1 1 auto;
+    min-height: 0;
     display: flex;
     flex-direction: column;
+    align-self: stretch;
   }
 
   @media (max-width: 900px) {
     .main-layout {
       flex-direction: column;
+      overflow: auto;
     }
 
     .sidebar {
+      flex: 0 0 auto;
       width: 100%;
-      max-width: none;
+      overflow-y: visible;
     }
 
     .preview-pane {
       width: 100%;
-    }
-
-    .preview-table-wrap {
-      max-height: 400px !important;
     }
   }
 
@@ -970,7 +972,7 @@
     border: 1px solid var(--border, #555);
     border-radius: 3px;
     background: var(--bg-header, var(--bg));
-    margin-top: 0.5rem;
+    flex-shrink: 0;
     gap: 1rem;
   }
 
@@ -1209,7 +1211,7 @@
 
   .preview-table-wrap {
     flex: 1;
-    max-height: calc(100vh - 16rem);
+    min-height: 8rem;
     overflow: auto;
     border: 1px solid var(--border, #555);
     border-radius: 0 0 3px 3px;
@@ -1365,6 +1367,11 @@
   }
 
   .empty-preview {
+    flex: 1;
+    min-height: 8rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     color: var(--text-muted);
     font-style: italic;
     padding: 2rem;
