@@ -640,6 +640,11 @@
       {:else if myParks.length === 0}
         <p class="empty">No POTA parks contacted yet.</p>
       {:else}
+        <div class="stats">
+          <span class="stat-highlight">{myParks.length} parks contacted</span>
+          <span>{myAvgQsos} avg QSOs/park</span>
+          <button class="map-toggle-btn" class:active={showMap} on:click={toggleMap}>Map</button>
+        </div>
         {#if showMap}
           <div class="my-map-wrap">
             <div class="my-map" bind:this={mapEl} style="height: {mapHeight}px; max-height: 70vh"></div>
@@ -649,11 +654,6 @@
             <div class="drag-grip"></div>
           </div>
         {/if}
-        <div class="stats">
-          <span class="stat-highlight">{myParks.length} parks contacted</span>
-          <span>{myAvgQsos} avg QSOs/park</span>
-          <button class="map-toggle-btn" class:active={showMap} on:click={toggleMap}>Map</button>
-        </div>
         <div class="my-sort-bar">
           <span class="my-sort-label">Sort:</span>
           <button class="my-sort-btn" class:active={mySort === "date"} on:click={() => toggleMySort("date")}>Date {mySort === "date" ? (mySortAsc ? "▲" : "▼") : ""}</button>
