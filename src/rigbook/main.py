@@ -61,19 +61,19 @@ def _close_logbook(name: str) -> None:
         sys.exit(1)
 
 
-def _find_free_port(host: str, start: int, max_tries: int = 100) -> int:
-    """Find a free port starting from *start*, trying up to *max_tries* ports."""
+def _find_free_port(host: str, preferred: int) -> int:
+    """Return *preferred* if available, otherwise ask the OS for a random free port."""
     import socket
 
-    for offset in range(max_tries):
-        port = start + offset
-        try:
-            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-                s.bind((host, port))
-                return port
-        except OSError:
-            continue
-    raise RuntimeError(f"No free port found in range {start}-{start + max_tries - 1}")
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.bind((host, preferred))
+            return preferred
+    except OSError:
+        pass
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.bind((host, 0))
+        return s.getsockname()[1]
 
 
 def _resource_path(relative: str) -> Path:
