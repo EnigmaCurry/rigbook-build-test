@@ -85,7 +85,7 @@ def _resource_path(relative: str) -> Path:
     return base / relative
 
 
-def _handle_sigint(sig, frame):
+def _handle_shutdown_signal(sig, frame):
     import signal
     import threading
     import time
@@ -93,8 +93,9 @@ def _handle_sigint(sig, frame):
     from rigbook.sse import notify_shutdown
 
     notify_shutdown()
-    # Restore default handler so a second Ctrl-C force-quits
+    # Restore default handlers so a second signal force-quits
     signal.signal(signal.SIGINT, signal.SIG_DFL)
+    signal.signal(signal.SIGTERM, signal.SIG_DFL)
 
     # Delay the actual shutdown so the event loop can flush SSE to clients
     def deferred_shutdown():
@@ -108,7 +109,8 @@ def _handle_sigint(sig, frame):
 async def lifespan(app: FastAPI):
     import signal
 
-    signal.signal(signal.SIGINT, _handle_sigint)
+    signal.signal(signal.SIGINT, _handle_shutdown_signal)
+    signal.signal(signal.SIGTERM, _handle_shutdown_signal)
     await init_db()
     if db_manager.is_open:
         await start_feeds()
