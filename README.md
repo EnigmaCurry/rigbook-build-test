@@ -1,6 +1,6 @@
 # 📻️ Rigbook
 
-<img width="2502" height="1113" alt="image" src="https://github.com/user-attachments/assets/666965e7-0d12-48bc-9f8a-fc96dcd7a9c3" />
+<img width="2267" height="1308" alt="image" src="https://github.com/user-attachments/assets/6ac1bcfb-574c-43be-bb4e-08b3ca96be68" />
 
 
 A ham radio logbook app. Log your QSOs with a local web UI, optionally
