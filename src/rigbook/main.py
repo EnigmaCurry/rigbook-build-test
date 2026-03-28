@@ -88,7 +88,7 @@ def _open_logbook(name: str) -> None:
 
     print(f"Starting logbook '{name}' ...")
     subprocess.Popen(
-        [sys.executable, "-m", "rigbook", name, "--no-browser"],
+        [sys.argv[0], name, "--no-browser"],
         start_new_session=True,
     )
     time.sleep(1)
