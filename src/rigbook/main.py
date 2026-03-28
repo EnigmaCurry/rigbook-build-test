@@ -34,106 +34,6 @@ from rigbook.routes.solar import router as solar_router
 logger = logging.getLogger("rigbook")
 
 
-def _list_logbooks() -> None:
-    """List all running rigbook processes."""
-    from rigbook.db import DB_DIR
-
-    found = False
-    for lock_path in sorted(DB_DIR.glob("*.lock")):
-        db_path = lock_path.with_suffix(".db")
-        info = db_manager.read_lock_info(db_path)
-        if info is None:
-            continue
-        pid = info["pid"]
-        try:
-            os.kill(pid, 0)
-        except ProcessLookupError:
-            lock_path.unlink(missing_ok=True)
-            continue
-        except PermissionError:
-            pass
-        name = db_path.stem
-        addr = f"{info.get('host', '?')}:{info.get('port', '?')}" if "port" in info else "?"
-        print(f"{name}\tpid={pid}\t{addr}")
-        found = True
-    if not found:
-        print("No running rigbook processes")
-
-
-def _open_logbook(name: str) -> None:
-    """Open a logbook in the browser, starting a background server if needed."""
-    import subprocess
-    import time
-    import webbrowser
-
-    from rigbook.db import DB_DIR
-
-    db_path = DB_DIR / f"{name}.db"
-    info = db_manager.read_lock_info(db_path)
-    if info and "port" in info:
-        pid = info["pid"]
-        try:
-            os.kill(pid, 0)
-            url = f"http://{info['host']}:{info['port']}"
-            print(f"Logbook '{name}' already running at {url}")
-            webbrowser.open(url)
-            return
-        except ProcessLookupError:
-            db_path.with_suffix(".lock").unlink(missing_ok=True)
-
-    print(f"Starting logbook '{name}' ...")
-    subprocess.Popen(
-        [sys.argv[0], name, "--no-browser"],
-        start_new_session=True,
-    )
-    time.sleep(1)
-
-    info = db_manager.read_lock_info(db_path)
-    if info and "port" in info:
-        url = f"http://{info['host']}:{info['port']}"
-        print(f"Logbook '{name}' running at {url}")
-        webbrowser.open(url)
-    else:
-        print(f"Error: logbook '{name}' did not start", file=sys.stderr)
-        sys.exit(1)
-
-
-def _close_logbook(name: str) -> None:
-    """Send SIGTERM to the process holding the named logbook."""
-    import signal
-
-    from rigbook.db import DB_DIR
-
-    db_path = DB_DIR / f"{name}.db"
-    pid = db_manager.read_lock_pid(db_path)
-    if pid is None:
-        print(f"Logbook '{name}' is not running")
-        return
-    try:
-        os.kill(pid, signal.SIGTERM)
-        print(f"Sent SIGTERM to logbook '{name}' (pid {pid})")
-    except ProcessLookupError:
-        print(f"Logbook '{name}' lock is stale (pid {pid} not found), removing lock")
-        db_path.with_suffix(".lock").unlink(missing_ok=True)
-    except PermissionError:
-        print(f"Error: no permission to signal pid {pid}", file=sys.stderr)
-        sys.exit(1)
-
-
-def _find_free_port(host: str, preferred: int) -> int:
-    """Return *preferred* if available, otherwise ask the OS for a random free port."""
-    import socket
-
-    try:
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            s.bind((host, preferred))
-            return preferred
-    except OSError:
-        pass
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        s.bind((host, 0))
-        return s.getsockname()[1]
-
 
 def _resource_path(relative: str) -> Path:
     """Resolve path to bundled resource (works in both dev and PyInstaller)."""
@@ -253,35 +153,7 @@ def run() -> None:
         default=None,
         help="Port to listen on (default: auto-select starting from 8073)",
     )
-    parser.add_argument(
-        "--close",
-        metavar="NAME",
-        help="Send SIGTERM to the process holding logbook NAME and exit",
-    )
-    parser.add_argument(
-        "-l",
-        "--list",
-        action="store_true",
-        help="List running rigbook processes and exit",
-    )
-    parser.add_argument(
-        "--open",
-        metavar="NAME",
-        help="Open logbook in browser, starting a background server if needed",
-    )
     args = parser.parse_args()
-
-    if args.list:
-        _list_logbooks()
-        return
-
-    if args.close:
-        _close_logbook(args.close)
-        return
-
-    if args.open:
-        _open_logbook(args.open)
-        return
 
     db_manager.configure(db_name=args.name, picker=args.pick)
 
@@ -305,11 +177,7 @@ def run() -> None:
     logging.getLogger("httpx").setLevel(logging.WARNING)
 
     host = os.environ.get("RIGBOOK_HOST", "127.0.0.1")
-    default_port = int(os.environ.get("RIGBOOK_PORT", "8073"))
-    if args.port is not None:
-        port = args.port
-    else:
-        port = _find_free_port(host, default_port)
+    port = args.port or int(os.environ.get("RIGBOOK_PORT", "8073"))
 
     db_manager.set_listen_addr(host, port)
 
