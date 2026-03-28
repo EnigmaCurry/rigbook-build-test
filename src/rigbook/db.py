@@ -189,15 +189,34 @@ class DatabaseManager:
                 f"Logbook '{db_path.stem}' is already open in another process"
             )
 
-    def read_lock_pid(self, db_path: Path) -> int | None:
-        """Read the PID from a lock file, or None if not locked."""
+    def read_lock_info(self, db_path: Path) -> dict | None:
+        """Read lock file contents. Returns dict with pid, host, port or None."""
         lock_path = db_path.with_suffix(".lock")
         if not lock_path.exists():
             return None
         try:
-            return int(lock_path.read_text().strip())
-        except (ValueError, OSError):
+            parts = lock_path.read_text().strip().split()
+            info = {"pid": int(parts[0])}
+            if len(parts) > 1:
+                host, _, port = parts[1].rpartition(":")
+                info["host"] = host
+                info["port"] = int(port)
+            return info
+        except (ValueError, OSError, IndexError):
             return None
+
+    def read_lock_pid(self, db_path: Path) -> int | None:
+        """Read the PID from a lock file, or None if not locked."""
+        info = self.read_lock_info(db_path)
+        return info["pid"] if info else None
+
+    def write_lock_info(self, host: str, port: int) -> None:
+        """Write host:port to the current lock file (call after acquiring lock)."""
+        if self._lock_file:
+            self._lock_file.seek(0)
+            self._lock_file.truncate()
+            self._lock_file.write(f"{os.getpid()} {host}:{port}")
+            self._lock_file.flush()
 
     def _acquire_lock(self, db_path: Path) -> None:
         """Acquire an exclusive file lock to prevent concurrent access."""

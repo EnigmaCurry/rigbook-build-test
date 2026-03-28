@@ -39,6 +39,32 @@ logger = logging.getLogger("rigbook")
 _no_auth = False
 
 
+def _list_logbooks() -> None:
+    """List all running rigbook processes."""
+    from rigbook.db import DB_DIR
+
+    found = False
+    for lock_path in sorted(DB_DIR.glob("*.lock")):
+        db_path = lock_path.with_suffix(".db")
+        info = db_manager.read_lock_info(db_path)
+        if info is None:
+            continue
+        pid = info["pid"]
+        try:
+            os.kill(pid, 0)
+        except ProcessLookupError:
+            lock_path.unlink(missing_ok=True)
+            continue
+        except PermissionError:
+            pass
+        name = db_path.stem
+        addr = f"{info.get('host', '?')}:{info.get('port', '?')}" if "port" in info else "?"
+        print(f"{name}\tpid={pid}\t{addr}")
+        found = True
+    if not found:
+        print("No running rigbook processes")
+
+
 def _close_logbook(name: str) -> None:
     """Send SIGTERM to the process holding the named logbook."""
     import signal
@@ -235,7 +261,17 @@ def run() -> None:
         metavar="NAME",
         help="Send SIGTERM to the process holding logbook NAME and exit",
     )
+    parser.add_argument(
+        "-l",
+        "--list",
+        action="store_true",
+        help="List running rigbook processes and exit",
+    )
     args = parser.parse_args()
+
+    if args.list:
+        _list_logbooks()
+        return
 
     if args.close:
         _close_logbook(args.close)
@@ -271,6 +307,8 @@ def run() -> None:
         port = args.port
     else:
         port = _find_free_port(host, default_port)
+
+    db_manager.write_lock_info(host, port)
 
     import threading
     import webbrowser
