@@ -39,6 +39,28 @@ logger = logging.getLogger("rigbook")
 _no_auth = False
 
 
+def _close_logbook(name: str) -> None:
+    """Send SIGTERM to the process holding the named logbook."""
+    import signal
+
+    from rigbook.db import DB_DIR
+
+    db_path = DB_DIR / f"{name}.db"
+    pid = db_manager.read_lock_pid(db_path)
+    if pid is None:
+        print(f"Logbook '{name}' is not running")
+        return
+    try:
+        os.kill(pid, signal.SIGTERM)
+        print(f"Sent SIGTERM to logbook '{name}' (pid {pid})")
+    except ProcessLookupError:
+        print(f"Logbook '{name}' lock is stale (pid {pid} not found), removing lock")
+        db_path.with_suffix(".lock").unlink(missing_ok=True)
+    except PermissionError:
+        print(f"Error: no permission to signal pid {pid}", file=sys.stderr)
+        sys.exit(1)
+
+
 def _find_free_port(host: str, start: int, max_tries: int = 100) -> int:
     """Find a free port starting from *start*, trying up to *max_tries* ports."""
     import socket
@@ -206,7 +228,16 @@ def run() -> None:
         default=None,
         help="Port to listen on (default: auto-select starting from 8073)",
     )
+    parser.add_argument(
+        "--close",
+        metavar="NAME",
+        help="Send SIGTERM to the process holding logbook NAME and exit",
+    )
     args = parser.parse_args()
+
+    if args.close:
+        _close_logbook(args.close)
+        return
 
     global _no_auth
     _no_auth = args.no_auth

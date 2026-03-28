@@ -189,6 +189,16 @@ class DatabaseManager:
                 f"Logbook '{db_path.stem}' is already open in another process"
             )
 
+    def read_lock_pid(self, db_path: Path) -> int | None:
+        """Read the PID from a lock file, or None if not locked."""
+        lock_path = db_path.with_suffix(".lock")
+        if not lock_path.exists():
+            return None
+        try:
+            return int(lock_path.read_text().strip())
+        except (ValueError, OSError):
+            return None
+
     def _acquire_lock(self, db_path: Path) -> None:
         """Acquire an exclusive file lock to prevent concurrent access."""
         import fcntl
