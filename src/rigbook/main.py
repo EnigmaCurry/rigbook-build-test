@@ -65,6 +65,44 @@ def _list_logbooks() -> None:
         print("No running rigbook processes")
 
 
+def _open_logbook(name: str) -> None:
+    """Open a logbook in the browser, starting a background server if needed."""
+    import subprocess
+    import time
+    import webbrowser
+
+    from rigbook.db import DB_DIR
+
+    db_path = DB_DIR / f"{name}.db"
+    info = db_manager.read_lock_info(db_path)
+    if info and "port" in info:
+        pid = info["pid"]
+        try:
+            os.kill(pid, 0)
+            url = f"http://{info['host']}:{info['port']}"
+            print(f"Logbook '{name}' already running at {url}")
+            webbrowser.open(url)
+            return
+        except ProcessLookupError:
+            db_path.with_suffix(".lock").unlink(missing_ok=True)
+
+    print(f"Starting logbook '{name}' ...")
+    subprocess.Popen(
+        [sys.executable, "-m", "rigbook", name, "--no-browser"],
+        start_new_session=True,
+    )
+    time.sleep(1)
+
+    info = db_manager.read_lock_info(db_path)
+    if info and "port" in info:
+        url = f"http://{info['host']}:{info['port']}"
+        print(f"Logbook '{name}' running at {url}")
+        webbrowser.open(url)
+    else:
+        print(f"Error: logbook '{name}' did not start", file=sys.stderr)
+        sys.exit(1)
+
+
 def _close_logbook(name: str) -> None:
     """Send SIGTERM to the process holding the named logbook."""
     import signal
@@ -267,6 +305,11 @@ def run() -> None:
         action="store_true",
         help="List running rigbook processes and exit",
     )
+    parser.add_argument(
+        "--open",
+        metavar="NAME",
+        help="Open logbook in browser, starting a background server if needed",
+    )
     args = parser.parse_args()
 
     if args.list:
@@ -275,6 +318,10 @@ def run() -> None:
 
     if args.close:
         _close_logbook(args.close)
+        return
+
+    if args.open:
+        _open_logbook(args.open)
         return
 
     global _no_auth
