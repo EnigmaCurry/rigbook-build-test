@@ -1385,13 +1385,16 @@
     border-radius: 4px;
     margin-bottom: 0.75rem;
     font-size: 0.85rem;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
+    overflow: hidden;
   }
 
   .status-item {
     display: flex;
     align-items: center;
     gap: 0.4rem;
+    white-space: nowrap;
+    flex-shrink: 0;
   }
 
   .dot {

@@ -16,9 +16,16 @@
   let skccResults = [];
   let qrzResult = null;
   let qrzLoading = false;
+  let qrzEnabled = false;
   let potaSpots = [];
   let debounceTimer;
+  let qrzDebounceTimer;
   let highlightIndex = -1;
+
+  function looksLikeCallsign(q) {
+    if (!q || q.length < 3) return false;
+    return /^[A-Za-z0-9]{1,3}[0-9][A-Za-z0-9]{0,4}(\/[A-Za-z0-9]+)?$/.test(q.trim());
+  }
 
   $: allResults = [
     ...logbookResults.map(r => ({ type: "logbook", data: r })),
@@ -55,6 +62,37 @@
       if (res.ok) logbookResults = (await res.json()).slice(0, 5);
       else logbookResults = [];
     } catch { logbookResults = []; }
+    maybeSearchQrz(q);
+  }
+
+  function maybeSearchQrz(q) {
+    clearTimeout(qrzDebounceTimer);
+    qrzResult = null;
+    if (!qrzEnabled || !looksLikeCallsign(q) || logbookResults.length > 0) return;
+    qrzDebounceTimer = setTimeout(() => searchQrz(q), 500);
+  }
+
+  async function searchQrz(q) {
+    if (!q || q.length < 3) return;
+    qrzLoading = true;
+    try {
+      const res = await fetch(`/api/qrz/lookup/${q.toUpperCase().trim()}`);
+      if (res.ok) {
+        const data = await res.json();
+        qrzResult = data.error ? null : data;
+      }
+    } catch {}
+    qrzLoading = false;
+  }
+
+  async function checkQrzEnabled() {
+    try {
+      const res = await fetch("/api/settings/qrz_password");
+      if (res.ok) {
+        const data = await res.json();
+        qrzEnabled = !!data.value && data.value !== "";
+      }
+    } catch {}
   }
 
   async function searchParks(q) {
@@ -75,24 +113,12 @@
     } catch { skccResults = []; }
   }
 
-  async function searchQrz() {
-    if (!query || query.length < 3) return;
-    qrzLoading = true;
-    try {
-      const res = await fetch(`/api/qrz/lookup/${query.toUpperCase()}`);
-      if (res.ok) {
-        const data = await res.json();
-        qrzResult = data.error ? null : data;
-      }
-    } catch {}
-    qrzLoading = false;
-  }
-
   function onInput() {
     open = true;
     highlightIndex = -1;
     qrzResult = null;
     clearTimeout(debounceTimer);
+    clearTimeout(qrzDebounceTimer);
     potaResults = filterPota(query);
     debounceTimer = setTimeout(() => { searchLogbook(query); searchParks(query); searchSkcc(query); }, 300);
   }
@@ -110,8 +136,14 @@
       e.preventDefault();
       if (highlightIndex >= 0 && highlightIndex < allResults.length) {
         pick(allResults[highlightIndex]);
-      } else {
-        searchQrz();
+      } else if (query.trim()) {
+        open = false;
+        dispatch("action", { type: "search", data: { query: query.trim() } });
+        query = "";
+        logbookResults = [];
+        potaResults = [];
+        parkResults = [];
+        skccResults = [];
       }
       return;
     }
@@ -160,6 +192,7 @@
 
   onMount(() => {
     fetchPotaSpots();
+    checkQrzEnabled();
     const interval = setInterval(fetchPotaSpots, 60000);
     return () => clearInterval(interval);
   });
@@ -250,12 +283,12 @@
           <span class="result-call">{qrzResult.call}</span>
           <span class="result-detail">{qrzResult.name || ""} {qrzResult.qth || ""} {qrzResult.state || ""}</span>
         </div>
-      {:else if query.length >= 3 && !qrzLoading}
-        <div class="qrz-hint">Press Enter to show results from QRZ</div>
+      {:else if qrzLoading}
+        <div class="qrz-hint">Looking up on QRZ...</div>
       {/if}
 
-      {#if qrzLoading}
-        <div class="qrz-hint">Looking up on QRZ...</div>
+      {#if query.length >= 2 && allResults.length > 0}
+        <div class="qrz-hint">Press Enter for advanced search</div>
       {/if}
 
       {#if allResults.length === 0 && !qrzLoading && query.length >= 2}
@@ -306,7 +339,7 @@
     border: 1px solid var(--border);
     border-top: none;
     border-radius: 0 0 6px 6px;
-    z-index: 200;
+    z-index: 10000;
   }
 
   .group-header {
