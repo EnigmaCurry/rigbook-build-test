@@ -275,14 +275,51 @@ def run() -> None:
 
     db_manager.configure(db_name=args.name, picker=args.pick)
 
+    import subprocess
+    import webbrowser
+
+    def _detect_browser_name() -> str:
+        name = webbrowser.get().name
+        if name == "xdg-open":
+            try:
+                result = subprocess.run(
+                    ["xdg-settings", "get", "default-web-browser"],
+                    capture_output=True, text=True, timeout=5,
+                )
+                desktop = result.stdout.strip()
+                if desktop:
+                    return desktop.removesuffix(".desktop")
+            except (OSError, subprocess.TimeoutExpired):
+                pass
+        return name
+
     if not db_manager.picker_mode:
         db_path = db_manager.default_db_path
         if db_path.exists() or not db_manager._db_override:
             try:
                 db_manager.check_lock(db_path)
             except DatabaseLockError as e:
-                print(f"Error: {e}", file=sys.stderr)
-                sys.exit(1)
+                no_browser = args.no_browser or os.environ.get(
+                    "RIGBOOK_NO_BROWSER", ""
+                ).lower() in ("1", "true", "yes")
+                lock_info = db_manager.read_lock_info(db_path)
+                if not no_browser and lock_info and "host" in lock_info:
+                    import urllib.request
+
+                    url = f"http://{lock_info['host']}:{lock_info['port']}"
+                    # Wait for the server to be ready (it may have just started)
+                    for _ in range(10):
+                        try:
+                            urllib.request.urlopen(f"{url}/api/settings/", timeout=1)
+                            break
+                        except Exception:
+                            time.sleep(0.5)
+                    browser_name = _detect_browser_name()
+                    print(f"{e} — opening {url} in {browser_name}")
+                    webbrowser.open(url)
+                else:
+                    print(f"Error: {e}", file=sys.stderr)
+                sys.exit(0 if not no_browser and lock_info else 1)
 
     log_level = "DEBUG" if args.verbose else "INFO"
     logging.Formatter.converter = time.gmtime
@@ -301,7 +338,6 @@ def run() -> None:
     db_manager.set_listen_addr(host, port)
 
     import threading
-    import webbrowser
 
     no_browser = args.no_browser or os.environ.get(
         "RIGBOOK_NO_BROWSER", ""
@@ -313,6 +349,8 @@ def run() -> None:
             import time
 
             time.sleep(1)
+            browser_name = _detect_browser_name()
+            logger.info("Opening %s in %s", url, browser_name)
             webbrowser.open(url)
 
         threading.Thread(target=open_browser, daemon=True).start()
