@@ -1,5 +1,16 @@
 # Changelog
 
+## v0.1.27
+
+### Spots
+
+- Show QRZ lookup status in spots location column when no location data available
+
+### SQL Query Page
+
+- Add cache table to allowed query tables (QRZ and SKCC cached data)
+- Add QRZ cache lookup and SKCC member lookup example queries
+
 ## v0.1.26
 
 ### SQL Query Page
