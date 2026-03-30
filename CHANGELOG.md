@@ -1,5 +1,33 @@
 # Changelog
 
+## v0.1.26
+
+### SQL Query Page
+
+- Read-only SQL query interface for power users, gated behind a setting (off by default)
+- SQLite authorizer restricts access to allowed tables only: contacts, notifications, pota_programs, pota_locations, pota_parks
+- Read-only database connection as a second layer of defense
+- Progress handler aborts runaway queries
+- Download results as CSV or JSON with no row limit (10000 row limit for interactive display)
+- Canned example queries with auto-run on selection
+- View Schema button shows all allowed table schemas
+- Bookmarkable queries — URL auto-updates with the current SQL on blur or run
+- Resizable columns with auto-fit to content
+- Download filenames include callsign, database name, and timestamp
+
+### Search
+
+- Full-text search across all contact fields
+- Advanced search with filters for band, mode, date range, country, state, grid, and POTA park
+
+### SKCC
+
+- SKCC member number validation
+
+### Comment Template
+
+- Limit comment template fields to SKCC, SKCC_EXCH, POTA, and DXCC
+
 ## v0.1.25
 
 ### Spots Map
