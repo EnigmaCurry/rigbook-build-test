@@ -156,11 +156,22 @@ async def query_spots(
         if qrz_json:
             try:
                 qrz_data = json.loads(qrz_json)
-                country_name = qrz_data.get("country") or ""
-                s["country"] = country_name
-                s["country_code"] = _COUNTRY_NAME_TO_CODE.get(country_name.lower(), "")
-                s["qrz_state"] = qrz_data.get("state") or ""
-                s["qrz_grid"] = qrz_data.get("grid") or ""
+                if qrz_data.get("error") == "Callsign not found":
+                    s["country"] = ""
+                    s["country_code"] = ""
+                    s["qrz_state"] = ""
+                    s["qrz_grid"] = ""
+                    s["qrz_status"] = "not_found"
+                else:
+                    country_name = qrz_data.get("country") or ""
+                    s["country"] = country_name
+                    s["country_code"] = _COUNTRY_NAME_TO_CODE.get(country_name.lower(), "")
+                    s["qrz_state"] = qrz_data.get("state") or ""
+                    s["qrz_grid"] = qrz_data.get("grid") or ""
+                    if country_name or s["qrz_state"]:
+                        s["qrz_status"] = "ok"
+                    else:
+                        s["qrz_status"] = "no_location"
             except (json.JSONDecodeError, TypeError):
                 s["country"] = ""
                 s["country_code"] = ""
@@ -263,13 +274,22 @@ async def skcc_skimmer(
 
     # Prefetch QRZ data for spots missing location
     for s in results:
-        if not s.get("country"):
+        if not s.get("country") and not s.get("qrz_status"):
             data = await qrz_lookup(s["callsign"], session)
-            if isinstance(data, dict) and not data.get("error"):
-                country_name = data.get("country") or ""
-                s["country"] = country_name
-                s["country_code"] = _COUNTRY_NAME_TO_CODE.get(country_name.lower(), "")
-                s["qrz_state"] = data.get("state") or ""
+            if isinstance(data, dict):
+                if data.get("error") == "Callsign not found":
+                    s["qrz_status"] = "not_found"
+                elif data.get("error"):
+                    pass  # transient error, don't set status
+                else:
+                    country_name = data.get("country") or ""
+                    s["country"] = country_name
+                    s["country_code"] = _COUNTRY_NAME_TO_CODE.get(country_name.lower(), "")
+                    s["qrz_state"] = data.get("state") or ""
+                    if country_name or s["qrz_state"]:
+                        s["qrz_status"] = "ok"
+                    else:
+                        s["qrz_status"] = "no_location"
 
     return results
 

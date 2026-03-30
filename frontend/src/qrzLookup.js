@@ -78,10 +78,16 @@ export class QrzLookup {
       if (res.ok) {
         const data = await res.json();
         for (const s of spots) {
-          if (s.callsign === call && data.country) {
+          if (s.callsign !== call) continue;
+          if (data.error === "Callsign not found") {
+            s._qrz_status = "not_found";
+          } else if (data.country) {
             s.country = data.country || "";
             s.country_code = data.country_code || "";
             s.qrz_state = data.state || "";
+            s._qrz_status = "ok";
+          } else if (!data.error) {
+            s._qrz_status = "no_location";
           }
         }
       }

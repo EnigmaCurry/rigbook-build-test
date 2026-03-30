@@ -164,7 +164,7 @@
               <span class="freq clickable" on:click={() => dispatch("tune", spot)} title="Tune radio">{spot.frequency} KHz</span>
             </div>
             <div class="card-body">
-              <span class="location">{locationStr(spot)}</span>
+              <span class="location">{locationStr(spot) || ((spot._qrz_status || spot.qrz_status) === "not_found" ? "(No QRZ record)" : (spot._qrz_status || spot.qrz_status) === "no_location" ? "(No QRZ location)" : "")}</span>
             </div>
             <div class="card-footer">
               <span class="distance">{spot.distance_mi != null ? `${spot.distance_mi}mi` : ""}{spot.closest_snr != null ? ` ${spot.closest_snr}dB` : ""}</span>
