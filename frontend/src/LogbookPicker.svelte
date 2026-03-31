@@ -1,12 +1,32 @@
 <script>
   import { onMount, createEventDispatcher } from "svelte";
 
+  export let showShutdown = false;
+
   const dispatch = createEventDispatcher();
 
   let logbooks = [];
   let newName = "";
   let error = "";
   let loading = true;
+  let shuttingDown = false;
+  let confirmingShutdown = false;
+
+  function requestShutdown() {
+    confirmingShutdown = true;
+  }
+
+  function cancelShutdown() {
+    confirmingShutdown = false;
+  }
+
+  async function shutdownServer() {
+    shuttingDown = true;
+    try {
+      const res = await fetch("/api/logbooks/shutdown", { method: "POST" });
+      if (res.ok) dispatch("shutdown");
+    } catch {}
+  }
 
   async function fetchLogbooks() {
     try {
@@ -110,6 +130,22 @@
         <button on:click={createLogbook}>Create</button>
       </div>
     </div>
+
+    {#if showShutdown}
+      <div class="picker-shutdown">
+        {#if confirmingShutdown}
+          <p class="confirm-text">Are you sure you want to shut down the server?</p>
+          <div class="confirm-row">
+            <button class="confirm-btn confirm-yes" on:click={shutdownServer} disabled={shuttingDown}>
+              {shuttingDown ? "Shutting down…" : "Yes, Shutdown"}
+            </button>
+            <button class="confirm-btn confirm-no" on:click={cancelShutdown} disabled={shuttingDown}>Cancel</button>
+          </div>
+        {:else}
+          <button class="shutdown-btn" on:click={requestShutdown}>Shutdown Server</button>
+        {/if}
+      </div>
+    {/if}
   </div>
 </div>
 
@@ -252,5 +288,75 @@
 
   .picker-create-row button:hover {
     background: var(--accent-hover);
+  }
+
+  .picker-shutdown {
+    border-top: 1px solid var(--border);
+    padding-top: 1.5rem;
+    margin-top: 1.5rem;
+    text-align: center;
+  }
+
+  .shutdown-btn {
+    width: 100%;
+    padding: 0.5rem 1.5rem;
+    background: transparent;
+    color: var(--text-muted);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    transition: background 0.15s, color 0.15s, border-color 0.15s;
+  }
+
+  .shutdown-btn:hover {
+    background: #ff444422;
+    color: #ff6666;
+    border-color: #ff444444;
+  }
+
+  .confirm-text {
+    margin: 0 0 0.75rem;
+    color: var(--text-muted);
+    font-size: 0.9rem;
+    text-align: center;
+  }
+
+  .confirm-row {
+    display: flex;
+    gap: 0.5rem;
+  }
+
+  .confirm-btn {
+    flex: 1;
+    padding: 0.5rem 1rem;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    border: 1px solid var(--border);
+  }
+
+  .confirm-yes {
+    background: #ff444422;
+    color: #ff6666;
+    border-color: #ff444444;
+  }
+
+  .confirm-yes:hover {
+    background: #ff444444;
+  }
+
+  .confirm-no {
+    background: transparent;
+    color: var(--text-muted);
+  }
+
+  .confirm-no:hover {
+    background: var(--bg-input);
+  }
+
+  .confirm-btn:disabled {
+    opacity: 0.5;
+    cursor: default;
   }
 </style>
