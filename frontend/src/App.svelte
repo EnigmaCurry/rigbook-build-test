@@ -222,6 +222,8 @@
   let clientCount = 0;
   let disconnectNonce = "";
   let eventSource = null;
+  let sseHeartbeatTimer = null;
+  const SSE_TIMEOUT_MS = 11000;
   let popupNotifications = [];
   let popupNotifEnabled = false;
   let showPopup = false;
@@ -309,19 +311,33 @@
     document.head.appendChild(link);
   }
 
+  function setDisconnectedState() {
+    serverDisconnected = true;
+    stopAppServices();
+    document.title = "Disconnected";
+    startAutoReconnect();
+  }
+
+  function clearDisconnectedState() {
+    serverDisconnected = false;
+    reconnecting = false;
+    stopAutoReconnect();
+    document.title = "Rigbook";
+  }
+
   function clearShutdownState() {
     serverShutdown = false;
+    logbookClosed = false;
     document.title = "Rigbook";
     const link = document.querySelector("link[rel~='icon']");
     if (link) link.href = "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📻</text></svg>";
   }
 
-  async function attemptReconnect() {
+  async function reloadIfAlive() {
     try {
-      const res = await fetch("/api/settings/my_callsign");
+      const res = await fetch("/api/logbooks/current");
       if (res.ok) {
-        clearShutdownState();
-        startAppServices();
+        location.reload();
       } else {
         alert("Server is not available yet.");
       }
@@ -330,25 +346,106 @@
     }
   }
 
+  async function attemptReconnect() {
+    try {
+      const res = await fetch("/api/logbooks/current");
+      if (res.ok) {
+        const data = await res.json();
+        if (serverDisconnected) {
+          clearDisconnectedState();
+          if (data.is_open && data.name === currentLogbook) {
+            startAppServices();
+          } else {
+            logbookClosed = true;
+            serverShutdown = true;
+            document.title = "Close this tab";
+          }
+        } else {
+          clearShutdownState();
+          startAppServices();
+        }
+      } else {
+        if (!serverDisconnected) alert("Server is not available yet.");
+      }
+    } catch {
+      if (!serverDisconnected) alert("Server is not available yet.");
+    }
+  }
+
+  async function startAutoReconnect() {
+    autoReconnectDelay = 2000;
+    reconnectStartedAt = Date.now();
+    // Try immediately first, then start backoff schedule
+    reconnecting = true;
+    await attemptReconnect();
+    reconnecting = false;
+    if (serverDisconnected) {
+      scheduleAutoReconnect();
+    }
+  }
+
+  function scheduleAutoReconnect() {
+    const delaySec = Math.round(autoReconnectDelay / 1000);
+    reconnectCountdown = delaySec;
+    clearInterval(countdownInterval);
+    if (delaySec > 1) {
+      countdownInterval = setInterval(() => {
+        reconnectCountdown = Math.max(0, reconnectCountdown - 1);
+        if (reconnectCountdown <= 0) clearInterval(countdownInterval);
+      }, 1000);
+    }
+    autoReconnectTimer = setTimeout(async () => {
+      clearInterval(countdownInterval);
+      reconnectCountdown = 0;
+      reconnecting = true;
+      await attemptReconnect();
+      reconnecting = false;
+      if (serverDisconnected) {
+        if (Date.now() - reconnectStartedAt > 61000) {
+          stopAutoReconnect();
+          serverDisconnected = false;
+          logbookClosed = true;
+          serverShutdown = true;
+          stopAppServices();
+          document.title = "Close this tab";
+          return;
+        }
+        autoReconnectDelay = Math.min(autoReconnectDelay * 2, 10000);
+        scheduleAutoReconnect();
+      }
+    }, autoReconnectDelay);
+  }
+
+  function stopAutoReconnect() {
+    clearTimeout(autoReconnectTimer);
+    autoReconnectTimer = null;
+    clearInterval(countdownInterval);
+    countdownInterval = null;
+    autoReconnectDelay = 1000;
+    reconnectCountdown = 0;
+  }
+
   function stopAppServices() {
     clearInterval(flrigInterval);
     flrigInterval = null;
+    clearTimeout(sseHeartbeatTimer);
+    sseHeartbeatTimer = null;
     if (eventSource) { eventSource.close(); eventSource = null; }
   }
 
-  async function handleLogbookOpened(e) {
-    currentLogbook = e.detail;
-    setLogbook(currentLogbook);
-    dualSplit = parseFloat(storageGet("dualSplit")) || 50;
-    applyTheme();
-    logbookOpen = true;
-    page = isWide() ? "dual" : "log";
-    window.location.hash = "/";
-    startAppServices();
-    await checkNeedsSetup();
+  function handleLogbookOpened() {
+    location.reload();
   }
 
   let serverShutdown = false;
+  let serverDisconnected = false;
+  let logbookClosed = false;
+  let autoReconnectTimer = null;
+  let autoReconnectDelay = 1000;
+  let reconnecting = false;
+  let reconnectCountdown = 0;
+  let countdownInterval = null;
+  let reconnectStartedAt = 0;
 
   async function confirmPendingLogbook() {
     try {
@@ -389,16 +486,20 @@
     try {
       await fetch("/api/logbooks/close", { method: "POST" });
     } catch {}
-    stopAppServices();
-    logbookOpen = false;
-    currentLogbook = "";
-    page = "picker";
-    applySystemTheme();
+    location.reload();
+  }
+
+  function resetSseHeartbeat() {
+    clearTimeout(sseHeartbeatTimer);
+    sseHeartbeatTimer = setTimeout(() => {
+      if (!serverShutdown && !serverDisconnected) setDisconnectedState();
+    }, SSE_TIMEOUT_MS);
   }
 
   function connectSSE() {
     if (eventSource) eventSource.close();
     eventSource = new EventSource("/api/events/stream");
+    resetSseHeartbeat();
     eventSource.addEventListener("unread", (e) => {
       const data = JSON.parse(e.data);
       const newCount = data.count;
@@ -426,6 +527,9 @@
     });
     eventSource.addEventListener("update-check", () => {
       fetchUpdateCheck();
+    });
+    eventSource.addEventListener("keepalive", () => {
+      resetSseHeartbeat();
     });
     eventSource.addEventListener("shutdown", () => {
       setShutdownState();
@@ -1187,8 +1291,8 @@
   {#if serverShutdown}
     <div class="welcome-container">
       <div class="welcome-card">
-        <p>Server has shut down.</p>
-        <button class="welcome-btn" on:click={attemptReconnect}>Reconnect</button>
+        <p>{logbookClosed ? "This logbook has been closed." : "Server has shut down."}</p>
+        <button class="welcome-btn" on:click={reloadIfAlive}>Reconnect</button>
       </div>
     </div>
   {:else if pendingLogbook}
@@ -1385,6 +1489,16 @@
   {/if}
   {/if}
 </main>
+
+{#if serverDisconnected}
+  <div class="disconnect-backdrop">
+    <div class="disconnect-modal">
+      <p>Server has been disconnected.</p>
+      <p class="disconnect-status">{reconnecting ? "Reconnecting…" : reconnectCountdown > 0 ? `Retrying in ${reconnectCountdown}s…` : "Waiting to reconnect…"}</p>
+      <button class="welcome-btn" on:click={attemptReconnect}>Reconnect Now</button>
+    </div>
+  </div>
+{/if}
 
 {#if showPopup}
   <!-- svelte-ignore a11y-click-events-have-key-events -->
@@ -2021,6 +2135,40 @@
     .vfo-digit {
       font-size: 0.9rem;
     }
+  }
+
+  .disconnect-backdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.6);
+    z-index: 30000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .disconnect-modal {
+    background: var(--bg-card);
+    border: 1px solid var(--accent);
+    border-radius: 6px;
+    padding: 1.5rem 2rem;
+    text-align: center;
+    max-width: 360px;
+    width: 90%;
+  }
+
+  .disconnect-modal p {
+    margin: 0 0 0.5rem;
+    color: var(--fg);
+  }
+
+  .disconnect-status {
+    font-size: 0.85rem;
+    color: var(--fg-dim);
+    margin-bottom: 1rem !important;
   }
 
   .popup-backdrop {
