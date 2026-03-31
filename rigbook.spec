@@ -1,6 +1,23 @@
 # -*- mode: python ; coding: utf-8 -*-
 import platform
+import subprocess
 from pathlib import Path
+
+# Inject git SHA into _build_info.py for the build, always using current HEAD.
+# The original file is restored after PyInstaller reads it so dev runs stay clean.
+build_info_path = Path("src/rigbook/_build_info.py")
+build_info_original = build_info_path.read_text()
+try:
+    sha = subprocess.check_output(
+        ["git", "rev-parse", "--short=8", "HEAD"], text=True
+    ).strip()
+    import atexit
+    build_info_path.write_text(
+        build_info_original.replace('BUILD_GIT_SHA = ""', f'BUILD_GIT_SHA = "{sha}"')
+    )
+    atexit.register(build_info_path.write_text, build_info_original)
+except Exception:
+    pass
 
 block_cipher = None
 static_dir = Path("src/rigbook/static")

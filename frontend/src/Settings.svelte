@@ -12,6 +12,7 @@
   export let pickerMode = false;
   export let needsSetup = false;
   export let initialTab = null;
+  export let clientCount = 0;
 
   const dispatch = createEventDispatcher();
 
@@ -25,6 +26,15 @@
   let update_check_enabled = true;
   let updateCheckResult = null;
   let updateChecking = false;
+  let updateSupported = false;
+  let updateNotWritable = false;
+  let updateApplying = false;
+  let updateApplyError = "";
+  let updateCustomRepo = false;
+  let updateGithubRepo = "";
+  let updateBuildRepo = "";
+  let updateBuildSha = "";
+  let updateOfficialBuild = false;
   let flrig_enabled = false;
   let flrig_simulate = false;
   let flrig_host = "127.0.0.1";
@@ -59,7 +69,7 @@
   let hamalert_password = "";
   let hasHamalertPassword = false;
 
-  const validTabs = ["station", "features", "appearance", "system"];
+  const validTabs = ["station", "features", "appearance", "updates", "system"];
   let activeTab = (initialTab && validTabs.includes(initialTab)) ? initialTab : "station";
   let settingsLoaded = false;
 
@@ -140,6 +150,11 @@
   }
 
 
+  // Shutdown
+  let noShutdown = false;
+  let autoShutdownOnDisconnect = false;
+  let shutdownInMenu = false;
+
   // Backup
   let backupMessage = "";
   let backupMessageType = "";
@@ -150,6 +165,7 @@
   let autoBackupHours = 24;
   let autoBackupMax = 10;
   let backupSaveTimer = null;
+  let backupSettingsReady = false;
 
   async function loadDbInfo() {
     try {
@@ -166,6 +182,8 @@
         autoBackupEnabled = backupStatus.auto_enabled;
         autoBackupHours = backupStatus.interval_hours;
         autoBackupMax = backupStatus.max_backups;
+        await tick();
+        backupSettingsReady = true;
       }
     } catch { /* ignore */ }
   }
@@ -204,6 +222,7 @@
   }
 
   async function saveAutoBackupSettings() {
+    if (!backupSettingsReady) return;  // not yet loaded — skip spurious saves
     clearTimeout(backupSaveTimer);
     backupSaveTimer = setTimeout(async () => {
       try {
@@ -318,13 +337,21 @@
     deleting = false;
   }
 
+  function disconnectOthers() {
+    const others = clientCount - 1;
+    if (!confirm(`Disconnect ${others} other client${others !== 1 ? "s" : ""}? It may take up to 30s to process this request.`)) return;
+    dispatch("disconnect-others");
+  }
+
   async function shutdownServer() {
     if (!confirm("Are you sure you want to shut down the Rigbook server?")) return;
-    dispatch("shutdown");
     try {
-      await fetch("/api/logbooks/shutdown", { method: "POST" });
+      const res = await fetch("/api/logbooks/shutdown", { method: "POST" });
+      if (res.ok) {
+        dispatch("shutdown");
+        dispatch("deleted", { shutdown: true });
+      }
     } catch {}
-    dispatch("deleted", { shutdown: true });
   }
 
   async function enableDesktopNotifications() {
@@ -752,6 +779,8 @@
           if (s.key === "default_page") default_page = s.value || "log";
           if (s.key === "theme") theme = s.value || (window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark");
           if (s.key === "popup_notifications_enabled") popupNotifEnabled = s.value === "true";
+          if (s.key === "auto_shutdown_on_disconnect") autoShutdownOnDisconnect = s.value === "true";
+          if (s.key === "shutdown_in_menu") shutdownInMenu = s.value === "true";
         }
       }
       settingsLoaded = true;
@@ -763,6 +792,72 @@
       const res = await fetch("/api/update-check");
       if (res.ok) updateCheckResult = await res.json();
     } catch {}
+    try {
+      const res = await fetch("/api/update/platform");
+      if (res.ok) {
+        const data = await res.json();
+        updateSupported = (data.supported && data.writable) || false;
+        updateNotWritable = data.supported && !data.writable;
+        updateBuildRepo = data.build_origin_repo || "";
+        updateBuildSha = data.build_git_sha || "";
+        updateGithubRepo = data.github_repo || "";
+        updateOfficialBuild = data.build_github_actions || false;
+        updateCustomRepo = !!updateBuildRepo && updateBuildRepo !== "EnigmaCurry/rigbook";
+      }
+    } catch {}
+  }
+
+  async function skipUpdate() {
+    try {
+      const res = await fetch("/api/update-check/skip", { method: "POST" });
+      if (res.ok && updateCheckResult) {
+        updateCheckResult.update_skipped = true;
+        updateCheckResult = updateCheckResult; // trigger reactivity
+      }
+    } catch {}
+  }
+
+  function confirmAndApplyUpdate() {
+    if (!updateCheckResult) return;
+    if (confirm(`Update Rigbook from v${updateCheckResult.current} to v${updateCheckResult.latest}? The server will restart.`)) {
+      applyUpdate();
+    }
+  }
+
+  async function applyUpdate() {
+    updateApplying = true;
+    updateApplyError = "";
+    try {
+      const res = await fetch("/api/update/apply", { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) {
+        updateApplyError = data.detail || "Update failed";
+        updateApplying = false;
+        return;
+      }
+      if (data.status === "up_to_date") {
+        updateApplyError = "Already up to date";
+        updateApplying = false;
+        return;
+      }
+      // Server is restarting — poll until it comes back
+      await new Promise(r => setTimeout(r, 2000));
+      for (let i = 0; i < 30; i++) {
+        try {
+          const check = await fetch("/api/version");
+          if (check.ok) {
+            window.location.reload();
+            return;
+          }
+        } catch {}
+        await new Promise(r => setTimeout(r, 1000));
+      }
+      updateApplyError = "Server did not come back after update — check manually";
+      updateApplying = false;
+    } catch (e) {
+      updateApplyError = "Update failed: " + e.message;
+      updateApplying = false;
+    }
   }
 
   async function fetchUpdateCheck() {
@@ -781,6 +876,15 @@
     if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
     if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
     return `${Math.floor(diff / 86400)}d ago`;
+  }
+
+  function formatTimeUntil(epochSecs) {
+    const diff = Math.floor(epochSecs - Date.now() / 1000);
+    if (diff <= 0) return "soon";
+    if (diff < 60) return `in ${diff}s`;
+    if (diff < 3600) return `in ${Math.floor(diff / 60)}m`;
+    if (diff < 86400) return `in ${Math.floor(diff / 3600)}h`;
+    return `in ${Math.floor(diff / 86400)}d`;
   }
 
   async function logoutQrz() {
@@ -815,12 +919,23 @@
     } catch {}
   }
 
+  async function fetchNoShutdown() {
+    try {
+      const res = await fetch("/api/version");
+      if (res.ok) {
+        const data = await res.json();
+        noShutdown = !!data.no_shutdown;
+      }
+    } catch {}
+  }
+
   onMount(() => {
     fetchSettings();
     fetchSpotStatus();
     fetchQsoCount();
     loadDbInfo();
     loadBackupStatus();
+    fetchNoShutdown();
     spotStatusInterval = setInterval(fetchSpotStatus, 5000);
   });
 
@@ -841,6 +956,7 @@
     <button class="tab" class:active={activeTab === "station"} on:click={() => switchTab("station")}>Station</button>
     <button class="tab" class:active={activeTab === "features"} on:click={() => switchTab("features")}>Features</button>
     <button class="tab" class:active={activeTab === "appearance"} on:click={() => switchTab("appearance")}>Appearance</button>
+    <button class="tab" class:active={activeTab === "updates"} on:click={() => switchTab("updates")}>Updates</button>
     <button class="tab" class:active={activeTab === "system"} on:click={() => switchTab("system")}>System</button>
   </div>
 
@@ -965,40 +1081,6 @@
   </section>
 
   <section class="settings-section">
-    <h3>Update Checker</h3>
-    <div class="setting-row toggle-row">
-      <label>
-        <input type="checkbox" bind:checked={update_check_enabled} on:change={onUpdateCheckEnabledChange} />
-        Check for new Rigbook releases on GitHub
-      </label>
-    </div>
-    {#if update_check_enabled && updateCheckResult}
-      <div class="update-status">
-        Current version: <strong>v{updateCheckResult.current}</strong>
-        {#if updateCheckResult.is_dev}
-          — 🚧 Development version — update checker is essentially disabled
-        {:else if updateCheckResult.update_available}
-          — <a href={updateCheckResult.url} target="_blank" rel="noopener" class="update-available">Update available: v{updateCheckResult.latest}</a>
-        {:else if updateCheckResult.is_exact}
-          — You're running the latest version
-        {:else if updateCheckResult.latest}
-          — 🚧 Development version — update checker is essentially disabled
-        {:else}
-          — Unable to check for updates
-        {/if}
-      </div>
-      <div class="update-check-meta">
-        {#if updateCheckResult.checked_at}
-          Checked {formatTimeAgo(updateCheckResult.checked_at)}
-        {/if}
-        <button class="check-now-btn" on:click={fetchUpdateCheck} disabled={updateChecking}>
-          {updateChecking ? "Checking…" : "Check now"}
-        </button>
-      </div>
-    {/if}
-  </section>
-
-  <section class="settings-section">
     <h3>Notifications</h3>
     <div class="setting-row toggle-row">
       {#if desktopNotifPermission === "denied"}
@@ -1106,7 +1188,7 @@
   {#if activeTab === "appearance"}
   <div class="tab-content">
   <section class="settings-section">
-    <h3>Appearance</h3>
+    <h3>Theme</h3>
     <div class="setting-row toggle-row">
       <label>Theme</label>
       <button class="theme-toggle" on:click={toggleTheme}>
@@ -1129,6 +1211,9 @@
         <option value="conditions">Conditions</option>
       </select>
     </div>
+  </section>
+  <section class="settings-section">
+    <h3>Map Tiles</h3>
     <div class="setting-row">
       <label for="map_theme">Map Tiles</label>
       <select id="map_theme" bind:value={map_theme} on:change={onMapThemeChange}>
@@ -1144,6 +1229,9 @@
       </div>
     {/if}
     <div class="map-preview" bind:this={previewEl}></div>
+  </section>
+  <section class="settings-section">
+    <h3>Wide Mode</h3>
     <div class="setting-row toggle-row">
       <label>
         <input type="checkbox" bind:checked={wide_mode_enabled} on:change={onWideModeEnabledChange} />
@@ -1160,6 +1248,78 @@
         Logbook on right side
       </label>
     </div>
+  </section>
+  </div>
+  {/if}
+
+  {#if activeTab === "updates"}
+  <div class="tab-content">
+  <section class="settings-section">
+    <h3>Update Checker</h3>
+    {#if updateOfficialBuild}
+      <div class="setting-row toggle-row">
+        <label>
+          <input type="checkbox" bind:checked={update_check_enabled} on:change={onUpdateCheckEnabledChange} />
+          Check for new Rigbook releases on GitHub
+        </label>
+      </div>
+      {#if update_check_enabled && updateCheckResult}
+        <div class="update-status">
+          <div>Current version: <strong>v{updateCheckResult.current}</strong>{#if updateBuildSha}
+            (<a href="https://github.com/{updateGithubRepo}/commit/{updateBuildSha}" target="_blank" rel="noopener" class="sha-link">{updateBuildSha}</a>){/if}
+          {#if updateCheckResult.is_dev}
+            — Development version — update checker is disabled
+          {:else if updateCheckResult.is_exact}
+            — You're running the latest version
+          {:else if updateCheckResult.latest && !updateCheckResult.update_available}
+            — You're ahead of the latest release (v{updateCheckResult.latest})
+          {:else if !updateCheckResult.latest}
+            — Unable to check for updates
+          {/if}
+          </div>
+          {#if updateCheckResult.update_available && !updateCheckResult.update_skipped}
+            <div><span class="update-available">Update available: v{updateCheckResult.latest}</span></div>
+            <div class="update-actions">
+              {#if updateSupported}
+                <button class="check-now-btn apply-update-btn" on:click={confirmAndApplyUpdate} disabled={updateApplying}>
+                  {updateApplying ? "Updating…" : "Apply Update"}
+                </button>
+                <button class="check-now-btn" on:click={skipUpdate}>Skip</button>
+              {:else}
+                <a href={updateCheckResult.url} target="_blank" rel="noopener" class="update-available">Download</a>
+                {#if updateNotWritable}
+                  <span class="update-error">In-app update unavailable: no write permission to the binary location</span>
+                {/if}
+              {/if}
+              {#if updateApplyError}
+                <span class="update-error">{updateApplyError}</span>
+              {/if}
+            </div>
+          {:else if updateCheckResult.update_skipped}
+            <div>v{updateCheckResult.latest} available (skipped)</div>
+          {/if}
+        </div>
+        <div class="update-check-meta">
+          {#if updateCheckResult.checked_at}
+            Checked {formatTimeAgo(updateCheckResult.checked_at)}{#if updateCheckResult.next_check_at}, next check {formatTimeUntil(updateCheckResult.next_check_at)}{/if}
+          {/if}
+          <button class="check-now-btn" on:click={fetchUpdateCheck} disabled={updateChecking}>
+            {updateChecking ? "Checking…" : "Check now"}
+          </button>
+        </div>
+      {/if}
+      {#if updateCustomRepo}
+        <div class="update-custom-repo-warning">
+          Warning: using custom update source <a href="https://github.com/{updateBuildRepo}" target="_blank" rel="noopener"><strong>{updateBuildRepo}</strong></a>
+        </div>
+      {/if}
+    {:else}
+      <div class="update-status">
+        Version: <strong>v{updateCheckResult?.current || '...'}</strong>{#if updateBuildSha}
+          (<a href="https://github.com/{updateGithubRepo}/commit/{updateBuildSha}" target="_blank" rel="noopener" class="sha-link">{updateBuildSha}</a>){/if}
+      </div>
+      <p class="hint">Update checking is disabled for local builds.</p>
+    {/if}
   </section>
   </div>
   {/if}
@@ -1218,12 +1378,33 @@
     {/if}
   </section>
 
+  {#if !noShutdown}
   <section class="settings-section">
     <h3>Shutdown</h3>
+    <p class="hint">Connected clients: {clientCount}</p>
+    {#if clientCount > 1}
+      <div class="setting-row">
+        <button class="warning-btn" on:click={disconnectOthers}>Disconnect all other clients</button>
+      </div>
+    {/if}
+    <div class="setting-row toggle-row">
+      <label class="toggle-label">
+        <input type="checkbox" bind:checked={autoShutdownOnDisconnect} on:change={() => saveSetting("auto_shutdown_on_disconnect", autoShutdownOnDisconnect ? "true" : "false")} />
+        Shutdown automatically when last client disconnects
+      </label>
+    </div>
+    <p class="hint">When enabled, the server will shut down after 15 seconds with no connected clients.</p>
+    <div class="setting-row toggle-row">
+      <label class="toggle-label">
+        <input type="checkbox" bind:checked={shutdownInMenu} on:change={() => { saveSetting("shutdown_in_menu", shutdownInMenu ? "true" : "false"); dispatch("saved"); }} />
+        Add Shutdown action to the main menu
+      </label>
+    </div>
     <div class="setting-row">
-      <button class="danger-btn" on:click={shutdownServer}>Shutdown Server</button>
+      <button class="danger-btn" on:click={shutdownServer}>Shutdown Now</button>
     </div>
   </section>
+  {/if}
 
   {#if logbookName}
     <section class="settings-section danger-zone">
@@ -1273,10 +1454,10 @@
     background: none;
     border: none;
     border-bottom: 2px solid transparent;
-    color: var(--text-muted);
+    color: var(--text);
     padding: 0.5rem 0.5rem;
     font-size: 0.8rem;
-    font-weight: 600;
+    font-weight: bold;
     cursor: pointer;
     font-family: inherit;
   }
@@ -1584,6 +1765,13 @@
     background: #ff4444;
     opacity: 0.4;
   }
+  .warning-btn {
+    background: #e67e22;
+    color: #fff;
+  }
+  .warning-btn:hover {
+    background: #cf6d17;
+  }
   .update-status {
     margin-top: 0.5rem;
     font-size: 0.9rem;
@@ -1597,8 +1785,14 @@
   .update-available:hover {
     text-decoration: underline;
   }
-  .update-check-meta {
+  .update-actions {
     margin-top: 0.3rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  .update-check-meta {
+    margin-top: 0.7rem;
     font-size: 0.8rem;
     color: var(--text-muted);
     display: flex;
@@ -1617,5 +1811,37 @@
   .check-now-btn:disabled {
     opacity: 0.5;
     cursor: default;
+  }
+  .apply-update-btn {
+    background: #2ecc40;
+    color: #000;
+    font-weight: bold;
+    border-color: #2ecc40;
+    margin-left: 0.5rem;
+  }
+  .apply-update-btn:disabled {
+    background: #2ecc40;
+    opacity: 0.6;
+  }
+  .update-error {
+    color: #e74c3c;
+    font-size: 0.8rem;
+    margin-left: 0.5rem;
+  }
+  .update-custom-repo-warning {
+    margin-top: 0.5rem;
+    padding: 0.4rem 0.6rem;
+    font-size: 0.85rem;
+    color: #f39c12;
+    border: 1px solid #f39c12;
+    border-radius: 4px;
+    background: rgba(243, 156, 18, 0.1);
+  }
+  .update-custom-repo-warning a {
+    color: #2ecc40;
+  }
+  .sha-link {
+    font-family: monospace;
+    color: var(--accent);
   }
 </style>

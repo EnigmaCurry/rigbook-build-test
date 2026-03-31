@@ -193,6 +193,10 @@
   let updateExact = false;
   let updateUrl = "";
   let updateLatest = "";
+  let updateHasUpdate = false;
+  let updateSkipped = false;
+  let updateSupported = false;
+  let appFrozen = true;
   let vfoFreq = "";
   let vfoMode = "";
   let vfoConnected = false;
@@ -206,18 +210,23 @@
   let solarEnabled = false;
   let sqlQueryEnabled = false;
   let flrigEnabled = false;
+  let shutdownMenuEnabled = false;
+  let noShutdown = false;
   let flrigInterval;
   let utcNow = new Date().toISOString().slice(0, 19).replace("T", " ") + "z";
   let clockInterval;
   let clockCopied = false;
   let unreadCount = 0;
   let prevUnreadCount = -1;
+  let clientCount = 0;
+  let disconnectNonce = "";
   let eventSource = null;
   let popupNotifications = [];
   let popupNotifEnabled = false;
   let showPopup = false;
   let activeDesktopNotif = null;
   let pickerMode = false;
+  let logbookReady = false;
   let logbookOpen = false;
   let currentLogbook = "";
   let pendingLogbook = "";
@@ -242,6 +251,7 @@
     if (!pickerMode && !logbookOpen && !pendingLogbook) {
       logbookOpen = true;
     }
+    logbookReady = true;
   }
 
   let needsSetup = false;
@@ -277,6 +287,7 @@
     await fetchPotaEnabled();
     await fetchSqlQueryEnabled();
     await fetchFlrigEnabled();
+    await fetchShutdownMenuEnabled();
     if (flrigEnabled) {
       fetchRadioModes();
       pollFlrig();
@@ -362,6 +373,14 @@
     setShutdownState();
   }
 
+  async function shutdownFromMenu() {
+    menuOpen = false;
+    try {
+      const res = await fetch("/api/logbooks/shutdown", { method: "POST" });
+      if (res.ok) setShutdownState();
+    } catch {}
+  }
+
   async function closeLogbook() {
     menuOpen = false;
     try {
@@ -371,6 +390,7 @@
     logbookOpen = false;
     currentLogbook = "";
     page = "picker";
+    applySystemTheme();
   }
 
   function connectSSE() {
@@ -401,7 +421,23 @@
     eventSource.addEventListener("notification", (e) => {
       // Individual notification pushed — could be used later
     });
+    eventSource.addEventListener("update-check", () => {
+      fetchUpdateCheck();
+    });
     eventSource.addEventListener("shutdown", () => {
+      setShutdownState();
+    });
+    eventSource.addEventListener("clients", (e) => {
+      const data = JSON.parse(e.data);
+      clientCount = data.count;
+    });
+    eventSource.addEventListener("disconnect", (e) => {
+      const data = JSON.parse(e.data);
+      if (data.nonce && data.nonce === disconnectNonce) {
+        disconnectNonce = "";
+        return;  // this client initiated the disconnect
+      }
+      if (eventSource) { eventSource.close(); eventSource = null; }
       setShutdownState();
     });
     eventSource.onerror = () => {
@@ -594,6 +630,8 @@
       if (res.ok) {
         const data = await res.json();
         appVersion = data.version || "";
+        noShutdown = !!data.no_shutdown;
+        appFrozen = data.frozen !== false;
       }
     } catch {}
   }
@@ -603,12 +641,32 @@
       const res = await fetch("/api/update-check");
       if (res.ok) {
         const data = await res.json();
-        updateAvailable = data.update_available || false;
         updateChecked = !!data.latest;
         updateDev = data.is_dev || false;
         updateExact = data.is_exact || false;
         updateLatest = data.latest || "";
         updateUrl = data.url || "";
+        updateHasUpdate = data.update_available || false;
+        updateSkipped = data.update_skipped || false;
+      }
+    } catch {}
+    try {
+      const res = await fetch("/api/update/platform");
+      if (res.ok) {
+        const data = await res.json();
+        updateSupported = data.supported || false;
+      }
+    } catch {}
+    // Only show "Update Available" banner for GitHub release binaries with a newer version (and not skipped)
+    updateAvailable = updateSupported && updateHasUpdate && !updateSkipped;
+  }
+
+  async function skipUpdate() {
+    try {
+      const res = await fetch("/api/update-check/skip", { method: "POST" });
+      if (res.ok) {
+        updateSkipped = true;
+        updateAvailable = false;
       }
     } catch {}
   }
@@ -716,6 +774,16 @@
     } catch {}
   }
 
+  async function fetchShutdownMenuEnabled() {
+    try {
+      const res = await fetch("/api/settings/shutdown_in_menu");
+      if (res.ok) {
+        const data = await res.json();
+        shutdownMenuEnabled = data.value === "true";
+      }
+    } catch {}
+  }
+
   function isWide() {
     return typeof window !== "undefined" && window.innerWidth >= wideBreakpoint;
   }
@@ -743,6 +811,7 @@
   function navigate(p) {
     if (p === "back") {
       if (previousHash) {
+        navigating = true;
         window.location.hash = previousHash;
         previousHash = "";
         const parsed = parseHash();
@@ -751,6 +820,7 @@
         editId = null;
         menuOpen = false;
         fetchCallsign();
+        setTimeout(() => { navigating = false; }, 0);
         return;
       }
       p = previousPage;
@@ -974,6 +1044,12 @@
     fetchWideBreakpoint();
   }
 
+  function applySystemTheme() {
+    const sysPref = window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+    storageSet("rigbook-theme", sysPref);
+    document.documentElement.classList.toggle("light", sysPref === "light");
+  }
+
   function applyThemeFromCache() {
     const cached = storageGet("rigbook-theme");
     const theme = cached || (window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark");
@@ -1040,16 +1116,18 @@
   onMount(async () => {
     migrateStorage();
     fetchVersion();
-    applyTheme();
+    applySystemTheme();
     window.addEventListener("keydown", onGlobalKeydown);
-    fetchWideBreakpoint();
     clockInterval = setInterval(() => { utcNow = new Date().toISOString().slice(0, 19).replace("T", " ") + "z"; }, 1000);
     window.addEventListener("hashchange", onHashChange);
     window.addEventListener("resize", onResize);
     await checkLogbookMode();
     setLogbook(currentLogbook);
     dualSplit = parseFloat(storageGet("dualSplit")) || 50;
-    applyTheme();
+    if (logbookOpen) {
+      applyTheme();
+      fetchWideBreakpoint();
+    }
     if (logbookOpen) {
       await startAppServices();
       await checkNeedsSetup();
@@ -1092,7 +1170,7 @@
   {#if serverShutdown}
     <header>
       <div class="header-left">
-        <h1 class="app-title"><span class="title-full">Rigbook</span><span class="title-short">RB</span>{#if appVersion}<span class="app-version" title={updateChecked && updateExact ? "Up to date" : updateChecked && updateDev ? "Development version" : !updateChecked ? "Enable update checker in the settings" : ""} on:click={() => navigate("about")} style="cursor: pointer">v{appVersion}{#if updateChecked && updateExact}<span class="up-to-date-check">✔</span>{/if}{#if updateChecked && updateDev}<span class="dev-version">🚧</span>{/if}{#if updateAvailable} <a href={updateUrl} target="_blank" rel="noopener" class="update-link" title={"v" + updateLatest + " available — you can disable this update checker in the settings"}>Update Available</a>{/if}</span>{/if}</h1>
+        <h1 class="app-title"><span class="title-full">Rigbook</span><span class="title-short">RB</span>{#if appVersion}<span class="app-version" title={!appFrozen ? "Local build" : updateChecked && updateExact ? "Up to date" : updateChecked && updateDev ? "Development version" : !updateChecked ? "Enable update checker in the settings" : ""} on:click={() => { navigate("about"); }} style="cursor: pointer">v{appVersion}{#if updateSupported && updateChecked && updateExact}<span class="up-to-date-check">✔</span>{/if}{#if (updateChecked && updateDev) || !appFrozen}<span class="dev-version">🚧</span>{/if}{#if updateAvailable} <button class="update-link-btn" title={"v" + updateLatest + " available"} on:click|stopPropagation={() => { settingsTab = "updates"; navigate("settings"); }}>Update Available</button><button class="update-skip-btn" title="Skip this version" on:click|stopPropagation={skipUpdate}>✕</button>{/if}</span>{/if}</h1>
       </div>
     </header>
     <div class="welcome-container">
@@ -1104,7 +1182,7 @@
   {:else if pendingLogbook}
     <header>
       <div class="header-left">
-        <h1 class="app-title"><span class="title-full">Rigbook</span><span class="title-short">RB</span>{#if appVersion}<span class="app-version" title={updateChecked && updateExact ? "Up to date" : updateChecked && updateDev ? "Development version" : !updateChecked ? "Enable update checker in the settings" : ""} on:click={() => navigate("about")} style="cursor: pointer">v{appVersion}{#if updateChecked && updateExact}<span class="up-to-date-check">✔</span>{/if}{#if updateChecked && updateDev}<span class="dev-version">🚧</span>{/if}{#if updateAvailable} <a href={updateUrl} target="_blank" rel="noopener" class="update-link" title={"v" + updateLatest + " available — you can disable this update checker in the settings"}>Update Available</a>{/if}</span>{/if}</h1>
+        <h1 class="app-title"><span class="title-full">Rigbook</span><span class="title-short">RB</span>{#if appVersion}<span class="app-version" title={!appFrozen ? "Local build" : updateChecked && updateExact ? "Up to date" : updateChecked && updateDev ? "Development version" : !updateChecked ? "Enable update checker in the settings" : ""} on:click={() => { navigate("about"); }} style="cursor: pointer">v{appVersion}{#if updateSupported && updateChecked && updateExact}<span class="up-to-date-check">✔</span>{/if}{#if (updateChecked && updateDev) || !appFrozen}<span class="dev-version">🚧</span>{/if}{#if updateAvailable} <button class="update-link-btn" title={"v" + updateLatest + " available"} on:click|stopPropagation={() => { settingsTab = "updates"; navigate("settings"); }}>Update Available</button><button class="update-skip-btn" title="Skip this version" on:click|stopPropagation={skipUpdate}>✕</button>{/if}</span>{/if}</h1>
       </div>
       <span class="utc-clock">{utcNow}</span>
     </header>
@@ -1118,10 +1196,12 @@
         </div>
       </div>
     </div>
+  {:else if !logbookReady}
+    <!-- waiting for logbook mode check -->
   {:else if pickerMode && !logbookOpen}
     <header>
       <div class="header-left">
-        <h1 class="app-title"><span class="title-full">Rigbook</span><span class="title-short">RB</span>{#if appVersion}<span class="app-version" title={updateChecked && updateExact ? "Up to date" : updateChecked && updateDev ? "Development version" : !updateChecked ? "Enable update checker in the settings" : ""} on:click={() => navigate("about")} style="cursor: pointer">v{appVersion}{#if updateChecked && updateExact}<span class="up-to-date-check">✔</span>{/if}{#if updateChecked && updateDev}<span class="dev-version">🚧</span>{/if}{#if updateAvailable} <a href={updateUrl} target="_blank" rel="noopener" class="update-link" title={"v" + updateLatest + " available — you can disable this update checker in the settings"}>Update Available</a>{/if}</span>{/if}</h1>
+        <h1 class="app-title"><span class="title-full">Rigbook</span><span class="title-short">RB</span>{#if appVersion}<span class="app-version" title={!appFrozen ? "Local build" : updateChecked && updateExact ? "Up to date" : updateChecked && updateDev ? "Development version" : !updateChecked ? "Enable update checker in the settings" : ""} on:click={() => { navigate("about"); }} style="cursor: pointer">v{appVersion}{#if updateSupported && updateChecked && updateExact}<span class="up-to-date-check">✔</span>{/if}{#if (updateChecked && updateDev) || !appFrozen}<span class="dev-version">🚧</span>{/if}{#if updateAvailable} <button class="update-link-btn" title={"v" + updateLatest + " available"} on:click|stopPropagation={() => { settingsTab = "updates"; navigate("settings"); }}>Update Available</button><button class="update-skip-btn" title="Skip this version" on:click|stopPropagation={skipUpdate}>✕</button>{/if}</span>{/if}</h1>
       </div>
       <span class="utc-clock">{utcNow}</span>
     </header>
@@ -1133,7 +1213,7 @@
         <!-- svelte-ignore a11y-click-events-have-key-events -->
         <!-- svelte-ignore a11y-no-noninteractive-element-interactions -->
         <h1 class="app-title" on:click={goHome} style="cursor: pointer"><span class="title-full">Rigbook</span><span class="title-short">RB</span></h1>
-        {#if appVersion}<span class="app-version" title={updateChecked && updateExact ? "Up to date" : updateChecked && updateDev ? "Development version" : !updateChecked ? "Enable update checker in the settings" : ""} on:click={() => navigate("about")} style="cursor: pointer">v{appVersion}{#if updateChecked && updateExact}<span class="up-to-date-check">✔</span>{/if}{#if updateChecked && updateDev}<span class="dev-version">🚧</span>{/if}{#if updateAvailable} <a href={updateUrl} target="_blank" rel="noopener" class="update-link" title={"v" + updateLatest + " available — you can disable this update checker in the settings"}>Update Available</a>{/if}</span>{/if}
+        {#if appVersion}<span class="app-version" title={!appFrozen ? "Local build" : updateChecked && updateExact ? "Up to date" : updateChecked && updateDev ? "Development version" : !updateChecked ? "Enable update checker in the settings" : ""} on:click={() => { navigate("about"); }} style="cursor: pointer">v{appVersion}{#if updateSupported && updateChecked && updateExact}<span class="up-to-date-check">✔</span>{/if}{#if (updateChecked && updateDev) || !appFrozen}<span class="dev-version">🚧</span>{/if}{#if updateAvailable} <button class="update-link-btn" title={"v" + updateLatest + " available"} on:click|stopPropagation={() => { settingsTab = "updates"; navigate("settings"); }}>Update Available</button><button class="update-skip-btn" title="Skip this version" on:click|stopPropagation={skipUpdate}>✕</button>{/if}</span>{/if}
       </div>
       {#if customHeader || myCallsign}
         <!-- svelte-ignore a11y-click-events-have-key-events -->
@@ -1234,6 +1314,10 @@
             <div class="menu-separator"></div>
             <button class="menu-item close-logbook" on:click={closeLogbook}>Close Logbook</button>
           {/if}
+          {#if shutdownMenuEnabled && !noShutdown}
+            <div class="menu-separator"></div>
+            <button class="menu-item menu-shutdown" on:click={shutdownFromMenu}>Shutdown</button>
+          {/if}
         </nav>
       {/if}
     </div>
@@ -1283,7 +1367,7 @@
     {:else if page === "notifications"}
       <Notifications on:countchange={() => fetchUnreadCount()} on:tune={e => tuneOnly(e.detail)} on:addqso={e => tuneAndPrefill(e.detail)} />
     {:else if page === "settings"}
-      <Settings logbookName={currentLogbook} pickerMode={pickerMode} {needsSetup} initialTab={settingsTab} on:deleted={e => { if (e.detail.shutdown) { setShutdownState(); } else { logbookOpen = false; currentLogbook = ""; page = "picker"; } }} on:setupcomplete={async () => { needsSetup = false; fetchCallsign(); await fetchLogbookRight(); await fetchSolarEnabled(); await fetchSpotsEnabled(); await fetchPotaEnabled(); await fetchSqlQueryEnabled(); await fetchFlrigEnabled(); if (flrigEnabled && !flrigInterval) { fetchRadioModes(); pollFlrig(); flrigInterval = setInterval(pollFlrig, 2000); } navigate(isWide() ? "dual" : "log"); }} on:saved={async () => { fetchCallsign(); fetchCustomHeader(); fetchDefaultPage(); applyTheme(); fetchPopupNotifEnabled(); await fetchLogbookRight(); await fetchSolarEnabled(); await fetchSpotsEnabled(); await fetchPotaEnabled(); await fetchSqlQueryEnabled(); await fetchFlrigEnabled(); fetchUpdateCheck(); if (flrigEnabled && !flrigInterval) { fetchRadioModes(); pollFlrig(); flrigInterval = setInterval(pollFlrig, 2000); } else if (!flrigEnabled && flrigInterval) { clearInterval(flrigInterval); flrigInterval = null; } }} on:shutdown={() => { setShutdownState(); }} />
+      <Settings logbookName={currentLogbook} pickerMode={pickerMode} {needsSetup} initialTab={settingsTab} {clientCount} on:disconnect-others={async () => { const nonce = Math.random().toString(36).slice(2); disconnectNonce = nonce; try { await fetch("/api/events/disconnect-others", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ nonce }) }); } catch {} }} on:deleted={e => { if (e.detail.shutdown) { setShutdownState(); } else { logbookOpen = false; currentLogbook = ""; page = "picker"; applySystemTheme(); } }} on:setupcomplete={async () => { needsSetup = false; fetchCallsign(); await fetchLogbookRight(); await fetchSolarEnabled(); await fetchSpotsEnabled(); await fetchPotaEnabled(); await fetchSqlQueryEnabled(); await fetchFlrigEnabled(); if (flrigEnabled && !flrigInterval) { fetchRadioModes(); pollFlrig(); flrigInterval = setInterval(pollFlrig, 2000); } navigate(isWide() ? "dual" : "log"); }} on:saved={async () => { fetchCallsign(); fetchCustomHeader(); fetchDefaultPage(); applyTheme(); fetchPopupNotifEnabled(); await fetchLogbookRight(); await fetchSolarEnabled(); await fetchSpotsEnabled(); await fetchPotaEnabled(); await fetchSqlQueryEnabled(); await fetchFlrigEnabled(); fetchShutdownMenuEnabled(); fetchUpdateCheck(); if (flrigEnabled && !flrigInterval) { fetchRadioModes(); pollFlrig(); flrigInterval = setInterval(pollFlrig, 2000); } else if (!flrigEnabled && flrigInterval) { clearInterval(flrigInterval); flrigInterval = null; } }} on:shutdown={() => { setShutdownState(); }} />
     {:else if page === "links"}
       <Links />
     {:else if page === "conditions"}
@@ -1504,14 +1588,31 @@
     font-size: 0.5rem;
   }
 
-  .update-link {
+  .update-link-btn {
     color: #2ecc40;
-    text-decoration: none;
+    background: none;
+    border: none;
     font-weight: bold;
     margin-left: 0.3rem;
+    cursor: pointer;
+    font-size: inherit;
+    font-family: inherit;
+    padding: 0;
   }
-  .update-link:hover {
+  .update-link-btn:hover {
     text-decoration: underline;
+  }
+  .update-skip-btn {
+    color: var(--text-muted);
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 0.75em;
+    padding: 0 0 0 0.3rem;
+    opacity: 0.6;
+  }
+  .update-skip-btn:hover {
+    opacity: 1;
   }
 
   .vfo-bezel {
@@ -1783,6 +1884,10 @@
 
   .menu-item.close-logbook {
     color: var(--text-muted);
+  }
+
+  .menu-item.menu-shutdown {
+    color: var(--danger, #e74c3c);
   }
 
   .welcome-container {

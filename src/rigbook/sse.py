@@ -7,6 +7,8 @@ events, and connected SSE clients receive them in real time.
 import asyncio
 import json
 import logging
+import os
+import signal
 import time
 from collections.abc import Callable
 
@@ -22,6 +24,10 @@ _shutdown_event: asyncio.Event | None = None
 _last_client_disconnected_at: float | None = None
 _on_connect_callbacks: list[Callable[[], None]] = []
 _on_disconnect_callbacks: list[Callable[[], None]] = []
+_ever_had_client: bool = False
+_auto_shutdown_task: asyncio.Task | None = None
+
+AUTO_SHUTDOWN_DELAY = 15  # seconds
 
 
 def subscriber_count() -> int:
@@ -59,6 +65,50 @@ def broadcast(event: str, data: dict) -> None:
             pass
 
 
+async def _auto_shutdown_loop() -> None:
+    """Background task: shut down server when no SSE clients are connected.
+
+    Triggers after AUTO_SHUTDOWN_DELAY seconds with zero clients, whether
+    a client connected and then left, or no client ever connected at all.
+    """
+    started_at = time.time()
+    while True:
+        await asyncio.sleep(5)
+        if len(_subscribers) > 0:
+            continue
+        # Use last-disconnect time if a client was seen, otherwise use start time
+        reference = _last_client_disconnected_at if _ever_had_client else started_at
+        elapsed = time.time() - reference
+        if elapsed >= AUTO_SHUTDOWN_DELAY:
+            logger.info(
+                "No SSE clients for %.0fs — shutting down now", elapsed
+            )
+            notify_shutdown()
+            os.kill(os.getpid(), signal.SIGTERM)
+            return
+
+
+async def start_auto_shutdown() -> None:
+    """Start the auto-shutdown watcher task."""
+    global _auto_shutdown_task
+    if _auto_shutdown_task is not None:
+        return
+    _auto_shutdown_task = asyncio.create_task(_auto_shutdown_loop())
+    logger.info("Auto-shutdown watcher started (delay=%ds)", AUTO_SHUTDOWN_DELAY)
+
+
+async def stop_auto_shutdown() -> None:
+    """Stop the auto-shutdown watcher task."""
+    global _auto_shutdown_task
+    if _auto_shutdown_task is not None:
+        _auto_shutdown_task.cancel()
+        try:
+            await _auto_shutdown_task
+        except asyncio.CancelledError:
+            pass
+        _auto_shutdown_task = None
+
+
 def notify_shutdown() -> None:
     """Broadcast shutdown event and signal all SSE generators to stop."""
     broadcast("shutdown", {})
@@ -66,12 +116,14 @@ def notify_shutdown() -> None:
     evt.set()
 
 
-async def _sse_generator(queue: asyncio.Queue[str]):
+async def _sse_generator(queue: asyncio.Queue[str], request: Request):
     shutdown_evt = _get_shutdown_event()
     try:
         while not shutdown_evt.is_set():
+            if await request.is_disconnected():
+                return
             try:
-                msg = await asyncio.wait_for(queue.get(), timeout=30)
+                msg = await asyncio.wait_for(queue.get(), timeout=5)
                 yield msg
             except asyncio.TimeoutError:
                 # Send keepalive comment to detect dead connections
@@ -85,21 +137,41 @@ async def _sse_generator(queue: asyncio.Queue[str]):
         return
 
 
+def _broadcast_client_count() -> None:
+    """Notify all connected clients of the current subscriber count."""
+    broadcast("clients", {"count": len(_subscribers)})
+
+
+@router.get("/clients")
+async def get_client_count():
+    return {"count": subscriber_count()}
+
+
+@router.post("/disconnect-others")
+async def disconnect_others(request: Request):
+    body = await request.json()
+    nonce = body.get("nonce", "")
+    broadcast("disconnect", {"nonce": nonce})
+    return {"ok": True}
+
+
 @router.get("/stream")
 async def event_stream(request: Request):
-    global _last_client_disconnected_at
+    global _last_client_disconnected_at, _ever_had_client
     client = request.client
     client_addr = f"{client.host}:{client.port}" if client else "unknown"
     queue: asyncio.Queue[str] = asyncio.Queue(maxsize=64)
     _subscribers.append(queue)
+    _ever_had_client = True
     logger.info("SSE client    connected from %s (total: %d)", client_addr, len(_subscribers))
+    _broadcast_client_count()
     for cb in _on_connect_callbacks:
         cb()
 
     async def cleanup_generator():
         global _last_client_disconnected_at
         try:
-            async for msg in _sse_generator(queue):
+            async for msg in _sse_generator(queue, request):
                 yield msg
         except (asyncio.CancelledError, GeneratorExit):
             pass
@@ -109,6 +181,7 @@ async def event_stream(request: Request):
             if len(_subscribers) == 0:
                 _last_client_disconnected_at = time.time()
             logger.info("SSE client disconnected from %s (total: %d)", client_addr, len(_subscribers))
+            _broadcast_client_count()
             for cb in _on_disconnect_callbacks:
                 cb()
 

@@ -62,6 +62,10 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Inject build info
+        run: |
+          printf 'BUILD_ORIGIN_REPO = "%s"\nBUILD_GITHUB_ACTIONS = True\nBUILD_GIT_SHA = "%s"\n' "${{ github.repository }}" "${GITHUB_SHA::8}" > src/rigbook/_build_info.py
+
       - name: Install dependencies
         run: |
           pip install pyinstaller

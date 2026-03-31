@@ -20,13 +20,30 @@ deps: _check-uv _check-node
     cd frontend && npm install
 
 # Run the server (builds frontend first)
-run *ARGS: _check-uv build
+run *ARGS: _check-uv build-frontend
     uv run rigbook {{ ARGS }}
 
-# Build the frontend
-build: _check-node
+# Build the frontend (skips if sources unchanged)
+build-frontend: _check-node
     @test -d frontend/node_modules || { echo "Error: frontend dependencies not installed. Run 'just deps' first."; exit 1; }
-    cd frontend && npm run build
+    @hash=$(find frontend/src frontend/index.html frontend/package.json frontend/vite.config.js -type f 2>/dev/null | sort | xargs cat | sha256sum | cut -d' ' -f1); \
+    if [ -f .build-frontend.stamp ] && [ "$(cat .build-frontend.stamp)" = "$hash" ]; then \
+        echo "frontend: up to date"; \
+    else \
+        cd frontend && npm run build && cd .. && echo "$hash" > .build-frontend.stamp; \
+    fi
+
+# Build a standalone binary with PyInstaller (skips if sources unchanged)
+build-binary: _check-uv build-frontend
+    @hash=$(find src/rigbook -type f -name '*.py' 2>/dev/null | sort | xargs cat | cat - rigbook.spec .build-frontend.stamp 2>/dev/null | sha256sum | cut -d' ' -f1); \
+    if [ -f .build-binary.stamp ] && [ "$(cat .build-binary.stamp)" = "$hash" ]; then \
+        echo "binary: up to date"; \
+    else \
+        uv sync --group build && uv run pyinstaller rigbook.spec && echo "$hash" > .build-binary.stamp; \
+    fi
+
+# Build everything (frontend + binary)
+build: build-frontend build-binary
 
 # Run frontend dev server with HMR
 dev: _check-node
@@ -70,3 +87,9 @@ config-show: _check-curl
 clean:
     rm -f ~/.local/rigbook/rigbook.db
     @echo "Database deleted."
+
+# Remove build artifacts and stamp files
+clean-build:
+    rm -rf dist/ build/
+    rm -f .build-*.stamp
+    @echo "Build artifacts cleaned."
