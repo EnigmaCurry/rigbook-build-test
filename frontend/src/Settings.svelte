@@ -113,6 +113,7 @@
   let global_hamalert_password = "";
   let global_hasHamalertPassword = false;
   let global_flrig_enabled = false;
+  let global_flrig_simulate = false;
   let global_flrig_host = "127.0.0.1";
   let global_flrig_port = "12345";
   let global_default_pick_mode = false;
@@ -1288,6 +1289,7 @@
           if (s.key === "hamalert_username") global_hamalert_username = s.value || "";
           if (s.key === "hamalert_password") global_hasHamalertPassword = !!s.value && s.value !== "";
           if (s.key === "flrig_enabled") global_flrig_enabled = s.value === "true";
+          if (s.key === "flrig_simulate") global_flrig_simulate = s.value === "true";
           if (s.key === "flrig_host") global_flrig_host = s.value || "127.0.0.1";
           if (s.key === "flrig_port") global_flrig_port = s.value || "12345";
           if (s.key === "default_pick_mode") global_default_pick_mode = s.value === "true";
@@ -2064,11 +2066,11 @@
   <section class="settings-section">
     <h3>Station Defaults</h3>
     <div class="setting-row">
-      <label for="global_my_callsign">My Callsign</label>
+      <label for="global_my_callsign">Default Callsign</label>
       <input id="global_my_callsign" type="text" bind:value={global_my_callsign} on:blur={() => saveGlobalSetting("my_callsign", global_my_callsign.trim().toUpperCase())} maxlength="10" autocomplete="off" style="text-transform: uppercase; max-width: 7rem" />
     </div>
     <div class="setting-row">
-      <label for="global_my_grid">My Grid Square</label>
+      <label for="global_my_grid">Default Grid Square</label>
       <input id="global_my_grid" type="text" bind:value={global_my_grid} on:blur={() => saveGlobalSetting("my_grid", global_my_grid.trim().toUpperCase())} autocomplete="off" style="text-transform: uppercase; max-width: 7rem" />
     </div>
     <div class="setting-row">
@@ -2078,9 +2080,9 @@
   </section>
 
   <section class="settings-section">
-    <h3>Credentials</h3>
+    <h3>Default Credentials</h3>
     <div class="setting-row">
-      <label>QRZ Password</label>
+      <label>Default QRZ Password</label>
       {#if global_hasQrzPassword}
         <span class="hint">Saved</span>
         <button class="check-now-btn" on:click={async () => { await saveGlobalSetting("qrz_password", ""); global_hasQrzPassword = false; global_qrz_password = ""; }}>Clear</button>
@@ -2090,11 +2092,11 @@
       {/if}
     </div>
     <div class="setting-row">
-      <label for="global_hamalert_username">HamAlert Username</label>
+      <label for="global_hamalert_username">Default HamAlert Username</label>
       <input id="global_hamalert_username" type="text" bind:value={global_hamalert_username} on:blur={() => saveGlobalSetting("hamalert_username", global_hamalert_username.trim())} autocomplete="off" style="max-width: 12rem" />
     </div>
     <div class="setting-row">
-      <label>HamAlert Password</label>
+      <label>Default HamAlert Password</label>
       {#if global_hasHamalertPassword}
         <span class="hint">Saved</span>
         <button class="check-now-btn" on:click={async () => { await saveGlobalSetting("hamalert_password", ""); global_hasHamalertPassword = false; global_hamalert_password = ""; }}>Clear</button>
@@ -2106,19 +2108,25 @@
   </section>
 
   <section class="settings-section">
-    <h3>Radio Connection</h3>
+    <h3>Default Radio Connection</h3>
     <div class="setting-row toggle-row">
       <label>
         <input type="checkbox" bind:checked={global_flrig_enabled} on:change={() => saveGlobalSetting("flrig_enabled", global_flrig_enabled ? "true" : "false")} />
-        Enable flrig
+        Default Enable flrig
+      </label>
+    </div>
+    <div class="setting-row toggle-row">
+      <label>
+        <input type="checkbox" bind:checked={global_flrig_simulate} on:change={() => saveGlobalSetting("flrig_simulate", global_flrig_simulate ? "true" : "false")} />
+        Default Simulate flrig
       </label>
     </div>
     <div class="setting-row">
-      <label for="global_flrig_host">flrig Host</label>
+      <label for="global_flrig_host">Default flrig Host</label>
       <input id="global_flrig_host" type="text" bind:value={global_flrig_host} on:blur={() => saveGlobalSetting("flrig_host", global_flrig_host.trim())} autocomplete="off" style="max-width: 12rem" />
     </div>
     <div class="setting-row">
-      <label for="global_flrig_port">flrig Port</label>
+      <label for="global_flrig_port">Default flrig Port</label>
       <input id="global_flrig_port" type="text" bind:value={global_flrig_port} on:blur={() => saveGlobalSetting("flrig_port", global_flrig_port.trim())} autocomplete="off" style="max-width: 6rem" />
     </div>
   </section>

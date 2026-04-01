@@ -31,6 +31,7 @@ GLOBAL_DEFAULTABLE_KEYS = {
     "flrig_host",
     "flrig_port",
     "flrig_enabled",
+    "flrig_simulate",
 }
 
 # Settings that live exclusively in __global.db (not per-logbook)
