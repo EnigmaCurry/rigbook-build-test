@@ -1,3 +1,7 @@
+## v0.2.5 — 2026-04-01
+
+- Fix macOS self-update opening an extra browser tab
+
 ## v0.2.4 — 2026-04-01
 
 - Test build to test macOS upgrade process
