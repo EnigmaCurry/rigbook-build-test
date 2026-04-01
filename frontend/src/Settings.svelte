@@ -2058,7 +2058,7 @@
   {/if}
 
   {#if activeTab === "global"}
-  <div class="tab-content">
+  <div class="tab-content" use:masonry>
   <p class="hint">Global defaults are used when a per-logbook setting is not set. Changes here apply across all logbooks.</p>
 
   <section class="settings-section">
