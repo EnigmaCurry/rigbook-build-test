@@ -625,12 +625,27 @@ def run() -> None:
         "RIGBOOK_NO_BROWSER", ""
     ).lower() in ("1", "true", "yes")
     if not no_browser:
-        url = f"http://{host}:{port}"
+        default_url = f"http://{host}:{port}"
 
         def open_browser():
+            import sqlite3
             import time
 
             time.sleep(1)
+            url = default_url
+            try:
+                from rigbook.db import META_DB_PATH
+
+                if META_DB_PATH.exists():
+                    conn = sqlite3.connect(str(META_DB_PATH))
+                    row = conn.execute(
+                        "SELECT value FROM settings WHERE key = 'browser_url_override'"
+                    ).fetchone()
+                    conn.close()
+                    if row and row[0]:
+                        url = row[0]
+            except Exception:
+                pass
             browser_name = _detect_browser_name()
             logger.info("Opening %s in %s", url, browser_name)
             webbrowser.open(url)

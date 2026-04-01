@@ -44,6 +44,7 @@ GLOBAL_ONLY_KEYS = {
     "auto_shutdown_on_disconnect",
     "welcome_acknowledged",
     "default_logbook_name",
+    "browser_url_override",
 }
 
 
