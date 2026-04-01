@@ -1335,6 +1335,9 @@
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ value }),
     });
+    // Re-fetch per-logbook settings so placeholders and fallbacks update
+    await fetchSettings();
+    dispatch("saved");
   }
 
   async function loadUpdateCheck() {
