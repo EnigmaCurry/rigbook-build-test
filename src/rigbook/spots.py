@@ -22,7 +22,13 @@ from dataclasses import dataclass, field
 import httpx
 from sqlalchemy import select
 
-from rigbook.db import Setting, async_session
+from rigbook.db import (
+    GLOBAL_DEFAULTABLE_KEYS,
+    MetaSetting,
+    Setting,
+    async_session,
+    meta_async_session,
+)
 
 logger = logging.getLogger("rigbook.spots")
 
@@ -896,6 +902,20 @@ async def _read_feed_settings() -> dict[str, str]:
                 settings[s.key] = s.value or ""
     except RuntimeError:
         pass
+    # Fall back to global defaults for missing keys
+    missing = set(keys) - settings.keys()
+    defaultable_missing = missing & GLOBAL_DEFAULTABLE_KEYS
+    if defaultable_missing:
+        try:
+            async with meta_async_session() as meta:
+                result = await meta.execute(
+                    select(MetaSetting).where(MetaSetting.key.in_(defaultable_missing))
+                )
+                for ms in result.scalars().all():
+                    if ms.value:
+                        settings[ms.key] = ms.value
+        except RuntimeError:
+            pass
     return settings
 
 

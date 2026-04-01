@@ -9,14 +9,38 @@ from pathlib import Path
 from typing import AsyncGenerator
 
 from fastapi import HTTPException
-from sqlalchemy import Float, String, DateTime, Integer, inspect, text
+from sqlalchemy import Float, String, DateTime, Integer, inspect, select, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 logger = logging.getLogger("rigbook")
 
 DB_DIR = Path.home() / ".local" / "rigbook"
+META_DB_PATH = DB_DIR / "__meta.db"
 _LAST_OPENED_FILE = DB_DIR / "last_opened.json"
+
+# Settings that can be set globally in __meta.db and overridden per-logbook
+GLOBAL_DEFAULTABLE_KEYS = {
+    "my_callsign",
+    "my_grid",
+    "default_rst",
+    "qrz_username",
+    "qrz_password",
+    "hamalert_username",
+    "hamalert_password",
+    "flrig_host",
+    "flrig_port",
+    "flrig_enabled",
+}
+
+# Settings that live exclusively in __meta.db (not per-logbook)
+GLOBAL_ONLY_KEYS = {
+    "update_check_enabled",
+    "default_pick_mode",
+    "default_port",
+    "default_shutdown_in_menu",
+    "update_skip_version",
+}
 
 
 def _read_last_opened() -> dict[str, float]:
@@ -167,6 +191,79 @@ class PotaPark(Base):
     fetched_at: Mapped[float] = mapped_column(Float, nullable=False)
 
 
+# --- Meta database models (shared __meta.db) ---
+
+
+class MetaBase(DeclarativeBase):
+    pass
+
+
+class MetaSetting(MetaBase):
+    __tablename__ = "settings"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    key: Mapped[str] = mapped_column(String, unique=True, nullable=False)
+    value: Mapped[str | None] = mapped_column(String, nullable=True)
+
+
+class MetaCache(MetaBase):
+    __tablename__ = "cache"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    namespace: Mapped[str] = mapped_column(String, nullable=False)
+    key: Mapped[str] = mapped_column(String, nullable=False)
+    value: Mapped[str | None] = mapped_column(String, nullable=True)
+    expires_at: Mapped[float] = mapped_column(nullable=False)
+
+
+class MetaPotaProgram(MetaBase):
+    __tablename__ = "pota_programs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    program_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    prefix: Mapped[str] = mapped_column(String, nullable=False)
+    name: Mapped[str] = mapped_column(String, nullable=False)
+    fetched_at: Mapped[float] = mapped_column(Float, nullable=False)
+
+
+class MetaPotaLocation(MetaBase):
+    __tablename__ = "pota_locations"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    location_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    program_prefix: Mapped[str] = mapped_column(String, nullable=False)
+    descriptor: Mapped[str] = mapped_column(String, nullable=False)
+    name: Mapped[str] = mapped_column(String, nullable=False)
+    latitude: Mapped[float | None] = mapped_column(Float, nullable=True)
+    longitude: Mapped[float | None] = mapped_column(Float, nullable=True)
+    fetched_at: Mapped[float] = mapped_column(Float, nullable=False)
+    parks_fetched_at: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+
+class MetaPotaPark(MetaBase):
+    __tablename__ = "pota_parks"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    reference: Mapped[str] = mapped_column(String, nullable=False)
+    name: Mapped[str] = mapped_column(String, nullable=False)
+    location_desc: Mapped[str] = mapped_column(String, nullable=False)
+    latitude: Mapped[float | None] = mapped_column(Float, nullable=True)
+    longitude: Mapped[float | None] = mapped_column(Float, nullable=True)
+    grid: Mapped[str | None] = mapped_column(String, nullable=True)
+    attempts: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    activations: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    qsos: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    fetched_at: Mapped[float] = mapped_column(Float, nullable=False)
+
+
+class MetaLastOpened(MetaBase):
+    __tablename__ = "last_opened"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String, unique=True, nullable=False)
+    opened_at: Mapped[float] = mapped_column(Float, nullable=False)
+
+
 class DatabaseLockError(Exception):
     """Raised when the database is already locked by another process."""
 
@@ -184,6 +281,9 @@ class DatabaseManager:
         self._lock_file = None
         self._host: str | None = None
         self._port: int | None = None
+        # Meta database (shared __meta.db)
+        self.meta_engine = None
+        self._meta_session_factory = None
 
     def configure(self, db_name: str | None = None, picker: bool = False) -> None:
         cli_name = db_name
@@ -340,7 +440,7 @@ class DatabaseManager:
                     "UPDATE contacts SET uuid = lower(hex(randomblob(4)) || '-' || hex(randomblob(2)) || '-4' || substr(hex(randomblob(2)),2) || '-' || substr('89ab', abs(random()) % 4 + 1, 1) || substr(hex(randomblob(2)),2) || '-' || hex(randomblob(6))) WHERE uuid IS NULL"
                 )
             )
-        _record_last_opened(db_path.stem)
+        await self.record_last_opened(db_path.stem)
         logger.info("Opened logbook: %s", db_path)
 
     async def close(self) -> None:
@@ -350,6 +450,79 @@ class DatabaseManager:
         self._session_factory = None
         self.db_path = None
         self._release_lock()
+
+    async def open_meta(self) -> None:
+        """Open the shared __meta.db with WAL mode for multi-process safety."""
+        if self.meta_engine is not None:
+            return
+        META_DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+        self.meta_engine = create_async_engine(f"sqlite+aiosqlite:///{META_DB_PATH}")
+        self._meta_session_factory = async_sessionmaker(
+            self.meta_engine, expire_on_commit=False
+        )
+        async with self.meta_engine.begin() as conn:
+            await conn.execute(text("PRAGMA journal_mode=WAL"))
+            await conn.execute(text("PRAGMA busy_timeout=5000"))
+            await conn.run_sync(MetaBase.metadata.create_all)
+            await conn.run_sync(_add_missing_columns_meta)
+        # Migrate last_opened.json if it exists
+        await self._migrate_last_opened()
+        logger.info("Opened meta database: %s", META_DB_PATH)
+
+    async def close_meta(self) -> None:
+        """Dispose of the meta database engine."""
+        if self.meta_engine:
+            await self.meta_engine.dispose()
+        self.meta_engine = None
+        self._meta_session_factory = None
+
+    async def _migrate_last_opened(self) -> None:
+        """One-time migration of last_opened.json into MetaLastOpened table."""
+        if not _LAST_OPENED_FILE.exists():
+            return
+        data = _read_last_opened()
+        if not data:
+            _LAST_OPENED_FILE.unlink(missing_ok=True)
+            return
+        async with self._meta_session_factory() as session:
+            for name, ts in data.items():
+                existing = (
+                    await session.execute(
+                        select(MetaLastOpened).where(MetaLastOpened.name == name)
+                    )
+                ).scalar_one_or_none()
+                if existing:
+                    if ts > existing.opened_at:
+                        existing.opened_at = ts
+                else:
+                    session.add(MetaLastOpened(name=name, opened_at=ts))
+            await session.commit()
+        _LAST_OPENED_FILE.unlink(missing_ok=True)
+        logger.info("Migrated last_opened.json to meta database")
+
+    async def record_last_opened(self, name: str) -> None:
+        """Record when a logbook was last opened (in meta DB)."""
+        if self._meta_session_factory is None:
+            return
+        async with self._meta_session_factory() as session:
+            existing = (
+                await session.execute(
+                    select(MetaLastOpened).where(MetaLastOpened.name == name)
+                )
+            ).scalar_one_or_none()
+            if existing:
+                existing.opened_at = time.time()
+            else:
+                session.add(MetaLastOpened(name=name, opened_at=time.time()))
+            await session.commit()
+
+    async def read_last_opened(self) -> dict[str, float]:
+        """Read last-opened timestamps from meta DB."""
+        if self._meta_session_factory is None:
+            return {}
+        async with self._meta_session_factory() as session:
+            result = await session.execute(select(MetaLastOpened))
+            return {row.name: row.opened_at for row in result.scalars().all()}
 
 
 db_manager = DatabaseManager()
@@ -361,8 +534,15 @@ def async_session():
     return db_manager._session_factory()
 
 
+def meta_async_session():
+    if db_manager._meta_session_factory is None:
+        raise RuntimeError("Meta database is not open")
+    return db_manager._meta_session_factory()
+
+
 async def init_db() -> None:
     DB_DIR.mkdir(parents=True, exist_ok=True)
+    await db_manager.open_meta()
     if db_manager.picker_mode:
         return
     db_path = db_manager.default_db_path
@@ -386,8 +566,29 @@ def _add_missing_columns(conn):
                 )
 
 
+def _add_missing_columns_meta(conn):
+    insp = inspect(conn)
+    for table_name, table in MetaBase.metadata.tables.items():
+        if not insp.has_table(table_name):
+            continue
+        existing = {c["name"] for c in insp.get_columns(table_name)}
+        for col in table.columns:
+            if col.name not in existing:
+                col_type = col.type.compile(conn.dialect)
+                conn.execute(
+                    text(f"ALTER TABLE {table_name} ADD COLUMN {col.name} {col_type}")
+                )
+
+
 async def get_session() -> AsyncGenerator[AsyncSession, None]:
     if db_manager._session_factory is None:
         raise HTTPException(status_code=503, detail="No logbook is currently open")
     async with db_manager._session_factory() as session:
+        yield session
+
+
+async def get_meta_session() -> AsyncGenerator[AsyncSession, None]:
+    if db_manager._meta_session_factory is None:
+        raise HTTPException(status_code=503, detail="Meta database is not open")
+    async with db_manager._meta_session_factory() as session:
         yield session

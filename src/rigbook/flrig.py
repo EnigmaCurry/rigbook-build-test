@@ -6,7 +6,13 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from rigbook.db import Setting, get_session
+from rigbook.db import (
+    GLOBAL_DEFAULTABLE_KEYS,
+    MetaSetting,
+    Setting,
+    get_meta_session,
+    get_session,
+)
 
 router = APIRouter(prefix="/api/flrig", tags=["flrig"])
 
@@ -29,17 +35,29 @@ async def is_simulate(session: AsyncSession) -> bool:
     return val == "true"
 
 
-async def get_flrig_url(session: AsyncSession = Depends(get_session)) -> str:
+async def get_flrig_url(
+    session: AsyncSession = Depends(get_session),
+    meta: AsyncSession = Depends(get_meta_session),
+) -> str:
     host = DEFAULT_FLRIG_HOST
     port = DEFAULT_FLRIG_PORT
-    result = await session.execute(
-        select(Setting).where(Setting.key.in_(["flrig_host", "flrig_port"]))
-    )
+    flrig_keys = {"flrig_host", "flrig_port"}
+    result = await session.execute(select(Setting).where(Setting.key.in_(flrig_keys)))
+    values: dict[str, str] = {}
     for s in result.scalars():
-        if s.key == "flrig_host" and s.value:
-            host = s.value
-        if s.key == "flrig_port" and s.value:
-            port = s.value
+        if s.value:
+            values[s.key] = s.value
+    # Fall back to global defaults for missing keys
+    missing = (flrig_keys - values.keys()) & GLOBAL_DEFAULTABLE_KEYS
+    if missing:
+        meta_result = await meta.execute(
+            select(MetaSetting).where(MetaSetting.key.in_(missing))
+        )
+        for ms in meta_result.scalars():
+            if ms.value:
+                values[ms.key] = ms.value
+    host = values.get("flrig_host", host)
+    port = values.get("flrig_port", port)
     return f"http://{host}:{port}"
 
 

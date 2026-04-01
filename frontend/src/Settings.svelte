@@ -103,7 +103,27 @@
   let hamalert_password = "";
   let hasHamalertPassword = false;
 
-  const validTabs = ["station", "features", "appearance", "updates", "system"];
+  // Global settings state
+  let global_my_callsign = "";
+  let global_my_grid = "";
+  let global_default_rst = "599";
+  let global_qrz_password = "";
+  let global_hasQrzPassword = false;
+  let global_hamalert_username = "";
+  let global_hamalert_password = "";
+  let global_hasHamalertPassword = false;
+  let global_flrig_enabled = false;
+  let global_flrig_host = "127.0.0.1";
+  let global_flrig_port = "12345";
+  let global_default_pick_mode = false;
+  let global_default_port = "8073";
+  let global_default_shutdown_in_menu = false;
+  let globalSettingsLoaded = false;
+
+  // Track which per-logbook settings are from global defaults
+  let settingSources = {};
+
+  const validTabs = ["station", "features", "appearance", "updates", "system", "global"];
   let activeTab = (initialTab && validTabs.includes(initialTab)) ? initialTab : "station";
   let settingsLoaded = false;
 
@@ -1002,7 +1022,7 @@
   }
 
   async function onUpdateCheckEnabledChange() {
-    await saveSetting("update_check_enabled", update_check_enabled ? "true" : "false");
+    await saveGlobalSetting("update_check_enabled", update_check_enabled ? "true" : "false");
     if (update_check_enabled) {
       await fetchUpdateCheck();
     } else {
@@ -1167,7 +1187,9 @@
       const res = await fetch("/api/settings/");
       if (res.ok) {
         const data = await res.json();
+        settingSources = {};
         for (const s of data) {
+          if (s.source) settingSources[s.key] = s.source;
           if (s.key === "my_callsign") my_callsign = s.value || "";
           if (s.key === "my_grid") my_grid = s.value || "";
           if (s.key === "default_rst") default_rst = s.value || "599";
@@ -1251,6 +1273,39 @@
       }
       settingsLoaded = true;
     } catch {}
+  }
+
+  async function fetchGlobalSettings() {
+    try {
+      const res = await fetch("/api/global-settings/");
+      if (res.ok) {
+        const data = await res.json();
+        for (const s of data) {
+          if (s.key === "my_callsign") global_my_callsign = s.value || "";
+          if (s.key === "my_grid") global_my_grid = s.value || "";
+          if (s.key === "default_rst") global_default_rst = s.value || "599";
+          if (s.key === "qrz_password") global_hasQrzPassword = !!s.value && s.value !== "";
+          if (s.key === "hamalert_username") global_hamalert_username = s.value || "";
+          if (s.key === "hamalert_password") global_hasHamalertPassword = !!s.value && s.value !== "";
+          if (s.key === "flrig_enabled") global_flrig_enabled = s.value === "true";
+          if (s.key === "flrig_host") global_flrig_host = s.value || "127.0.0.1";
+          if (s.key === "flrig_port") global_flrig_port = s.value || "12345";
+          if (s.key === "default_pick_mode") global_default_pick_mode = s.value === "true";
+          if (s.key === "default_port") global_default_port = s.value || "8073";
+          if (s.key === "default_shutdown_in_menu") global_default_shutdown_in_menu = s.value === "true";
+          if (s.key === "update_check_enabled") update_check_enabled = s.value !== "false";
+        }
+        globalSettingsLoaded = true;
+      }
+    } catch {}
+  }
+
+  async function saveGlobalSetting(key, value) {
+    await fetch(`/api/global-settings/${key}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ value }),
+    });
   }
 
   async function loadUpdateCheck() {
@@ -1397,6 +1452,7 @@
 
   onMount(() => {
     fetchSettings();
+    fetchGlobalSettings();
     fetchSpotStatus();
     fetchQsoCount();
     loadDbInfo();
@@ -1424,6 +1480,7 @@
     <button class="tab" class:active={activeTab === "appearance"} on:click={() => switchTab("appearance")}>Appearance</button>
     <button class="tab" class:active={activeTab === "updates"} on:click={() => switchTab("updates")}>Updates</button>
     <button class="tab" class:active={activeTab === "system"} on:click={() => switchTab("system")}>System</button>
+    <button class="tab" class:active={activeTab === "global"} on:click={() => switchTab("global")}>Global</button>
   </div>
 
   {#if activeTab === "station"}
@@ -1431,11 +1488,11 @@
   <section class="settings-section" data-section="station">
     <h3>Station</h3>
     <div class="setting-row">
-      <label for="my_callsign">My Callsign{#if needsSetup && !my_callsign.trim()} <span class="required">*</span>{/if}</label>
+      <label for="my_callsign">My Callsign{#if needsSetup && !my_callsign.trim()} <span class="required">*</span>{/if}{#if settingSources.my_callsign === "global"} <span class="global-hint">(global default)</span>{/if}</label>
       <input id="my_callsign" type="text" bind:value={my_callsign} on:input={onCallsignInput} on:keydown={onFieldKeydown} on:blur={() => onFieldBlur("my_callsign")} maxlength="10" autocomplete="off" style="text-transform: uppercase; max-width: 7rem" class:input-required={needsSetup && !my_callsign.trim()} />
     </div>
     <div class="setting-row">
-      <label for="my_grid">My Grid Square{#if needsSetup && !my_grid.trim()} <span class="required">*</span>{/if}</label>
+      <label for="my_grid">My Grid Square{#if needsSetup && !my_grid.trim()} <span class="required">*</span>{/if}{#if settingSources.my_grid === "global"} <span class="global-hint">(global default)</span>{/if}</label>
       <div class="grid-input-row">
         <input id="my_grid" type="text" bind:value={my_grid} on:input={onGridInput} on:keydown={onFieldKeydown} on:blur={() => onFieldBlur("my_grid")} autocomplete="off" style="text-transform: uppercase; max-width: 7rem" class:input-required={needsSetup && !my_grid.trim()} />
         <button type="button" class="grid-picker-btn" on:click={() => showGridPicker = !showGridPicker} title="Pick from map">🌍</button>
@@ -1999,6 +2056,94 @@
   {/if}
   </div>
   {/if}
+
+  {#if activeTab === "global"}
+  <div class="tab-content">
+  <p class="hint">Global defaults are used when a per-logbook setting is not set. Changes here apply across all logbooks.</p>
+
+  <section class="settings-section">
+    <h3>Station Defaults</h3>
+    <div class="setting-row">
+      <label for="global_my_callsign">My Callsign</label>
+      <input id="global_my_callsign" type="text" bind:value={global_my_callsign} on:blur={() => saveGlobalSetting("my_callsign", global_my_callsign.trim().toUpperCase())} maxlength="10" autocomplete="off" style="text-transform: uppercase; max-width: 7rem" />
+    </div>
+    <div class="setting-row">
+      <label for="global_my_grid">My Grid Square</label>
+      <input id="global_my_grid" type="text" bind:value={global_my_grid} on:blur={() => saveGlobalSetting("my_grid", global_my_grid.trim().toUpperCase())} autocomplete="off" style="text-transform: uppercase; max-width: 7rem" />
+    </div>
+    <div class="setting-row">
+      <label for="global_default_rst">Default RST</label>
+      <input id="global_default_rst" type="text" bind:value={global_default_rst} on:blur={() => saveGlobalSetting("default_rst", global_default_rst.trim())} maxlength="3" autocomplete="off" style="max-width: 4rem" />
+    </div>
+  </section>
+
+  <section class="settings-section">
+    <h3>Credentials</h3>
+    <div class="setting-row">
+      <label>QRZ Password</label>
+      {#if global_hasQrzPassword}
+        <span class="hint">Saved</span>
+        <button class="check-now-btn" on:click={async () => { await saveGlobalSetting("qrz_password", ""); global_hasQrzPassword = false; global_qrz_password = ""; }}>Clear</button>
+      {:else}
+        <input type="password" bind:value={global_qrz_password} placeholder="QRZ API key" autocomplete="off" style="max-width: 14rem" />
+        <button class="check-now-btn" on:click={async () => { if (global_qrz_password.trim()) { await saveGlobalSetting("qrz_password", global_qrz_password.trim()); global_hasQrzPassword = true; global_qrz_password = ""; } }}>Save</button>
+      {/if}
+    </div>
+    <div class="setting-row">
+      <label for="global_hamalert_username">HamAlert Username</label>
+      <input id="global_hamalert_username" type="text" bind:value={global_hamalert_username} on:blur={() => saveGlobalSetting("hamalert_username", global_hamalert_username.trim())} autocomplete="off" style="max-width: 12rem" />
+    </div>
+    <div class="setting-row">
+      <label>HamAlert Password</label>
+      {#if global_hasHamalertPassword}
+        <span class="hint">Saved</span>
+        <button class="check-now-btn" on:click={async () => { await saveGlobalSetting("hamalert_password", ""); global_hasHamalertPassword = false; global_hamalert_password = ""; }}>Clear</button>
+      {:else}
+        <input type="password" bind:value={global_hamalert_password} placeholder="HamAlert password" autocomplete="off" style="max-width: 14rem" />
+        <button class="check-now-btn" on:click={async () => { if (global_hamalert_password.trim()) { await saveGlobalSetting("hamalert_password", global_hamalert_password.trim()); global_hasHamalertPassword = true; global_hamalert_password = ""; } }}>Save</button>
+      {/if}
+    </div>
+  </section>
+
+  <section class="settings-section">
+    <h3>Radio Connection</h3>
+    <div class="setting-row toggle-row">
+      <label>
+        <input type="checkbox" bind:checked={global_flrig_enabled} on:change={() => saveGlobalSetting("flrig_enabled", global_flrig_enabled ? "true" : "false")} />
+        Enable flrig
+      </label>
+    </div>
+    <div class="setting-row">
+      <label for="global_flrig_host">flrig Host</label>
+      <input id="global_flrig_host" type="text" bind:value={global_flrig_host} on:blur={() => saveGlobalSetting("flrig_host", global_flrig_host.trim())} autocomplete="off" style="max-width: 12rem" />
+    </div>
+    <div class="setting-row">
+      <label for="global_flrig_port">flrig Port</label>
+      <input id="global_flrig_port" type="text" bind:value={global_flrig_port} on:blur={() => saveGlobalSetting("flrig_port", global_flrig_port.trim())} autocomplete="off" style="max-width: 6rem" />
+    </div>
+  </section>
+
+  <section class="settings-section">
+    <h3>Application Defaults</h3>
+    <div class="setting-row toggle-row">
+      <label>
+        <input type="checkbox" bind:checked={global_default_pick_mode} on:change={() => saveGlobalSetting("default_pick_mode", global_default_pick_mode ? "true" : "false")} />
+        Start in picker mode by default
+      </label>
+    </div>
+    <div class="setting-row">
+      <label for="global_default_port">Default Port</label>
+      <input id="global_default_port" type="text" bind:value={global_default_port} on:blur={() => saveGlobalSetting("default_port", global_default_port.trim())} autocomplete="off" style="max-width: 6rem" />
+    </div>
+    <div class="setting-row toggle-row">
+      <label>
+        <input type="checkbox" bind:checked={global_default_shutdown_in_menu} on:change={() => saveGlobalSetting("default_shutdown_in_menu", global_default_shutdown_in_menu ? "true" : "false")} />
+        Show shutdown in menu by default
+      </label>
+    </div>
+  </section>
+  </div>
+  {/if}
 </div>
 
 <style>
@@ -2310,6 +2455,13 @@
   .hint {
     font-size: 0.7rem;
     color: var(--text-dim);
+  }
+
+  .global-hint {
+    font-size: 0.65rem;
+    color: var(--accent);
+    opacity: 0.7;
+    font-style: italic;
   }
 
   .toggle-row {

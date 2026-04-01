@@ -9,7 +9,6 @@ from rigbook.db import (
     DB_DIR,
     DatabaseLockError,
     _lock_exclusive,
-    _read_last_opened,
     _unlock,
     db_manager,
 )
@@ -61,14 +60,18 @@ def _is_locked(db_path) -> bool:
 
 @router.get("/")
 async def list_logbooks():
-    last_opened = _read_last_opened()
+    last_opened = await db_manager.read_last_opened()
     dbs = []
     for f in DB_DIR.glob("*.db"):
-        dbs.append({
-            "name": f.stem,
-            "size_bytes": f.stat().st_size,
-            "locked": _is_locked(f),
-        })
+        if f.stem == "__meta":
+            continue
+        dbs.append(
+            {
+                "name": f.stem,
+                "size_bytes": f.stat().st_size,
+                "locked": _is_locked(f),
+            }
+        )
     dbs.sort(key=lambda d: last_opened.get(d["name"], 0), reverse=True)
     return dbs
 

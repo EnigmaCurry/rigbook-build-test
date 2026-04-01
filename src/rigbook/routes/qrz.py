@@ -9,7 +9,14 @@ from fastapi import APIRouter, Depends
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from rigbook.db import Cache, Setting, get_session
+from rigbook.db import (
+    GLOBAL_DEFAULTABLE_KEYS,
+    MetaCache,
+    MetaSetting,
+    Setting,
+    get_meta_session,
+    get_session,
+)
 
 logger = logging.getLogger("rigbook")
 
@@ -24,33 +31,39 @@ NAMESPACE = "qrz"
 _session_key: str | None = None
 
 
-async def _get_credentials(session: AsyncSession) -> tuple[str, str]:
-    """Return (username, api_key) from settings. Username defaults to my_callsign."""
-    result = await session.execute(
-        select(Setting).where(
-            Setting.key.in_(["qrz_password", "qrz_username", "my_callsign"])
-        )
-    )
-    api_key = ""
-    username = ""
-    callsign = ""
+async def _get_credentials(
+    session: AsyncSession, meta: AsyncSession
+) -> tuple[str, str]:
+    """Return (username, api_key) from settings with global-default fallback."""
+    cred_keys = {"qrz_password", "qrz_username", "my_callsign"}
+    result = await session.execute(select(Setting).where(Setting.key.in_(cred_keys)))
+    values: dict[str, str] = {}
     for s in result.scalars():
-        if s.key == "qrz_password" and s.value:
-            api_key = s.value
-        if s.key == "qrz_username" and s.value:
-            username = s.value
-        if s.key == "my_callsign" and s.value:
-            callsign = s.value
-    # Use explicit QRZ username, fall back to my_callsign
-    return username or callsign, api_key
+        if s.value:
+            values[s.key] = s.value
+
+    # Fall back to global defaults for missing keys
+    missing = cred_keys - values.keys()
+    defaultable_missing = missing & GLOBAL_DEFAULTABLE_KEYS
+    if defaultable_missing:
+        meta_result = await meta.execute(
+            select(MetaSetting).where(MetaSetting.key.in_(defaultable_missing))
+        )
+        for ms in meta_result.scalars():
+            if ms.value:
+                values[ms.key] = ms.value
+
+    api_key = values.get("qrz_password", "")
+    username = values.get("qrz_username", "") or values.get("my_callsign", "")
+    return username, api_key
 
 
 async def _get_cached(call: str, session: AsyncSession) -> dict | None:
     result = await session.execute(
-        select(Cache).where(
-            Cache.namespace == NAMESPACE,
-            Cache.key == call,
-            Cache.expires_at > time.time(),
+        select(MetaCache).where(
+            MetaCache.namespace == NAMESPACE,
+            MetaCache.key == call,
+            MetaCache.expires_at > time.time(),
         )
     )
     row = result.scalar_one_or_none()
@@ -63,10 +76,10 @@ async def _get_cached(call: str, session: AsyncSession) -> dict | None:
 async def _store_cached(call: str, data: dict, session: AsyncSession):
     # Remove old entry
     await session.execute(
-        delete(Cache).where(Cache.namespace == NAMESPACE, Cache.key == call)
+        delete(MetaCache).where(MetaCache.namespace == NAMESPACE, MetaCache.key == call)
     )
     session.add(
-        Cache(
+        MetaCache(
             namespace=NAMESPACE,
             key=call,
             value=json.dumps(data),
@@ -183,11 +196,15 @@ async def _fetch_callsign(callsign: str, username: str, api_key: str) -> dict | 
 
 
 @router.get("/lookup/{callsign}")
-async def qrz_lookup(callsign: str, session: AsyncSession = Depends(get_session)):
+async def qrz_lookup(
+    callsign: str,
+    session: AsyncSession = Depends(get_session),
+    meta: AsyncSession = Depends(get_meta_session),
+):
     call_upper = callsign.upper().strip()
 
     # Check DB cache (fast path, no lock needed)
-    cached = await _get_cached(call_upper, session)
+    cached = await _get_cached(call_upper, meta)
     if cached:
         return cached
 
@@ -196,11 +213,11 @@ async def qrz_lookup(callsign: str, session: AsyncSession = Depends(get_session)
         _call_locks[call_upper] = asyncio.Lock()
     async with _call_locks[call_upper]:
         # Re-check cache after acquiring lock
-        cached = await _get_cached(call_upper, session)
+        cached = await _get_cached(call_upper, meta)
         if cached:
             return cached
 
-        username, api_key = await _get_credentials(session)
+        username, api_key = await _get_credentials(session, meta)
         if not username:
             return {"error": "Set My Callsign in Settings (used as QRZ username)"}
         if not api_key:
@@ -212,17 +229,20 @@ async def qrz_lookup(callsign: str, session: AsyncSession = Depends(get_session)
             return {"error": "QRZ lookup failed"}
         if result == _NOT_FOUND:
             not_found = {"error": "Callsign not found"}
-            await _store_cached(call_upper, not_found, session)
+            await _store_cached(call_upper, not_found, meta)
             return not_found
 
-        await _store_cached(call_upper, result, session)
+        await _store_cached(call_upper, result, meta)
         return result
 
 
 @router.get("/status")
-async def qrz_status(session: AsyncSession = Depends(get_session)):
+async def qrz_status(
+    session: AsyncSession = Depends(get_session),
+    meta: AsyncSession = Depends(get_meta_session),
+):
     global _session_key
-    username, api_key = await _get_credentials(session)
+    username, api_key = await _get_credentials(session, meta)
     if not username:
         return {"ok": False, "error": "No callsign configured"}
     if not api_key:
@@ -236,20 +256,20 @@ async def qrz_status(session: AsyncSession = Depends(get_session)):
 
 
 @router.get("/cache/stats")
-async def cache_stats(session: AsyncSession = Depends(get_session)):
+async def cache_stats(meta: AsyncSession = Depends(get_meta_session)):
     """Return QRZ cache statistics for diagnostics."""
     from sqlalchemy import func
 
     now = time.time()
     # Total cached entries (including expired)
     total = (
-        await session.execute(select(func.count()).where(Cache.namespace == NAMESPACE))
+        await meta.execute(select(func.count()).where(MetaCache.namespace == NAMESPACE))
     ).scalar() or 0
     # Valid (non-expired) entries
     valid = (
-        await session.execute(
+        await meta.execute(
             select(func.count()).where(
-                Cache.namespace == NAMESPACE, Cache.expires_at > now
+                MetaCache.namespace == NAMESPACE, MetaCache.expires_at > now
             )
         )
     ).scalar() or 0
@@ -260,9 +280,9 @@ async def cache_stats(session: AsyncSession = Depends(get_session)):
     if valid > 0:
         rows = (
             (
-                await session.execute(
-                    select(Cache.value).where(
-                        Cache.namespace == NAMESPACE, Cache.expires_at > now
+                await meta.execute(
+                    select(MetaCache.value).where(
+                        MetaCache.namespace == NAMESPACE, MetaCache.expires_at > now
                     )
                 )
             )
@@ -288,7 +308,7 @@ async def cache_stats(session: AsyncSession = Depends(get_session)):
 
 
 @router.delete("/cache")
-async def clear_cache(session: AsyncSession = Depends(get_session)):
-    await session.execute(delete(Cache).where(Cache.namespace == NAMESPACE))
-    await session.commit()
+async def clear_cache(meta: AsyncSession = Depends(get_meta_session)):
+    await meta.execute(delete(MetaCache).where(MetaCache.namespace == NAMESPACE))
+    await meta.commit()
     return {"ok": True}
