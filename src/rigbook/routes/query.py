@@ -43,11 +43,9 @@ async def _check_enabled(session: AsyncSession) -> None:
 ALLOWED_TABLES = {"contacts", "notifications"}
 META_ALLOWED_TABLES = {
     "cache",
-    "settings",
     "pota_programs",
     "pota_locations",
     "pota_parks",
-    "last_opened",
 }
 MAX_ROWS = 10000
 QUERY_TIMEOUT_OPS = 1_000_000  # SQLite VM operations before abort
