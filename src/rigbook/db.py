@@ -43,6 +43,7 @@ GLOBAL_ONLY_KEYS = {
     "shutdown_in_menu",
     "auto_shutdown_on_disconnect",
     "welcome_acknowledged",
+    "default_logbook_name",
 }
 
 
@@ -567,6 +568,18 @@ async def init_db() -> None:
     await db_manager.open_global()
     if db_manager.picker_mode:
         return
+    # Check global DB for default logbook name if no CLI override
+    if not db_manager._db_override and db_manager._global_session_factory:
+        async with db_manager._global_session_factory() as gdb:
+            row = (
+                await gdb.execute(
+                    select(GlobalSetting).where(
+                        GlobalSetting.key == "default_logbook_name"
+                    )
+                )
+            ).scalar_one_or_none()
+            if row and row.value:
+                db_manager._db_override = row.value
     db_path = db_manager.default_db_path
     if not db_path.exists() and db_manager._db_override:
         db_manager.pending_name = db_path.stem

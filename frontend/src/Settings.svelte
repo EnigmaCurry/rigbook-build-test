@@ -120,6 +120,7 @@
   let global_flrig_port = "12345";
   let global_default_pick_mode = false;
   let global_default_port = "8073";
+  let global_default_logbook_name = "rigbook";
   let globalSettingsLoaded = false;
 
   // Track which per-logbook settings are from global defaults
@@ -1326,6 +1327,7 @@
           if (s.key === "flrig_port") global_flrig_port = s.value || "12345";
           if (s.key === "default_pick_mode") global_default_pick_mode = s.value === "true";
           if (s.key === "default_port") global_default_port = s.value || "8073";
+          if (s.key === "default_logbook_name") global_default_logbook_name = s.value || "rigbook";
           if (s.key === "shutdown_in_menu") shutdownInMenu = s.value === "true";
           if (s.key === "auto_shutdown_on_disconnect") autoShutdownOnDisconnect = s.value === "true";
           if (s.key === "update_check_enabled") update_check_enabled = s.value !== "false";
@@ -2164,6 +2166,11 @@
         <input type="checkbox" bind:checked={global_default_pick_mode} on:change={() => saveGlobalSetting("default_pick_mode", global_default_pick_mode ? "true" : "false")} />
         Start in picker mode by default
       </label>
+    </div>
+    <div class="setting-row">
+      <label for="global_default_logbook">Default Logbook Name</label>
+      <input id="global_default_logbook" type="text" bind:value={global_default_logbook_name} on:keydown={e => { if (/^[_]{2}/.test(global_default_logbook_name) || (!/[a-zA-Z0-9_-]/.test(e.key) && e.key.length === 1)) e.preventDefault(); }} on:blur={() => { const v = global_default_logbook_name.trim(); if (v && /^[a-zA-Z0-9_-]+$/.test(v) && !v.startsWith("__")) saveGlobalSetting("default_logbook_name", v); }} autocomplete="off" style="max-width: 14rem" />
+      <span class="hint">Logbook opened when running rigbook without arguments</span>
     </div>
     <div class="setting-row">
       <label for="global_default_port">Default Port</label>

@@ -28,11 +28,10 @@
       await saveGlobal("my_grid", grid.trim().toUpperCase());
       await saveGlobal("qrz_password", qrzKey.trim());
 
-      // Mark welcome as acknowledged
-      await saveGlobal("welcome_acknowledged", "true");
-
-      // Create/open the first logbook
+      // Save logbook name as default and mark welcome acknowledged
       const name = logbookName.trim() || "rigbook";
+      await saveGlobal("default_logbook_name", name);
+      await saveGlobal("welcome_acknowledged", "true");
       const res = await fetch("/api/logbooks/open", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -77,6 +76,14 @@
       e.preventDefault();
     }
   }
+
+  function validateName(name) {
+    if (name.startsWith("__")) return "Name must not start with '__'";
+    if (name && !/^[a-zA-Z0-9_-]+$/.test(name)) return "Letters, numbers, hyphens, underscores only";
+    return "";
+  }
+
+  $: nameError = validateName(logbookName.trim());
 </script>
 
 <div class="welcome-overlay">
@@ -103,7 +110,11 @@
       <div class="field">
         <label for="w-logbook">First Logbook Name</label>
         <input id="w-logbook" type="text" bind:value={logbookName} autocomplete="nope" on:keydown={onNameKeydown} placeholder="rigbook" style="max-width: 14rem" />
-        <span class="hint">Letters, numbers, hyphens, underscores only</span>
+        {#if nameError}
+          <span class="field-error">{nameError}</span>
+        {:else}
+          <span class="hint">Letters, numbers, hyphens, underscores only</span>
+        {/if}
       </div>
     </div>
 
@@ -113,7 +124,7 @@
 
     <div class="actions">
       <button class="skip-link" on:click={skip} disabled={saving}>Skip</button>
-      <button class="continue-btn" on:click={finish} disabled={saving}>
+      <button class="continue-btn" on:click={finish} disabled={saving || !!nameError}>
         {saving ? "Setting up..." : "Continue"}
       </button>
     </div>
@@ -188,9 +199,11 @@
     color: var(--text-dim, #888);
   }
 
-  .error {
+  .error, .field-error {
     color: #ff4444;
-    font-size: 0.8rem;
+    font-size: 0.7rem;
+  }
+  .error {
     margin: 0.75rem 0 0;
   }
 

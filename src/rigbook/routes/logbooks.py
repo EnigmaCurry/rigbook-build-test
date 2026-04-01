@@ -31,6 +31,11 @@ def _validate_name(name: str) -> None:
             status_code=400,
             detail="Name must contain only letters, digits, hyphens, and underscores",
         )
+    if name.startswith("__"):
+        raise HTTPException(
+            status_code=400,
+            detail="Name must not start with '__' (reserved for system databases)",
+        )
 
 
 @router.get("/mode")

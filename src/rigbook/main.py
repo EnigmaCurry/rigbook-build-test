@@ -409,6 +409,9 @@ def run() -> None:
     args = parser.parse_args()
 
     global NO_SHUTDOWN
+    if args.name and args.name.startswith("__"):
+        print("Error: logbook name must not start with '__' (reserved for system databases)")
+        sys.exit(1)
     db_manager.configure(db_name=args.name, picker=args.pick)
     if args.no_shutdown:
         NO_SHUTDOWN = True
