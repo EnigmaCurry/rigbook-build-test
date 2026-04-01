@@ -66,7 +66,7 @@ allowed-tools: Bash(git *, gh *, uv *, cd *), Read, Edit, Write, AskUserQuestion
    git commit -m "Bump version to v{NEW_VERSION} and add changelog"
    git tag v{NEW_VERSION}
    git push
-   git push --tags
+   git push origin v{NEW_VERSION}
    ```
 
 10. **Watch the GitHub Actions build in the background:**
