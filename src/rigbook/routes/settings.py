@@ -54,15 +54,18 @@ async def list_settings(
 ):
     result = await session.execute(select(Setting))
     logbook_settings = result.scalars().all()
-    logbook_keys = {s.key for s in logbook_settings}
-    responses = [_redact(s, "logbook") for s in logbook_settings]
+    # Track which defaultable keys have a non-blank logbook value
+    logbook_filled = {
+        s.key for s in logbook_settings if s.key not in GLOBAL_DEFAULTABLE_KEYS or s.value
+    }
+    responses = [_redact(s, "logbook") for s in logbook_settings if s.key in logbook_filled]
 
-    # Fill in global defaults for any missing defaultable keys
+    # Fill in global defaults for defaultable keys that are missing or blank
     meta_result = await gdb.execute(
         select(GlobalSetting).where(GlobalSetting.key.in_(GLOBAL_DEFAULTABLE_KEYS))
     )
     for ms in meta_result.scalars().all():
-        if ms.key not in logbook_keys and ms.value:
+        if ms.key not in logbook_filled and ms.value:
             responses.append(
                 _redact(Setting(key=ms.key, value=ms.value), source="global")
             )
