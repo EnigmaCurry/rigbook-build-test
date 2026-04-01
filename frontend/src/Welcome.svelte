@@ -39,7 +39,7 @@
     try {
       // Save any filled-in global defaults
       await saveGlobal("my_callsign", callsign.trim().toUpperCase());
-      await saveGlobal("my_grid", grid.trim().toUpperCase());
+      await saveGlobal("my_grid", normalizeGrid(grid.trim()));
       await saveGlobal("qrz_password", qrzKey.trim());
 
       // Save logbook name as default and mark welcome acknowledged
@@ -85,6 +85,15 @@
     }
   }
 
+  function normalizeGrid(g) {
+    g = g.replace(/[^A-Za-z0-9]/g, "");
+    if (g.length < 2) return g.toUpperCase();
+    let out = g.slice(0, 2).toUpperCase() + g.slice(2, 4);
+    if (g.length > 4) out += g.slice(4, 6).toLowerCase();
+    if (g.length > 6) out += g.slice(6).toUpperCase();
+    return out;
+  }
+
   function onNameKeydown(e) {
     if (!/[a-zA-Z0-9_-]/.test(e.key) && e.key.length === 1) {
       e.preventDefault();
@@ -113,7 +122,7 @@
 
       <div class="field">
         <label for="w-grid">My Grid Square</label>
-        <input id="w-grid" type="text" bind:value={grid} autocomplete="nope" data-1p-ignore data-lpignore="true" style="text-transform: uppercase; max-width: 10rem" placeholder="e.g. FN31pr" />
+        <input id="w-grid" type="text" bind:value={grid} autocomplete="nope" data-1p-ignore data-lpignore="true" style="max-width: 10rem" placeholder="e.g. AB12xy" />
       </div>
 
       <div class="field">

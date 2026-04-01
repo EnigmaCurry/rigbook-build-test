@@ -793,6 +793,16 @@
   $: stripCallsign = () => { my_callsign = my_callsign.replace(/\s/g, ""); };
   $: stripGrid = () => { my_grid = my_grid.replace(/[^A-Za-z0-9]/g, ""); };
 
+  function normalizeGrid(g) {
+    // Maidenhead: AA00aa — first 2 upper, 2 digits, last 2 lower
+    g = g.replace(/[^A-Za-z0-9]/g, "");
+    if (g.length < 2) return g.toUpperCase();
+    let out = g.slice(0, 2).toUpperCase() + g.slice(2, 4);
+    if (g.length > 4) out += g.slice(4, 6).toLowerCase();
+    if (g.length > 6) out += g.slice(6).toUpperCase(); // extended grids
+    return out;
+  }
+
   // --- Auto-save helpers ---
 
   async function saveSetting(key, value) {
@@ -944,7 +954,8 @@
       dispatch("saved");
     },
     my_grid: async () => {
-      await saveSetting("my_grid", my_grid.trim().toUpperCase());
+      my_grid = normalizeGrid(my_grid.trim());
+      await saveSetting("my_grid", my_grid);
       dispatch("saved");
     },
     default_rst: async () => {
@@ -1534,7 +1545,7 @@
     <div class="setting-row">
       <label for="my_grid">My Grid Square{#if needsSetup && !my_grid.trim()} <span class="required">*</span>{/if}{#if settingSources.my_grid === "global"} <span class="global-hint">(global default)</span>{/if}</label>
       <div class="grid-input-row">
-        <input id="my_grid" type="text" bind:value={my_grid} on:input={onGridInput} on:keydown={onFieldKeydown} on:blur={() => onFieldBlur("my_grid")} autocomplete="off" style="text-transform: uppercase; max-width: 7rem" class:input-required={needsSetup && !my_grid.trim()} placeholder={globalPlaceholders.my_grid || ""} />
+        <input id="my_grid" type="text" bind:value={my_grid} on:input={onGridInput} on:keydown={onFieldKeydown} on:blur={() => onFieldBlur("my_grid")} autocomplete="off" style="max-width: 7rem" class:input-required={needsSetup && !my_grid.trim()} placeholder={globalPlaceholders.my_grid || ""} />
         <button type="button" class="grid-picker-btn" on:click={() => showGridPicker = !showGridPicker} title="Pick from map">🌍</button>
       </div>
       {#if showGridPicker}
@@ -2094,7 +2105,7 @@
     </div>
     <div class="setting-row">
       <label for="global_my_grid">Default Grid Square</label>
-      <input id="global_my_grid" type="text" bind:value={global_my_grid} on:blur={() => saveGlobalSetting("my_grid", global_my_grid.trim().toUpperCase())} autocomplete="off" style="text-transform: uppercase; max-width: 7rem" />
+      <input id="global_my_grid" type="text" bind:value={global_my_grid} on:blur={() => { global_my_grid = normalizeGrid(global_my_grid.trim()); saveGlobalSetting("my_grid", global_my_grid); }} autocomplete="off" style="max-width: 7rem" />
     </div>
     <div class="setting-row">
       <label for="global_default_rst">Default RST</label>
