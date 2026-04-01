@@ -13,7 +13,7 @@ from rigbook.db import (
     GlobalPotaLocation,
     GlobalPotaPark,
     GlobalPotaProgram,
-    Setting,
+    GlobalSetting,
     get_global_session,
     get_session,
     global_async_session,
@@ -141,7 +141,6 @@ async def _fetch_and_cache_programs(session: AsyncSession):
 
 @router.get("/programs")
 async def get_programs(
-    session: AsyncSession = Depends(get_session),
     gdb: AsyncSession = Depends(get_global_session),
 ):
     row = (await gdb.execute(select(func.min(GlobalPotaProgram.fetched_at)))).scalar()
@@ -175,8 +174,8 @@ async def get_programs(
             prefix_loc_count.get(loc.program_prefix, 0) + 1
         )
 
-    # Get selected programs (per-logbook setting)
-    selected = await _get_selected(session)
+    # Get selected programs (global setting)
+    selected = await _get_selected(gdb)
 
     return [
         {
@@ -190,9 +189,11 @@ async def get_programs(
     ]
 
 
-async def _get_selected(session: AsyncSession) -> set[str]:
+async def _get_selected(gdb: AsyncSession) -> set[str]:
     row = (
-        await session.execute(select(Setting.value).where(Setting.key == SELECTED_KEY))
+        await gdb.execute(
+            select(GlobalSetting.value).where(GlobalSetting.key == SELECTED_KEY)
+        )
     ).scalar()
     if row:
         return set(json.loads(row))
@@ -237,27 +238,28 @@ async def get_locations(prefix: str, gdb: AsyncSession = Depends(get_global_sess
 
 @router.put("/selected-programs")
 async def set_selected_programs(
-    body: dict, session: AsyncSession = Depends(get_session)
+    body: dict, gdb: AsyncSession = Depends(get_global_session)
 ):
     prefixes = body.get("prefixes", [])
     existing = (
-        await session.execute(select(Setting).where(Setting.key == SELECTED_KEY))
+        await gdb.execute(
+            select(GlobalSetting).where(GlobalSetting.key == SELECTED_KEY)
+        )
     ).scalar_one_or_none()
     if existing:
         existing.value = json.dumps(prefixes)
     else:
-        session.add(Setting(key=SELECTED_KEY, value=json.dumps(prefixes)))
-    await session.commit()
+        gdb.add(GlobalSetting(key=SELECTED_KEY, value=json.dumps(prefixes)))
+    await gdb.commit()
     return {"status": "ok"}
 
 
 @router.post("/fetch-parks")
 async def fetch_parks_for_selected(
-    session: AsyncSession = Depends(get_session),
     gdb: AsyncSession = Depends(get_global_session),
 ):
     """Stream progress as SSE while fetching parks for all selected programs."""
-    selected = await _get_selected(session)
+    selected = await _get_selected(gdb)
     if not selected:
         return {"status": "none_selected"}
 
