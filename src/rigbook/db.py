@@ -568,6 +568,22 @@ async def resolve_setting(
 async def init_db() -> None:
     DB_DIR.mkdir(parents=True, exist_ok=True)
     await db_manager.open_global()
+    # Check global default_pick_mode if no CLI override or --pick flag
+    if (
+        not db_manager.picker_mode
+        and not db_manager._db_override
+        and db_manager._global_session_factory
+    ):
+        async with db_manager._global_session_factory() as gdb:
+            row = (
+                await gdb.execute(
+                    select(GlobalSetting).where(
+                        GlobalSetting.key == "default_pick_mode"
+                    )
+                )
+            ).scalar_one_or_none()
+            if row and row.value == "true":
+                db_manager.picker_mode = True
     if db_manager.picker_mode:
         return
     # Check global DB for default logbook name if no CLI override
