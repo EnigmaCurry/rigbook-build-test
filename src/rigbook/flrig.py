@@ -8,9 +8,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from rigbook.db import (
     GLOBAL_DEFAULTABLE_KEYS,
-    MetaSetting,
+    GlobalSetting,
     Setting,
-    get_meta_session,
+    get_global_session,
     get_session,
 )
 
@@ -37,7 +37,7 @@ async def is_simulate(session: AsyncSession) -> bool:
 
 async def get_flrig_url(
     session: AsyncSession = Depends(get_session),
-    meta: AsyncSession = Depends(get_meta_session),
+    gdb: AsyncSession = Depends(get_global_session),
 ) -> str:
     host = DEFAULT_FLRIG_HOST
     port = DEFAULT_FLRIG_PORT
@@ -50,10 +50,10 @@ async def get_flrig_url(
     # Fall back to global defaults for missing keys
     missing = (flrig_keys - values.keys()) & GLOBAL_DEFAULTABLE_KEYS
     if missing:
-        meta_result = await meta.execute(
-            select(MetaSetting).where(MetaSetting.key.in_(missing))
+        global_result = await gdb.execute(
+            select(GlobalSetting).where(GlobalSetting.key.in_(missing))
         )
-        for ms in meta_result.scalars():
+        for ms in global_result.scalars():
             if ms.value:
                 values[ms.key] = ms.value
     host = values.get("flrig_host", host)

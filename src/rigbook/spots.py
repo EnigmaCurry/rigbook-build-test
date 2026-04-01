@@ -24,10 +24,10 @@ from sqlalchemy import select
 
 from rigbook.db import (
     GLOBAL_DEFAULTABLE_KEYS,
-    MetaSetting,
+    GlobalSetting,
     Setting,
     async_session,
-    meta_async_session,
+    global_async_session,
 )
 
 logger = logging.getLogger("rigbook.spots")
@@ -907,9 +907,9 @@ async def _read_feed_settings() -> dict[str, str]:
     defaultable_missing = missing & GLOBAL_DEFAULTABLE_KEYS
     if defaultable_missing:
         try:
-            async with meta_async_session() as meta:
-                result = await meta.execute(
-                    select(MetaSetting).where(MetaSetting.key.in_(defaultable_missing))
+            async with global_async_session() as gdb:
+                result = await gdb.execute(
+                    select(GlobalSetting).where(GlobalSetting.key.in_(defaultable_missing))
                 )
                 for ms in result.scalars().all():
                     if ms.value:

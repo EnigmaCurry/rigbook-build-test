@@ -10,10 +10,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from rigbook.db import (
     GLOBAL_DEFAULTABLE_KEYS,
-    MetaSetting,
+    GlobalSetting,
     Setting,
     db_manager,
-    get_meta_session,
+    get_global_session,
     get_session,
 )
 
@@ -50,7 +50,7 @@ def _redact(setting: Setting, source: str = "logbook") -> SettingResponse:
 @router.get("/", response_model=list[SettingResponse])
 async def list_settings(
     session: AsyncSession = Depends(get_session),
-    meta: AsyncSession = Depends(get_meta_session),
+    gdb: AsyncSession = Depends(get_global_session),
 ):
     result = await session.execute(select(Setting))
     logbook_settings = result.scalars().all()
@@ -58,8 +58,8 @@ async def list_settings(
     responses = [_redact(s, "logbook") for s in logbook_settings]
 
     # Fill in global defaults for any missing defaultable keys
-    meta_result = await meta.execute(
-        select(MetaSetting).where(MetaSetting.key.in_(GLOBAL_DEFAULTABLE_KEYS))
+    meta_result = await gdb.execute(
+        select(GlobalSetting).where(GlobalSetting.key.in_(GLOBAL_DEFAULTABLE_KEYS))
     )
     for ms in meta_result.scalars().all():
         if ms.key not in logbook_keys and ms.value:
@@ -74,7 +74,7 @@ async def list_settings(
 async def get_setting(
     key: str,
     session: AsyncSession = Depends(get_session),
-    meta: AsyncSession = Depends(get_meta_session),
+    gdb: AsyncSession = Depends(get_global_session),
 ):
     result = await session.execute(select(Setting).where(Setting.key == key))
     setting = result.scalar_one_or_none()
@@ -82,8 +82,8 @@ async def get_setting(
         return _redact(setting, "logbook")
     # Fall back to global default if applicable
     if key in GLOBAL_DEFAULTABLE_KEYS:
-        meta_result = await meta.execute(
-            select(MetaSetting).where(MetaSetting.key == key)
+        meta_result = await gdb.execute(
+            select(GlobalSetting).where(GlobalSetting.key == key)
         )
         meta_setting = meta_result.scalar_one_or_none()
         if meta_setting and meta_setting.value:

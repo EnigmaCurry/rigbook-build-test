@@ -191,14 +191,14 @@ class PotaPark(Base):
     fetched_at: Mapped[float] = mapped_column(Float, nullable=False)
 
 
-# --- Meta database models (shared __global.db) ---
+# --- Global database models (shared __global.db) ---
 
 
-class MetaBase(DeclarativeBase):
+class GlobalBase(DeclarativeBase):
     pass
 
 
-class MetaSetting(MetaBase):
+class GlobalSetting(GlobalBase):
     __tablename__ = "settings"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -206,7 +206,7 @@ class MetaSetting(MetaBase):
     value: Mapped[str | None] = mapped_column(String, nullable=True)
 
 
-class MetaCache(MetaBase):
+class GlobalCache(GlobalBase):
     __tablename__ = "cache"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -216,7 +216,7 @@ class MetaCache(MetaBase):
     expires_at: Mapped[float] = mapped_column(nullable=False)
 
 
-class MetaPotaProgram(MetaBase):
+class GlobalPotaProgram(GlobalBase):
     __tablename__ = "pota_programs"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -226,7 +226,7 @@ class MetaPotaProgram(MetaBase):
     fetched_at: Mapped[float] = mapped_column(Float, nullable=False)
 
 
-class MetaPotaLocation(MetaBase):
+class GlobalPotaLocation(GlobalBase):
     __tablename__ = "pota_locations"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -240,7 +240,7 @@ class MetaPotaLocation(MetaBase):
     parks_fetched_at: Mapped[float | None] = mapped_column(Float, nullable=True)
 
 
-class MetaPotaPark(MetaBase):
+class GlobalPotaPark(GlobalBase):
     __tablename__ = "pota_parks"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -256,7 +256,7 @@ class MetaPotaPark(MetaBase):
     fetched_at: Mapped[float] = mapped_column(Float, nullable=False)
 
 
-class MetaLastOpened(MetaBase):
+class GlobalLastOpened(GlobalBase):
     __tablename__ = "last_opened"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -281,9 +281,9 @@ class DatabaseManager:
         self._lock_file = None
         self._host: str | None = None
         self._port: int | None = None
-        # Meta database (shared __global.db)
-        self.meta_engine = None
-        self._meta_session_factory = None
+        # Global database (shared __global.db)
+        self.global_engine = None
+        self._global_session_factory = None
 
     def configure(self, db_name: str | None = None, picker: bool = False) -> None:
         cli_name = db_name
@@ -451,77 +451,77 @@ class DatabaseManager:
         self.db_path = None
         self._release_lock()
 
-    async def open_meta(self) -> None:
+    async def open_global(self) -> None:
         """Open the shared __global.db with WAL mode for multi-process safety."""
-        if self.meta_engine is not None:
+        if self.global_engine is not None:
             return
         META_DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-        self.meta_engine = create_async_engine(f"sqlite+aiosqlite:///{META_DB_PATH}")
-        self._meta_session_factory = async_sessionmaker(
-            self.meta_engine, expire_on_commit=False
+        self.global_engine = create_async_engine(f"sqlite+aiosqlite:///{META_DB_PATH}")
+        self._global_session_factory = async_sessionmaker(
+            self.global_engine, expire_on_commit=False
         )
-        async with self.meta_engine.begin() as conn:
+        async with self.global_engine.begin() as conn:
             await conn.execute(text("PRAGMA journal_mode=WAL"))
             await conn.execute(text("PRAGMA busy_timeout=5000"))
-            await conn.run_sync(MetaBase.metadata.create_all)
-            await conn.run_sync(_add_missing_columns_meta)
+            await conn.run_sync(GlobalBase.metadata.create_all)
+            await conn.run_sync(_add_missing_columns_global)
         # Migrate last_opened.json if it exists
         await self._migrate_last_opened()
-        logger.info("Opened meta database: %s", META_DB_PATH)
+        logger.info("Opened global database: %s", META_DB_PATH)
 
-    async def close_meta(self) -> None:
-        """Dispose of the meta database engine."""
-        if self.meta_engine:
-            await self.meta_engine.dispose()
-        self.meta_engine = None
-        self._meta_session_factory = None
+    async def close_global(self) -> None:
+        """Dispose of the global database engine."""
+        if self.global_engine:
+            await self.global_engine.dispose()
+        self.global_engine = None
+        self._global_session_factory = None
 
     async def _migrate_last_opened(self) -> None:
-        """One-time migration of last_opened.json into MetaLastOpened table."""
+        """One-time migration of last_opened.json into GlobalLastOpened table."""
         if not _LAST_OPENED_FILE.exists():
             return
         data = _read_last_opened()
         if not data:
             _LAST_OPENED_FILE.unlink(missing_ok=True)
             return
-        async with self._meta_session_factory() as session:
+        async with self._global_session_factory() as session:
             for name, ts in data.items():
                 existing = (
                     await session.execute(
-                        select(MetaLastOpened).where(MetaLastOpened.name == name)
+                        select(GlobalLastOpened).where(GlobalLastOpened.name == name)
                     )
                 ).scalar_one_or_none()
                 if existing:
                     if ts > existing.opened_at:
                         existing.opened_at = ts
                 else:
-                    session.add(MetaLastOpened(name=name, opened_at=ts))
+                    session.add(GlobalLastOpened(name=name, opened_at=ts))
             await session.commit()
         _LAST_OPENED_FILE.unlink(missing_ok=True)
-        logger.info("Migrated last_opened.json to meta database")
+        logger.info("Migrated last_opened.json to global database")
 
     async def record_last_opened(self, name: str) -> None:
-        """Record when a logbook was last opened (in meta DB)."""
-        if self._meta_session_factory is None:
+        """Record when a logbook was last opened (in global DB)."""
+        if self._global_session_factory is None:
             return
-        async with self._meta_session_factory() as session:
+        async with self._global_session_factory() as session:
             existing = (
                 await session.execute(
-                    select(MetaLastOpened).where(MetaLastOpened.name == name)
+                    select(GlobalLastOpened).where(GlobalLastOpened.name == name)
                 )
             ).scalar_one_or_none()
             if existing:
                 existing.opened_at = time.time()
             else:
-                session.add(MetaLastOpened(name=name, opened_at=time.time()))
+                session.add(GlobalLastOpened(name=name, opened_at=time.time()))
             await session.commit()
 
     async def read_last_opened(self) -> dict[str, float]:
-        """Read last-opened timestamps from meta DB."""
-        if self._meta_session_factory is None:
+        """Read last-opened timestamps from global DB."""
+        if self._global_session_factory is None:
             return {}
-        async with self._meta_session_factory() as session:
-            result = await session.execute(select(MetaLastOpened))
+        async with self._global_session_factory() as session:
+            result = await session.execute(select(GlobalLastOpened))
             return {row.name: row.opened_at for row in result.scalars().all()}
 
 
@@ -534,15 +534,15 @@ def async_session():
     return db_manager._session_factory()
 
 
-def meta_async_session():
-    if db_manager._meta_session_factory is None:
-        raise RuntimeError("Meta database is not open")
-    return db_manager._meta_session_factory()
+def global_async_session():
+    if db_manager._global_session_factory is None:
+        raise RuntimeError("Global database is not open")
+    return db_manager._global_session_factory()
 
 
 async def init_db() -> None:
     DB_DIR.mkdir(parents=True, exist_ok=True)
-    await db_manager.open_meta()
+    await db_manager.open_global()
     if db_manager.picker_mode:
         return
     db_path = db_manager.default_db_path
@@ -566,9 +566,9 @@ def _add_missing_columns(conn):
                 )
 
 
-def _add_missing_columns_meta(conn):
+def _add_missing_columns_global(conn):
     insp = inspect(conn)
-    for table_name, table in MetaBase.metadata.tables.items():
+    for table_name, table in GlobalBase.metadata.tables.items():
         if not insp.has_table(table_name):
             continue
         existing = {c["name"] for c in insp.get_columns(table_name)}
@@ -587,8 +587,8 @@ async def get_session() -> AsyncGenerator[AsyncSession, None]:
         yield session
 
 
-async def get_meta_session() -> AsyncGenerator[AsyncSession, None]:
-    if db_manager._meta_session_factory is None:
-        raise HTTPException(status_code=503, detail="Meta database is not open")
-    async with db_manager._meta_session_factory() as session:
+async def get_global_session() -> AsyncGenerator[AsyncSession, None]:
+    if db_manager._global_session_factory is None:
+        raise HTTPException(status_code=503, detail="Global database is not open")
+    async with db_manager._global_session_factory() as session:
         yield session

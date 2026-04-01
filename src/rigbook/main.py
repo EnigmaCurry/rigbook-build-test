@@ -18,14 +18,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from rigbook.db import (
     DatabaseLockError,
-    MetaCache,
+    GlobalCache,
     Setting,
     async_session,
     db_manager,
-    get_meta_session,
+    get_global_session,
     get_session,
     init_db,
-    meta_async_session,
+    global_async_session,
 )
 from rigbook.flrig import router as flrig_router
 from rigbook.routes.logbooks import router as logbooks_router
@@ -104,14 +104,14 @@ async def lifespan(app: FastAPI):
     _cleanup_old_binaries()
     await init_db()
     # Clear update check cache so we always check once on startup
-    async with meta_async_session() as meta:
-        await meta.execute(
-            delete(MetaCache).where(
-                MetaCache.namespace == UPDATE_CACHE_NS,
-                MetaCache.key == UPDATE_CACHE_KEY,
+    async with global_async_session() as gdb:
+        await gdb.execute(
+            delete(GlobalCache).where(
+                GlobalCache.namespace == UPDATE_CACHE_NS,
+                GlobalCache.key == UPDATE_CACHE_KEY,
             )
         )
-        await meta.commit()
+        await gdb.commit()
     if db_manager.is_open:
         await start_feeds()
         await start_auto_backup()
@@ -131,7 +131,7 @@ async def lifespan(app: FastAPI):
     await stop_auto_backup()
     await stop_feeds()
     await db_manager.close()
-    await db_manager.close_meta()
+    await db_manager.close_global()
 
 
 app = FastAPI(title="Rigbook", lifespan=lifespan)
@@ -173,7 +173,7 @@ UPDATE_CACHE_TTL = 3600  # 1 hour
 
 @app.get("/api/update-check")
 async def check_for_update(
-    meta: AsyncSession = Depends(get_meta_session),
+    gdb: AsyncSession = Depends(get_global_session),
     session: AsyncSession = Depends(get_session),
     bust: bool = False,
 ):
@@ -195,21 +195,21 @@ async def check_for_update(
 
     # Bust cache if requested
     if bust:
-        await meta.execute(
-            delete(MetaCache).where(
-                MetaCache.namespace == UPDATE_CACHE_NS,
-                MetaCache.key == UPDATE_CACHE_KEY,
+        await gdb.execute(
+            delete(GlobalCache).where(
+                GlobalCache.namespace == UPDATE_CACHE_NS,
+                GlobalCache.key == UPDATE_CACHE_KEY,
             )
         )
-        await meta.commit()
+        await gdb.commit()
 
     # Check cache
     cached = (
-        await meta.execute(
-            select(MetaCache).where(
-                MetaCache.namespace == UPDATE_CACHE_NS,
-                MetaCache.key == UPDATE_CACHE_KEY,
-                MetaCache.expires_at > time.time(),
+        await gdb.execute(
+            select(GlobalCache).where(
+                GlobalCache.namespace == UPDATE_CACHE_NS,
+                GlobalCache.key == UPDATE_CACHE_KEY,
+                GlobalCache.expires_at > time.time(),
             )
         )
     ).scalar_one_or_none()
@@ -247,14 +247,14 @@ async def check_for_update(
         checked_at = time.time()
 
         # Store in cache
-        await meta.execute(
-            delete(MetaCache).where(
-                MetaCache.namespace == UPDATE_CACHE_NS,
-                MetaCache.key == UPDATE_CACHE_KEY,
+        await gdb.execute(
+            delete(GlobalCache).where(
+                GlobalCache.namespace == UPDATE_CACHE_NS,
+                GlobalCache.key == UPDATE_CACHE_KEY,
             )
         )
-        meta.add(
-            MetaCache(
+        gdb.add(
+            GlobalCache(
                 namespace=UPDATE_CACHE_NS,
                 key=UPDATE_CACHE_KEY,
                 value=json.dumps(
@@ -263,7 +263,7 @@ async def check_for_update(
                 expires_at=time.time() + UPDATE_CACHE_TTL,
             )
         )
-        await meta.commit()
+        await gdb.commit()
 
     dev_suffixes = ("-dev", "-alpha", "-beta", "-rc")
     is_dev = any(s in current for s in dev_suffixes)
@@ -307,16 +307,16 @@ async def check_for_update(
 
 @app.post("/api/update-check/skip")
 async def skip_update(
-    meta: AsyncSession = Depends(get_meta_session),
+    gdb: AsyncSession = Depends(get_global_session),
     session: AsyncSession = Depends(get_session),
 ):
     """Skip the currently available update version."""
     # Get the latest known version from meta cache
     cached = (
-        await meta.execute(
-            select(MetaCache).where(
-                MetaCache.namespace == UPDATE_CACHE_NS,
-                MetaCache.key == UPDATE_CACHE_KEY,
+        await gdb.execute(
+            select(GlobalCache).where(
+                GlobalCache.namespace == UPDATE_CACHE_NS,
+                GlobalCache.key == UPDATE_CACHE_KEY,
             )
         )
     ).scalar_one_or_none()

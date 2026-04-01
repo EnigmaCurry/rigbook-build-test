@@ -73,11 +73,11 @@ def _authorizer(action, arg1, arg2, db_name, trigger):
 def _execute_query(
     db_path: str, sql: str, limit: int | None = MAX_ROWS
 ) -> tuple[list[str], list[list]]:
-    """Execute a read-only query against logbook + attached meta DB."""
+    """Execute a read-only query against logbook + attached global DB."""
     conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
     try:
         conn.set_authorizer(_authorizer)
-        # Attach meta database for cross-DB queries
+        # Attach global database for cross-DB queries
         if META_DB_PATH.exists():
             conn.execute(f"ATTACH DATABASE 'file:{META_DB_PATH}?mode=ro' AS meta")
         ops = [0]
@@ -123,7 +123,7 @@ async def get_schema(session: AsyncSession = Depends(get_session)):
     finally:
         conn.close()
 
-    # Add meta database tables
+    # Add global database tables
     if META_DB_PATH.exists():
         meta_conn = sqlite3.connect(f"file:{META_DB_PATH}?mode=ro", uri=True)
         try:
