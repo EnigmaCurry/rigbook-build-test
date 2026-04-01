@@ -2227,7 +2227,7 @@
     </div>
     <div class="setting-row">
       <label for="global_browser_url">Browser URL Override</label>
-      <input id="global_browser_url" type="text" bind:value={global_browser_url_override} on:blur={() => saveGlobalSetting("browser_url_override", global_browser_url_override.trim())} autocomplete="off" placeholder="e.g. https://rigbook.local" style="max-width: 20rem" />
+      <input id="global_browser_url" type="text" bind:value={global_browser_url_override} on:blur={() => saveGlobalSetting("browser_url_override", global_browser_url_override.trim())} autocomplete="off" placeholder="e.g. https://rigbook.local" style="max-width: 20rem" disabled={!global_open_browser_on_startup} />
       <span class="hint">Custom URL opened in browser on startup (for proxies/TLS). Leave blank for default.</span>
     </div>
   </section>
