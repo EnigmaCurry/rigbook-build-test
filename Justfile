@@ -1,4 +1,5 @@
 # Rigbook - Ham Radio Logbook
+build_test_repo := "EnigmaCurry/rigbook-build-test"
 
 # Show available recipes
 @default:
@@ -87,6 +88,21 @@ reset-dev:
     git fetch origin
     git checkout dev
     git reset --hard origin/dev
+
+# Print the next .devN version for test releases (e.g. 0.2.7.dev3)
+next-dev-version:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    BASE=$(python -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")
+    EXISTING=$(gh release list --repo {{ build_test_repo }} --json tagName --limit 100 --jq '.[].tagName' 2>/dev/null || true)
+    MAX=-1
+    for tag in $EXISTING; do
+        if [[ "$tag" =~ ^v${BASE}\.dev([0-9]+)$ ]]; then
+            N=${BASH_REMATCH[1]}
+            (( N > MAX )) && MAX=$N
+        fi
+    done
+    echo "${BASE}.dev$(( MAX + 1 ))"
 
 # Remove build artifacts and stamp files
 clean:
