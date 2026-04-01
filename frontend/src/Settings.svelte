@@ -121,6 +121,7 @@
   let global_default_pick_mode = false;
   let global_default_port = "8073";
   let global_default_logbook_name = "rigbook";
+  let availableLogbooks = [];
   let globalSettingsLoaded = false;
 
   // Track which per-logbook settings are from global defaults
@@ -1326,6 +1327,13 @@
     } catch {}
   }
 
+  async function fetchLogbookList() {
+    try {
+      const res = await fetch("/api/logbooks/");
+      if (res.ok) availableLogbooks = (await res.json()).map(d => d.name);
+    } catch {}
+  }
+
   async function fetchGlobalSettings() {
     try {
       const res = await fetch("/api/global-settings/");
@@ -1511,6 +1519,7 @@
   onMount(() => {
     fetchSettings();
     fetchGlobalSettings();
+    fetchLogbookList();
     fetchSpotStatus();
     fetchQsoCount();
     loadDbInfo();
@@ -2187,7 +2196,15 @@
     </div>
     <div class="setting-row">
       <label for="global_default_logbook">Default Logbook Name</label>
-      <input id="global_default_logbook" type="text" bind:value={global_default_logbook_name} on:keydown={e => { if (/^[_]{2}/.test(global_default_logbook_name) || (!/[a-zA-Z0-9_-]/.test(e.key) && e.key.length === 1)) e.preventDefault(); }} on:blur={() => { const v = global_default_logbook_name.trim(); if (v && /^[a-zA-Z0-9_-]+$/.test(v) && !v.startsWith("__")) saveGlobalSetting("default_logbook_name", v); }} autocomplete="off" style="max-width: 14rem" />
+      {#if availableLogbooks.length > 0}
+        <select id="global_default_logbook" bind:value={global_default_logbook_name} on:change={() => saveGlobalSetting("default_logbook_name", global_default_logbook_name)} style="max-width: 14rem">
+          {#each availableLogbooks as name}
+            <option value={name}>{name}</option>
+          {/each}
+        </select>
+      {:else}
+        <span class="hint">No logbooks exist yet</span>
+      {/if}
       <span class="hint">Logbook opened when running rigbook without arguments</span>
     </div>
     <div class="setting-row">
