@@ -1560,7 +1560,7 @@
     <h3>QRZ</h3>
     <div class="setting-row">
       <label for="qrz_username">QRZ Username{#if settingSources.qrz_username === "global"} <span class="global-hint">(global default)</span>{/if}</label>
-      <input id="qrz_username" type="text" bind:value={qrz_username} on:input={() => markDirty("qrz_username")} on:keydown={onFieldKeydown} on:blur={() => onFieldBlur("qrz_username")} autocomplete="nope" data-1p-ignore data-lpignore="true" style="text-transform: uppercase; max-width: 10rem" placeholder={globalPlaceholders.qrz_username || effectiveSetting(my_callsign, "my_callsign")} />
+      <input id="qrz_username" type="text" bind:value={qrz_username} on:input={() => markDirty("qrz_username")} on:keydown={onFieldKeydown} on:blur={() => onFieldBlur("qrz_username")} autocomplete="nope" data-1p-ignore data-lpignore="true" style="text-transform: uppercase; max-width: 10rem" placeholder={globalPlaceholders.qrz_username || global_qrz_username || effectiveSetting(my_callsign, "my_callsign")} />
       <span class="hint">Defaults to My Callsign if blank</span>
     </div>
     <div class="setting-row">
