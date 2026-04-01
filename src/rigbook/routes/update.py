@@ -53,10 +53,11 @@ def _spawn_and_exit(exe_path: str) -> None:
         if sys.platform == "darwin":
             # On macOS, use `open` to relaunch so the user gets a fresh
             # Terminal.app window (the old one closes due to `; exit;`
-            # that Finder injects).  `open` doesn't forward CLI args, so
-            # skip --no-browser — reopening the tab is fine for an update.
+            # that Finder injects).  Pass --args to forward CLI flags.
+            if "--no-browser" not in args:
+                args = args + ["--no-browser"]
             subprocess.Popen(
-                ["open", exe_path],
+                ["open", exe_path, "--args"] + args,
                 env=env,
                 start_new_session=True,
             )
