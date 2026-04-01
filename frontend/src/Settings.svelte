@@ -2042,6 +2042,9 @@
         <button class="warning-btn" on:click={disconnectOthers}>Disconnect all other clients</button>
       </div>
     {/if}
+    <div class="setting-row">
+      <button class="danger-btn" on:click={shutdownServer}>Shutdown Now</button>
+    </div>
   </section>
   {/if}
 
@@ -2190,9 +2193,6 @@
         <input type="checkbox" bind:checked={shutdownInMenu} on:change={() => { saveGlobalSetting("shutdown_in_menu", shutdownInMenu ? "true" : "false"); }} />
         Add Shutdown action to the main menu
       </label>
-    </div>
-    <div class="setting-row">
-      <button class="danger-btn" on:click={shutdownServer}>Shutdown Now</button>
     </div>
   </section>
   </div>
