@@ -1,5 +1,5 @@
 <script>
-  import { createEventDispatcher } from "svelte";
+  import { onMount, createEventDispatcher } from "svelte";
 
   const dispatch = createEventDispatcher();
 
@@ -7,8 +7,22 @@
   let grid = "";
   let qrzKey = "";
   let logbookName = "rigbook";
+  let existingLogbooks = [];
   let saving = false;
   let error = "";
+
+  onMount(async () => {
+    try {
+      const res = await fetch("/api/logbooks/");
+      if (res.ok) {
+        const data = await res.json();
+        existingLogbooks = data.map(d => d.name);
+        if (existingLogbooks.length > 0) {
+          logbookName = existingLogbooks[0]; // most recently opened
+        }
+      }
+    } catch {}
+  });
 
   async function saveGlobal(key, value) {
     if (!value) return;
@@ -108,12 +122,20 @@
       </div>
 
       <div class="field">
-        <label for="w-logbook">First Logbook Name</label>
-        <input id="w-logbook" type="text" bind:value={logbookName} autocomplete="nope" on:keydown={onNameKeydown} placeholder="rigbook" style="max-width: 14rem" />
-        {#if nameError}
-          <span class="field-error">{nameError}</span>
+        <label for="w-logbook">Default Logbook Name</label>
+        {#if existingLogbooks.length > 0}
+          <select id="w-logbook" bind:value={logbookName} style="max-width: 14rem">
+            {#each existingLogbooks as name}
+              <option value={name}>{name}</option>
+            {/each}
+          </select>
         {:else}
-          <span class="hint">Letters, numbers, hyphens, underscores only</span>
+          <input id="w-logbook" type="text" bind:value={logbookName} autocomplete="nope" on:keydown={onNameKeydown} placeholder="rigbook" style="max-width: 14rem" />
+          {#if nameError}
+            <span class="field-error">{nameError}</span>
+          {:else}
+            <span class="hint">Letters, numbers, hyphens, underscores only</span>
+          {/if}
         {/if}
       </div>
     </div>
@@ -180,6 +202,7 @@
     color: var(--text-dim, #888);
   }
 
+  .field select,
   .field input {
     padding: 0.4rem 0.6rem;
     border: 1px solid var(--border, #3a3b3f);
