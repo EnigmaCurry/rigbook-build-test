@@ -74,13 +74,30 @@ chmod +x rigbook-linux-amd64
 
 ### macOS
 
+Download `Rigbook.app.zip` from the
+[Releases](https://github.com/EnigmaCurry/rigbook/releases) page.
+Safari will unzip it automatically. Copy `Rigbook.app` into
+`/Applications`.
+
+Before launching for the first time, remove the quarantine attribute
+(the app is not signed with an Apple developer certificate):
+
 ```bash
-wget https://github.com/EnigmaCurry/rigbook/releases/latest/download/rigbook-macos-arm64
-chmod +x rigbook-macos-arm64
-# Remove the quarantine attribute:
-xattr -d com.apple.quarantine rigbook-macos-arm64
-./rigbook-macos-arm64
+xattr -cr /Applications/Rigbook.app
 ```
+
+Then open Rigbook from your Applications folder. It launches as a
+standalone desktop app (no terminal window).
+
+To add the `rigbook` CLI to your PATH:
+
+```bash
+sudo ln -sf /Applications/Rigbook.app/Contents/MacOS/rigbook /usr/local/bin/rigbook
+```
+
+> The release also includes a standalone `rigbook-macos-arm64` binary.
+> This is used by the built-in updater and can also be run directly
+> from the command line if you prefer.
 
 ### Windows
 

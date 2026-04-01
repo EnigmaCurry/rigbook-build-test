@@ -71,6 +71,10 @@ jobs:
           pip install pyinstaller
           pip install .
 
+      - name: Convert icon for Windows
+        if: runner.os == 'Windows'
+        run: pip install Pillow && python -c "from PIL import Image; img = Image.open('rigbook.png'); img.save('rigbook.ico', sizes=[(16,16),(32,32),(48,48),(64,64),(128,128),(256,256)])"
+
       - name: Build binary
         run: pyinstaller rigbook.spec
 
@@ -81,6 +85,74 @@ jobs:
       - name: Rename binary (windows)
         if: runner.os == 'Windows'
         run: mv dist/rigbook.exe dist/rigbook-${{ matrix.target }}.exe
+
+      - name: Create macOS app bundle
+        if: matrix.target == 'macos-arm64'
+        run: |
+          version=$(grep -m1 '^version' pyproject.toml | sed 's/.*"\(.*\)".*/\1/')
+          mkdir -p Rigbook.app/Contents/MacOS Rigbook.app/Contents/Resources
+          cp dist/rigbook-${{ matrix.target }} Rigbook.app/Contents/MacOS/rigbook
+          mkdir -p rigbook_icon.iconset
+          sips -z 1024 1024 rigbook.png --out rigbook_icon.iconset/icon_512x512@2x.png
+          sips -z 512 512 rigbook.png --out rigbook_icon.iconset/icon_512x512.png
+          sips -z 512 512 rigbook.png --out rigbook_icon.iconset/icon_256x256@2x.png
+          sips -z 256 256 rigbook.png --out rigbook_icon.iconset/icon_256x256.png
+          sips -z 256 256 rigbook.png --out rigbook_icon.iconset/icon_128x128@2x.png
+          sips -z 128 128 rigbook.png --out rigbook_icon.iconset/icon_128x128.png
+          sips -z 64 64 rigbook.png --out rigbook_icon.iconset/icon_32x32@2x.png
+          sips -z 32 32 rigbook.png --out rigbook_icon.iconset/icon_32x32.png
+          sips -z 32 32 rigbook.png --out rigbook_icon.iconset/icon_16x16@2x.png
+          sips -z 16 16 rigbook.png --out rigbook_icon.iconset/icon_16x16.png
+          iconutil -c icns rigbook_icon.iconset -o Rigbook.app/Contents/Resources/rigbook.icns
+          printf '%s\n' '#!/bin/bash' \
+            'DIR="$(dirname "$0")"' \
+            'HOST="${RIGBOOK_HOST:-127.0.0.1}"' \
+            'PORT="${RIGBOOK_PORT:-8073}"' \
+            'URL="http://${HOST}:${PORT}"' \
+            'if curl -s -o /dev/null --connect-timeout 1 "${URL}/api/version"; then' \
+            '    open "${URL}"' \
+            '    exit 0' \
+            'fi' \
+            '("$DIR/rigbook" "$@" &)' \
+            'for i in $(seq 1 30); do' \
+            '    sleep 0.5' \
+            '    if curl -s -o /dev/null --connect-timeout 1 "${URL}/api/version"; then' \
+            '        open "${URL}"' \
+            '        break' \
+            '    fi' \
+            'done' \
+            'wait' > Rigbook.app/Contents/MacOS/launch
+          chmod +x Rigbook.app/Contents/MacOS/launch
+          cat > Rigbook.app/Contents/Info.plist << 'PLIST'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+              <key>CFBundleExecutable</key>
+              <string>launch</string>
+              <key>CFBundleIdentifier</key>
+              <string>com.enigmacurry.rigbook</string>
+              <key>CFBundleName</key>
+              <string>Rigbook</string>
+              <key>CFBundleDisplayName</key>
+              <string>Rigbook</string>
+              <key>CFBundleVersion</key>
+              <string>VERSIONPLACEHOLDER</string>
+              <key>CFBundleShortVersionString</key>
+              <string>VERSIONPLACEHOLDER</string>
+              <key>CFBundleIconFile</key>
+              <string>rigbook</string>
+              <key>CFBundlePackageType</key>
+              <string>APPL</string>
+              <key>LSUIElement</key>
+              <true/>
+              <key>NSHighResolutionCapable</key>
+              <true/>
+          </dict>
+          </plist>
+          PLIST
+          sed -i '' "s/VERSIONPLACEHOLDER/${version}/g" Rigbook.app/Contents/Info.plist
+          zip -r dist/rigbook-macos-arm64.app.zip Rigbook.app
 
       - uses: actions/upload-artifact@v6
         with:
