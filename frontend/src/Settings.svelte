@@ -123,6 +123,8 @@
 
   // Track which per-logbook settings are from global defaults
   let settingSources = {};
+  // Store global default values for use as placeholders
+  let globalPlaceholders = {};
 
   const validTabs = ["station", "features", "appearance", "updates", "system", "global"];
   let activeTab = (initialTab && validTabs.includes(initialTab)) ? initialTab : "station";
@@ -798,7 +800,9 @@
       body: JSON.stringify({ value }),
     });
     settingSources[key] = "logbook";
-    settingSources = settingSources; // trigger reactivity
+    settingSources = settingSources;
+    delete globalPlaceholders[key];
+    globalPlaceholders = globalPlaceholders;
   }
 
   const dirtyFields = new Set();
@@ -1191,11 +1195,18 @@
       if (res.ok) {
         const data = await res.json();
         settingSources = {};
+        globalPlaceholders = {};
         for (const s of data) {
           if (s.source) settingSources[s.key] = s.source;
-          if (s.key === "my_callsign") my_callsign = s.value || "";
-          if (s.key === "my_grid") my_grid = s.value || "";
-          if (s.key === "default_rst") default_rst = s.value || "599";
+          const isGlobal = s.source === "global";
+          // Text fields: show global defaults as placeholders, not values
+          if (s.key === "my_callsign") { if (isGlobal) { globalPlaceholders.my_callsign = s.value; my_callsign = ""; } else my_callsign = s.value || ""; }
+          if (s.key === "my_grid") { if (isGlobal) { globalPlaceholders.my_grid = s.value; my_grid = ""; } else my_grid = s.value || ""; }
+          if (s.key === "default_rst") { if (isGlobal) { globalPlaceholders.default_rst = s.value; default_rst = ""; } else default_rst = s.value || "599"; }
+          if (s.key === "flrig_host") { if (isGlobal) { globalPlaceholders.flrig_host = s.value; flrig_host = ""; } else flrig_host = s.value || "127.0.0.1"; }
+          if (s.key === "flrig_port") { if (isGlobal) { globalPlaceholders.flrig_port = s.value; flrig_port = ""; } else flrig_port = s.value || "12345"; }
+          if (s.key === "hamalert_username") { if (isGlobal) { globalPlaceholders.hamalert_username = s.value; hamalert_username = ""; } else hamalert_username = s.value || ""; }
+          // Boolean/password fields: inherit global value normally
           if (s.key === "qrz_password") hasQrzPassword = !!s.value && s.value !== "";
           if (s.key === "pota_enabled") pota_enabled = s.value !== "false";
           if (s.key === "solar_enabled") solar_enabled = s.value === "true";
@@ -1203,8 +1214,6 @@
           if (s.key === "update_check_enabled") update_check_enabled = s.value !== "false";
           if (s.key === "flrig_enabled") flrig_enabled = s.value === "true";
           if (s.key === "flrig_simulate") flrig_simulate = s.value === "true";
-          if (s.key === "flrig_host") flrig_host = s.value || "127.0.0.1";
-          if (s.key === "flrig_port") flrig_port = s.value || "12345";
           if (s.key === "rbn_enabled") rbn_enabled = s.value === "true";
           if (s.key === "rbn_host") rbn_host = s.value || "telnet.reversebeacon.net";
           if (s.key === "rbn_feeds") {
@@ -1472,7 +1481,7 @@
 </script>
 
 <div class="settings">
-  <h2>Settings <span class="autosave-hint">(are automatically saved on change)</span></h2>
+  <h2>Settings <span class="autosave-hint">(are saved automatically on change)</span></h2>
 
   {#if needsSetup}
     <p class="setup-hint">Enter your callsign and grid square to get started.</p>
@@ -1493,12 +1502,12 @@
     <h3>Station</h3>
     <div class="setting-row">
       <label for="my_callsign">My Callsign{#if needsSetup && !my_callsign.trim()} <span class="required">*</span>{/if}{#if settingSources.my_callsign === "global"} <span class="global-hint">(global default)</span>{/if}</label>
-      <input id="my_callsign" type="text" bind:value={my_callsign} on:input={onCallsignInput} on:keydown={onFieldKeydown} on:blur={() => onFieldBlur("my_callsign")} maxlength="10" autocomplete="off" style="text-transform: uppercase; max-width: 7rem" class:input-required={needsSetup && !my_callsign.trim()} />
+      <input id="my_callsign" type="text" bind:value={my_callsign} on:input={onCallsignInput} on:keydown={onFieldKeydown} on:blur={() => onFieldBlur("my_callsign")} maxlength="10" autocomplete="off" style="text-transform: uppercase; max-width: 7rem" class:input-required={needsSetup && !my_callsign.trim()} placeholder={globalPlaceholders.my_callsign || ""} />
     </div>
     <div class="setting-row">
       <label for="my_grid">My Grid Square{#if needsSetup && !my_grid.trim()} <span class="required">*</span>{/if}{#if settingSources.my_grid === "global"} <span class="global-hint">(global default)</span>{/if}</label>
       <div class="grid-input-row">
-        <input id="my_grid" type="text" bind:value={my_grid} on:input={onGridInput} on:keydown={onFieldKeydown} on:blur={() => onFieldBlur("my_grid")} autocomplete="off" style="text-transform: uppercase; max-width: 7rem" class:input-required={needsSetup && !my_grid.trim()} />
+        <input id="my_grid" type="text" bind:value={my_grid} on:input={onGridInput} on:keydown={onFieldKeydown} on:blur={() => onFieldBlur("my_grid")} autocomplete="off" style="text-transform: uppercase; max-width: 7rem" class:input-required={needsSetup && !my_grid.trim()} placeholder={globalPlaceholders.my_grid || ""} />
         <button type="button" class="grid-picker-btn" on:click={() => showGridPicker = !showGridPicker} title="Pick from map">🌍</button>
       </div>
       {#if showGridPicker}
@@ -1518,7 +1527,7 @@
     </div>
     <div class="setting-row">
       <label for="default_rst">Default RST</label>
-      <input id="default_rst" type="text" bind:value={default_rst} on:input={onDefaultRstInput} on:keydown={onFieldKeydown} on:blur={() => onFieldBlur("default_rst")} autocomplete="off" style="max-width: 7rem" />
+      <input id="default_rst" type="text" bind:value={default_rst} on:input={onDefaultRstInput} on:keydown={onFieldKeydown} on:blur={() => onFieldBlur("default_rst")} autocomplete="off" style="max-width: 7rem" placeholder={globalPlaceholders.default_rst || ""} />
     </div>
   </section>
 
@@ -1565,11 +1574,11 @@
     </div>
     <div class="setting-row">
       <label for="flrig_host">flrig Host</label>
-      <input id="flrig_host" type="text" bind:value={flrig_host} on:input={onFlrigHostInput} on:keydown={onFieldKeydown} on:blur={() => onFieldBlur("flrig_host")} autocomplete="off" disabled={!flrig_enabled || flrig_simulate} style="max-width: 7rem" />
+      <input id="flrig_host" type="text" bind:value={flrig_host} on:input={onFlrigHostInput} on:keydown={onFieldKeydown} on:blur={() => onFieldBlur("flrig_host")} autocomplete="off" disabled={!flrig_enabled || flrig_simulate} style="max-width: 7rem" placeholder={globalPlaceholders.flrig_host || ""} />
     </div>
     <div class="setting-row">
       <label for="flrig_port">flrig Port</label>
-      <input id="flrig_port" type="text" bind:value={flrig_port} on:input={onFlrigPortInput} on:keydown={onFieldKeydown} on:blur={() => onFieldBlur("flrig_port")} autocomplete="off" inputmode="numeric" disabled={!flrig_enabled || flrig_simulate} style="max-width: 7rem" />
+      <input id="flrig_port" type="text" bind:value={flrig_port} on:input={onFlrigPortInput} on:keydown={onFieldKeydown} on:blur={() => onFieldBlur("flrig_port")} autocomplete="off" inputmode="numeric" disabled={!flrig_enabled || flrig_simulate} style="max-width: 7rem" placeholder={globalPlaceholders.flrig_port || ""} />
     </div>
   </section>
   </div>
@@ -1699,7 +1708,7 @@
     </div>
     <div class="setting-row">
       <label for="hamalert_username">Telnet Username</label>
-      <input id="hamalert_username" type="text" bind:value={hamalert_username} on:input={onHamalertUsernameInput} on:keydown={onFieldKeydown} on:blur={() => onFieldBlur("hamalert_username")} autocomplete="off" disabled={!hamalert_enabled} />
+      <input id="hamalert_username" type="text" bind:value={hamalert_username} on:input={onHamalertUsernameInput} on:keydown={onFieldKeydown} on:blur={() => onFieldBlur("hamalert_username")} autocomplete="off" disabled={!hamalert_enabled} placeholder={globalPlaceholders.hamalert_username || ""} />
     </div>
     <div class="setting-row">
       <label for="hamalert_password">{hasHamalertPassword ? "Change Telnet Password" : "Telnet Password"}</label>
