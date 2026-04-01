@@ -43,9 +43,9 @@ allowed-tools: Bash(git *, gh *, uv *, cd *), Read, Edit, Write, AskUserQuestion
    ```
    (Use the old version tag. If the tag doesn't exist, use `git log --oneline` with a reasonable range.)
 
-7. **Write CHANGELOG.txt entry:**
-   - Read `CHANGELOG.txt` if it exists.
-   - Prepend a new entry at the top of the file with this format:
+7. **Write CHANGELOG.md entry:**
+   - Read `CHANGELOG.md`.
+   - Insert a new entry after the `# Changelog` header (before the first `##` entry) with this format:
      ```
      ## v{NEW_VERSION} — {YYYY-MM-DD}
 
@@ -62,7 +62,7 @@ allowed-tools: Bash(git *, gh *, uv *, cd *), Read, Edit, Write, AskUserQuestion
 
 9. **Commit, tag, and push:**
    ```bash
-   git add pyproject.toml uv.lock CHANGELOG.txt
+   git add pyproject.toml uv.lock CHANGELOG.md
    git commit -m "Bump version to v{NEW_VERSION} and add changelog"
    git tag v{NEW_VERSION}
    git push

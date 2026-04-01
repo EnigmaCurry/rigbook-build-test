@@ -1,5 +1,32 @@
 # Changelog
 
+## v0.2.7 — 2026-04-01
+
+- Test release to verify upgrade from v0.2.6
+
+## v0.2.6 — 2026-04-01
+
+- macOS .app bundle: launch from Finder as a desktop app, reopen opens a new browser tab
+- App icon for macOS (.icns) and Windows (.ico)
+- Fix Windows second-launch not opening browser (lock file unreadable due to byte-range lock)
+- Fix Windows shutdown not navigating to shutdown page (SSE event never received)
+- Fix crash on second launch when lock info missing host key
+- Document CLI symlink for macOS app in README
+
+## v0.2.5 — 2026-04-01
+
+- Fix macOS self-update opening an extra browser tab
+
+## v0.2.4 — 2026-04-01
+
+- Test build to test macOS upgrade process
+
+## v0.2.3 — 2026-04-01
+
+- Map visualization overhaul with color presets and marker improvements
+- Fix self-update restart on macOS
+- Add Claude Code skills for merge and release workflows
+
 ## v0.2.2
 
 ### Spots Map
