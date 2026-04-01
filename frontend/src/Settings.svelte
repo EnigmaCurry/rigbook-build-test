@@ -53,6 +53,32 @@
   let map_theme = "natgeo";
   let map_custom_url = "";
   let custom_header = "";
+
+  // Spot map color presets
+  const MAP_COLOR_PRESETS = {
+    "aurora":      { label: "Aurora Borealis",  qth: "#ff4444", station: "#00ff88", spotter: "#00ccff", secondary: "#7744aa", strokes: { qth: "black", station: "black", spotter: "black", secondary: "white" } },
+    "coral-reef":  { label: "Coral Reef",       qth: "#ff4488", station: "#ffaa55", spotter: "#44ddcc", secondary: "#2288aa", strokes: { qth: "black", station: "black", spotter: "black", secondary: "white" } },
+    "sunset":      { label: "Sunset Ridge",     qth: "#ff2255", station: "#ffbb00", spotter: "#00ccff", secondary: "#8844cc", strokes: { qth: "white", station: "black", spotter: "black", secondary: "white" } },
+    "deep-sea":    { label: "Deep Sea",         qth: "#ff3355", station: "#00eebb", spotter: "#4488ff", secondary: "#cc44ff", strokes: { qth: "white", station: "black", spotter: "white", secondary: "black" } },
+    "volcano":     { label: "Volcano",          qth: "#ff0000", station: "#ffdd00", spotter: "#00bbff", secondary: "#aa55ff", strokes: { qth: "white", station: "black", spotter: "black", secondary: "white" } },
+    "glacier":     { label: "Glacier",          qth: "#ff4466", station: "#00ffcc", spotter: "#4499ff", secondary: "#ddaa00", strokes: { qth: "white", station: "black", spotter: "white", secondary: "black" } },
+    "savanna":     { label: "Savanna",          qth: "#ff3333", station: "#ddcc00", spotter: "#33bbaa", secondary: "#cc66ff", strokes: { qth: "white", station: "black", spotter: "black", secondary: "black" } },
+    "midnight":    { label: "Midnight Pass",    qth: "#ff3366", station: "#bb88ff", spotter: "#00ddff", secondary: "#ffaa00", strokes: { qth: "white", station: "white", spotter: "black", secondary: "black" } },
+    "tundra":      { label: "Tundra",           qth: "#ff5544", station: "#44eedd", spotter: "#ffcc33", secondary: "#aa66ff", strokes: { qth: "black", station: "black", spotter: "black", secondary: "white" } },
+    "desert":      { label: "Desert Mesa",      qth: "#ff2200", station: "#ffcc00", spotter: "#44ccbb", secondary: "#dd55aa", strokes: { qth: "white", station: "black", spotter: "black", secondary: "black" } },
+  };
+  const MAP_COLOR_PRESET_NAMES = Object.keys(MAP_COLOR_PRESETS);
+
+  let spotMapColorMode = "preset"; // "preset" or "custom"
+  let spotMapPreset = "aurora";
+  let spotMapQth = MAP_COLOR_PRESETS.aurora.qth;
+  let spotMapStation = MAP_COLOR_PRESETS.aurora.station;
+  let spotMapSpotter = MAP_COLOR_PRESETS.aurora.spotter;
+  let spotMapSecondary = MAP_COLOR_PRESETS.aurora.secondary;
+  let spotMapStrokeQth = "black";
+  let spotMapStrokeStation = "black";
+  let spotMapStrokeSpotter = "black";
+  let spotMapStrokeSecondary = "white";
   let default_page = "log";
   let qrzStatus = null; // { ok, error?, username? }
   let qrzChecking = false;
@@ -98,8 +124,9 @@
   // Map preview
   let previewEl;
   let previewMap;
+  let previewMapEl; // track which DOM node the map was created on
   let previewTileLayer;
-  let previewMarker;
+  let previewLayers = [];
 
   function gridToLatLon(grid) {
     if (!grid || grid.length < 4) return null;
@@ -119,40 +146,214 @@
     return { lat, lon };
   }
 
-  const qthIcon = L.divIcon({
-    className: "",
-    html: '<div style="width:10px;height:10px;background:#e53e3e;border-radius:50%;border:2px solid #fff;"></div>',
-    iconSize: [10, 10],
-    iconAnchor: [5, 5],
-  });
+  function clearPreviewLayers() {
+    for (const l of previewLayers) {
+      if (previewMap) previewMap.removeLayer(l);
+    }
+    previewLayers = [];
+  }
+
+  function previewDot(ll, color, border, size = 10) {
+    const half = Math.round(size / 2);
+    const icon = L.divIcon({
+      className: "",
+      html: `<div style="width:${size}px;height:${size}px;background:${color};border-radius:50%;border:2px solid ${border};"></div>`,
+      iconSize: [size, size],
+      iconAnchor: [half, half],
+    });
+    return L.marker(ll, { icon, interactive: false });
+  }
+
+  function previewApproxDot(ll, color, size = 12) {
+    const half = Math.round(size / 2);
+    const qColor = spotMapStrokeStation === "white" ? "#fff" : "#000";
+    const icon = L.divIcon({
+      className: "",
+      html: `<div style="width:${size}px;height:${size}px;background:${color}88;border:2px dashed ${color};border-radius:50%;display:flex;align-items:center;justify-content:center"><span style="color:${qColor};font-size:${Math.max(size-2,8)}px;font-weight:bold;line-height:1">?</span></div>`,
+      iconSize: [size, size],
+      iconAnchor: [half, half],
+    });
+    return L.marker(ll, { icon, interactive: false });
+  }
+
+  function strokeRgba(strokeName) {
+    return strokeName === "white" ? "rgba(255,255,255,0.85)" : "rgba(0,0,0,0.85)";
+  }
+
+  function previewLabel(ll, text, color, strokeName) {
+    const stroke = strokeRgba(strokeName);
+    const icon = L.divIcon({
+      className: "marker-label",
+      html: `<span style="color:${color};font-size:11px;font-weight:bold;white-space:nowrap;paint-order:stroke fill;-webkit-text-stroke:3px ${stroke};text-shadow:0 0 4px ${stroke}">${text}</span>`,
+      iconSize: [0, 0],
+      iconAnchor: [0, 16],
+    });
+    return L.marker(ll, { icon, interactive: false });
+  }
+
+  function darkenColor(hex, factor = 0.5) {
+    const h = hex.replace("#", "");
+    const r = Math.round(parseInt(h.slice(0, 2), 16) * factor);
+    const g = Math.round(parseInt(h.slice(2, 4), 16) * factor);
+    const b = Math.round(parseInt(h.slice(4, 6), 16) * factor);
+    return `#${r.toString(16).padStart(2,"0")}${g.toString(16).padStart(2,"0")}${b.toString(16).padStart(2,"0")}`;
+  }
+
+  function distLabel(from, to, color, strokeName, t = 0.5) {
+    const mi = Math.round(haversineMi(from, to));
+    const mid = [from[0] + (to[0] - from[0]) * t, from[1] + (to[1] - from[1]) * t];
+    const stroke = strokeRgba(strokeName);
+    const icon = L.divIcon({
+      className: "distance-label",
+      html: `<span style="color:${color};font-size:11px;font-weight:bold;white-space:nowrap;paint-order:stroke fill;-webkit-text-stroke:3px ${stroke};text-shadow:0 0 4px ${stroke}">${mi} mi</span>`,
+      iconSize: [0, 0],
+    });
+    return L.marker(mid, { icon, interactive: false });
+  }
 
   function updatePreview() {
     if (!previewEl) return;
     const tiles = resolveTileConfig(map_theme, map_custom_url);
     const pos = gridToLatLon(my_grid);
-    if (!previewMap) {
+    const center = pos ? [pos.lat, pos.lon] : [39, -98];
+    // Reinitialize if the DOM node changed (tab switch destroys/recreates it)
+    if (previewMap && previewMapEl !== previewEl) {
+      previewMap.remove();
+      previewMap = null;
+      previewTileLayer = null;
+      previewLayers = [];
+    }
+    const isNew = !previewMap;
+    if (isNew) {
       previewMap = L.map(previewEl, {
-        scrollWheelZoom: false, zoomControl: false,
+        scrollWheelZoom: true, zoomControl: true,
         dragging: true, doubleClickZoom: false,
         attributionControl: false,
       });
-      previewMap.setView(pos ? [pos.lat, pos.lon] : [39, -98], 4);
+      previewMapEl = previewEl;
+      previewMap.setView(center, 4); // temporary; fitBounds below
     }
     if (previewTileLayer) previewMap.removeLayer(previewTileLayer);
     previewTileLayer = L.tileLayer(tiles.url, {
       attribution: tiles.attribution,
       maxZoom: tiles.maxZoom,
     }).addTo(previewMap);
-    if (previewMarker) previewMap.removeLayer(previewMarker);
-    if (pos) {
-      const label = [my_callsign.trim().toUpperCase(), my_grid.trim().toUpperCase()].filter(Boolean).join(" · ");
-      previewMarker = L.marker([pos.lat, pos.lon], { icon: qthIcon }).addTo(previewMap);
-      if (label) previewMarker.bindTooltip(label, { permanent: true, direction: "right", offset: [8, 0], className: "qth-label" });
+
+    clearPreviewLayers();
+
+    const qthBorder = darkenColor(spotMapQth);
+    const staBorder = darkenColor(spotMapStation);
+    const sptBorder = darkenColor(spotMapSpotter);
+    const secBorder = darkenColor(spotMapSecondary);
+
+    const qthLL = pos ? [pos.lat, pos.lon] : center;
+
+    // --- Single triangle: QTH ↔ Station ↔ Spotter, with one secondary ---
+    const staLL = [qthLL[0] + 5, qthLL[1] + 8];
+    const sptLL = [qthLL[0] + 1, qthLL[1] + 5];
+    const secLL = [qthLL[0] - 1, qthLL[1] + 10];
+
+    const layers = [];
+    function add(...items) { for (const l of items) layers.push(l); }
+
+    // Bullseye helper for exact stations
+    function exactDot(ll, size = 11) {
+      const half = Math.round(size / 2);
+      const qColor = spotMapStrokeStation === "white" ? "#fff" : "#000";
+      const icon = L.divIcon({
+        className: "",
+        html: `<div style="width:${size}px;height:${size}px;background:${spotMapStation};border:2px solid ${staBorder};border-radius:50%;display:flex;align-items:center;justify-content:center"><span style="color:${qColor};font-size:${Math.max(size-5,6)}px;font-weight:bold;line-height:1">@</span></div>`,
+        iconSize: [size, size],
+        iconAnchor: [half, half],
+      });
+      return L.marker(ll, { icon, interactive: false });
+    }
+
+    // Lines
+    add(
+      L.polyline([secLL, staLL], { color: spotMapSecondary, weight: 2, opacity: 0.4, dashArray: "4 6" }),
+      L.polyline([sptLL, staLL], { color: spotMapSpotter, weight: 2, opacity: 0.6, dashArray: "6 4" }),
+      L.polyline([staLL, qthLL], { color: spotMapStation, weight: 2, opacity: 0.6, dashArray: "6 4" }),
+      L.polyline([qthLL, sptLL], { color: spotMapSpotter, weight: 2, opacity: 0.6, dashArray: "2 16", lineCap: "round" }),
+    );
+
+    // Triangle dots + labels
+    add(
+      exactDot(staLL, 12),
+      previewDot(sptLL, spotMapSpotter, sptBorder, 10),
+      previewDot(secLL, spotMapSecondary, secBorder, 8),
+    );
+
+    const callLabel = my_callsign.trim().toUpperCase() || "QTH";
+    add(
+      previewLabel(staLL, "W1AW", spotMapStation, spotMapStrokeStation),
+      previewLabel(sptLL, "K3LR", spotMapSpotter, spotMapStrokeSpotter),
+      previewLabel(secLL, "VE3NEA", spotMapSecondary, spotMapStrokeSecondary),
+      distLabel(sptLL, staLL, spotMapSpotter, spotMapStrokeSpotter, 0.33),
+      distLabel(staLL, qthLL, spotMapStation, spotMapStrokeStation, 0.5),
+    );
+
+    // --- Scattered unconnected dots (no lines, no labels) ---
+    // Exact stations with bullseye
+    add(
+      exactDot([qthLL[0] - 5, qthLL[1] - 4], 10),
+      exactDot([qthLL[0] + 7, qthLL[1] - 6], 11),
+      exactDot([qthLL[0] + 2, qthLL[1] + 14], 10),
+      exactDot([qthLL[0] - 3, qthLL[1] - 9], 12),
+    );
+    // Approximate stations
+    add(
+      previewApproxDot([qthLL[0] - 6, qthLL[1] + 6], spotMapStation, 11),
+      previewApproxDot([qthLL[0] + 4, qthLL[1] - 11], spotMapStation, 10),
+    );
+    // Primary spotters
+    add(
+      previewDot([qthLL[0] + 6, qthLL[1] + 11], spotMapSpotter, sptBorder, 9),
+      previewDot([qthLL[0] - 4, qthLL[1] - 6], spotMapSpotter, sptBorder, 9),
+      previewDot([qthLL[0] + 8, qthLL[1] + 4], spotMapSpotter, sptBorder, 10),
+    );
+    // Secondary spotters
+    add(
+      previewDot([qthLL[0] - 7, qthLL[1] + 2], spotMapSecondary, secBorder, 8),
+      previewDot([qthLL[0] + 3, qthLL[1] - 5], spotMapSecondary, secBorder, 8),
+    );
+
+    // --- QTH dot + label (on top) ---
+    add(previewDot(qthLL, spotMapQth, qthBorder, 14));
+    add(previewLabel(qthLL, callLabel, spotMapQth, spotMapStrokeQth));
+
+    for (const l of layers) {
+      l.addTo(previewMap);
+      previewLayers.push(l);
+    }
+
+    // On first render, fit the map to show all points
+    // Delay until container has its final size (tab switch starts at zero dimensions)
+    if (isNew) {
+      const allPoints = previewLayers
+        .filter(l => l instanceof L.Marker)
+        .map(l => { const ll = l.getLatLng(); return [ll.lat, ll.lng]; });
+      setTimeout(() => {
+        if (previewMap) {
+          previewMap.invalidateSize();
+          previewMap.fitBounds(allPoints, { padding: [20, 20] });
+        }
+      }, 50);
     }
   }
 
+  function haversineMi(a, b) {
+    const R = 3958.8;
+    const dLat = (b[0] - a[0]) * Math.PI / 180;
+    const dLon = (b[1] - a[1]) * Math.PI / 180;
+    const lat1 = a[0] * Math.PI / 180;
+    const lat2 = b[0] * Math.PI / 180;
+    const h = Math.sin(dLat/2)**2 + Math.cos(lat1)*Math.cos(lat2)*Math.sin(dLon/2)**2;
+    return Math.round(R * 2 * Math.asin(Math.sqrt(h)));
+  }
+
   $: if (settingsLoaded && previewEl) {
-    map_theme, map_custom_url;
+    map_theme, map_custom_url, spotMapQth, spotMapStation, spotMapSpotter, spotMapSecondary;
     updatePreview();
   }
 
@@ -466,6 +667,79 @@
     };
   }
 
+  // --- Spot map color pickers ---
+  let mapColorDragging = false;
+
+  function mapColorPicker(node, { getValue, setValue }) {
+    node.setAttribute("color", getValue());
+    const onChange = (e) => { setValue(e.detail.value); updatePreview(); };
+    const onDown = () => { mapColorDragging = true; };
+    const onUp = () => { if (mapColorDragging) { mapColorDragging = false; saveSpotMapColors(); } };
+    node.addEventListener("color-changed", onChange);
+    window.addEventListener("mouseup", onUp);
+    window.addEventListener("touchend", onUp);
+    node.addEventListener("mousedown", onDown);
+    node.addEventListener("touchstart", onDown);
+    return {
+      update({ getValue }) { node.setAttribute("color", getValue()); },
+      destroy() {
+        node.removeEventListener("color-changed", onChange);
+        window.removeEventListener("mouseup", onUp);
+        window.removeEventListener("touchend", onUp);
+        node.removeEventListener("mousedown", onDown);
+        node.removeEventListener("touchstart", onDown);
+      },
+    };
+  }
+
+  function applyMapPreset(name) {
+    const p = MAP_COLOR_PRESETS[name];
+    if (!p) return;
+    spotMapQth = p.qth;
+    spotMapStation = p.station;
+    spotMapSpotter = p.spotter;
+    spotMapSecondary = p.secondary;
+    spotMapStrokeQth = p.strokes.qth;
+    spotMapStrokeStation = p.strokes.station;
+    spotMapStrokeSpotter = p.strokes.spotter;
+    spotMapStrokeSecondary = p.strokes.secondary;
+  }
+
+  async function onMapColorModeChange() {
+    if (spotMapColorMode === "preset") {
+      applyMapPreset(spotMapPreset);
+    }
+    updatePreview();
+    await saveSpotMapColors();
+  }
+
+  async function onMapPresetChange() {
+    applyMapPreset(spotMapPreset);
+    updatePreview();
+    await saveSpotMapColors();
+  }
+
+  function onMapColorInput() {
+    updatePreview();
+  }
+
+  async function onMapColorCommit() {
+    updatePreview();
+    await saveSpotMapColors();
+  }
+
+  async function saveSpotMapColors() {
+    const colors = JSON.stringify({
+      mode: spotMapColorMode,
+      preset: spotMapPreset,
+      qth: spotMapQth, station: spotMapStation, spotter: spotMapSpotter, secondary: spotMapSecondary,
+      strokeQth: spotMapStrokeQth, strokeStation: spotMapStrokeStation,
+      strokeSpotter: spotMapStrokeSpotter, strokeSecondary: spotMapStrokeSecondary,
+    });
+    await saveSetting("spot_map_colors", colors);
+    dispatch("saved");
+  }
+
   async function clearCache() {
     try {
       await Promise.all([
@@ -513,6 +787,86 @@
     await flushPending();
     activeTab = tab;
     window.location.hash = `/settings/${tab}`;
+  }
+
+  // --- Masonry layout action ---
+  // Distributes child sections into two columns, placing each in the shorter column.
+  // Runs once on mount and on window resize only — no MutationObserver.
+  function masonry(node) {
+    let col1, col2;
+    const MIN_WIDTH = 640;
+
+    function collectSections() {
+      const direct = [...node.querySelectorAll(":scope > .settings-section")];
+      const inCols = col1 ? [...col1.querySelectorAll(":scope > .settings-section"), ...col2.querySelectorAll(":scope > .settings-section")] : [];
+      return [...direct, ...inCols];
+    }
+
+    function teardownColumns() {
+      if (col1 && col1.parentNode === node) {
+        const sections = collectSections();
+        for (const s of sections) node.appendChild(s);
+        if (col1.parentNode === node) node.removeChild(col1);
+        if (col2.parentNode === node) node.removeChild(col2);
+      }
+    }
+
+    function layout() {
+      const width = node.parentElement?.offsetWidth || node.offsetWidth;
+
+      if (width < MIN_WIDTH) {
+        teardownColumns();
+        return;
+      }
+
+      const sections = collectSections();
+      if (!sections.length) return;
+
+      // Move sections back to node temporarily for measurement
+      for (const s of sections) node.appendChild(s);
+      if (col1 && col1.parentNode === node) {
+        node.removeChild(col1);
+        node.removeChild(col2);
+      }
+
+      if (!col1) {
+        col1 = document.createElement("div");
+        col1.className = "masonry-col";
+        col2 = document.createElement("div");
+        col2.className = "masonry-col";
+      }
+
+      const heights = sections.map(s => s.offsetHeight);
+
+      let h1 = 0, h2 = 0;
+      const assign1 = [], assign2 = [];
+      for (let i = 0; i < sections.length; i++) {
+        if (h1 <= h2) {
+          assign1.push(sections[i]);
+          h1 += heights[i];
+        } else {
+          assign2.push(sections[i]);
+          h2 += heights[i];
+        }
+      }
+
+      for (const s of assign1) col1.appendChild(s);
+      for (const s of assign2) col2.appendChild(s);
+      node.appendChild(col1);
+      node.appendChild(col2);
+    }
+
+    const raf = requestAnimationFrame(layout);
+    const onResize = () => requestAnimationFrame(layout);
+    window.addEventListener("resize", onResize);
+
+    return {
+      destroy() {
+        cancelAnimationFrame(raf);
+        window.removeEventListener("resize", onResize);
+        teardownColumns();
+      },
+    };
   }
 
   async function restartFeeds() {
@@ -842,6 +1196,21 @@
           if (s.key === "logbook_right") logbook_right = s.value === "true";
           if (s.key === "map_theme") map_theme = s.value || "default";
           if (s.key === "map_custom_url") map_custom_url = s.value || "";
+          if (s.key === "spot_map_colors") {
+            try {
+              const c = JSON.parse(s.value);
+              if (c.mode) spotMapColorMode = c.mode;
+              if (c.preset && MAP_COLOR_PRESETS[c.preset]) spotMapPreset = c.preset;
+              if (c.qth) spotMapQth = c.qth;
+              if (c.station) spotMapStation = c.station;
+              if (c.spotter) spotMapSpotter = c.spotter;
+              if (c.secondary) spotMapSecondary = c.secondary;
+              if (c.strokeQth) spotMapStrokeQth = c.strokeQth;
+              if (c.strokeStation) spotMapStrokeStation = c.strokeStation;
+              if (c.strokeSpotter) spotMapStrokeSpotter = c.strokeSpotter;
+              if (c.strokeSecondary) spotMapStrokeSecondary = c.strokeSecondary;
+            } catch {}
+          }
           if (s.key === "custom_header") custom_header = s.value || "";
           if (s.key === "default_page") default_page = s.value || "log";
           if (s.key === "theme") theme = s.value || (window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark");
@@ -1038,7 +1407,7 @@
   </div>
 
   {#if activeTab === "station"}
-  <div class="tab-content">
+  <div class="tab-content" use:masonry>
   <section class="settings-section">
     <h3>Station</h3>
     <div class="setting-row">
@@ -1126,7 +1495,7 @@
   {/if}
 
   {#if activeTab === "features"}
-  <div class="tab-content">
+  <div class="tab-content" use:masonry>
   <section class="settings-section">
     <h3>Parks on the Air (POTA)</h3>
     <div class="setting-row toggle-row">
@@ -1263,7 +1632,69 @@
   {/if}
 
   {#if activeTab === "appearance"}
-  <div class="tab-content">
+  <div class="tab-content" use:masonry>
+  <section class="settings-section">
+    <h3>Maps</h3>
+    <div class="map-preview" bind:this={previewEl}></div>
+    <div class="setting-row">
+      <label for="map_theme">Map Tiles</label>
+      <select id="map_theme" bind:value={map_theme} on:change={onMapThemeChange}>
+        {#each TILE_THEMES as t}
+          <option value={t.value}>{t.label}</option>
+        {/each}
+      </select>
+    </div>
+    {#if map_theme === "custom"}
+      <div class="setting-row">
+        <label for="map_custom_url">Tile URL</label>
+        <input id="map_custom_url" type="text" bind:value={map_custom_url} on:input={onMapCustomUrlInput} on:blur={() => onFieldBlur("map_custom_url")} placeholder="https://&#123;s&#125;.tile.example.com/&#123;z&#125;/&#123;x&#125;/&#123;y&#125;.png" />
+      </div>
+    {/if}
+    <div class="setting-row toggle-row">
+      <label>Colors</label>
+      <div class="theme-mode-switch">
+        <button class="mode-btn" class:active={spotMapColorMode === "preset"} on:click={() => { spotMapColorMode = "preset"; onMapColorModeChange(); }}>Preset</button>
+        <button class="mode-btn" class:active={spotMapColorMode === "custom"} on:click={() => { spotMapColorMode = "custom"; onMapColorModeChange(); }}>Custom</button>
+      </div>
+    </div>
+    {#if spotMapColorMode === "preset"}
+    <div class="setting-row">
+      <label for="map_color_preset">Color Preset</label>
+      <select id="map_color_preset" bind:value={spotMapPreset} on:change={onMapPresetChange}>
+        {#each MAP_COLOR_PRESET_NAMES as name}
+          <option value={name}>{MAP_COLOR_PRESETS[name].label}</option>
+        {/each}
+      </select>
+    </div>
+    {:else}
+    <div class="color-pickers spot-map-colors">
+      <div class="color-picker-group">
+        <label>QTH</label>
+        <hex-color-picker use:mapColorPicker={{ getValue: () => spotMapQth, setValue: (v) => { spotMapQth = v; } }}></hex-color-picker>
+        <input type="text" class="color-hex-input" bind:value={spotMapQth} on:input={onMapColorInput} on:blur={onMapColorCommit} maxlength="7" />
+        <select class="stroke-select" bind:value={spotMapStrokeQth} on:change={onMapColorCommit}><option value="black">Black outline</option><option value="white">White outline</option></select>
+      </div>
+      <div class="color-picker-group">
+        <label>Station</label>
+        <hex-color-picker use:mapColorPicker={{ getValue: () => spotMapStation, setValue: (v) => { spotMapStation = v; } }}></hex-color-picker>
+        <input type="text" class="color-hex-input" bind:value={spotMapStation} on:input={onMapColorInput} on:blur={onMapColorCommit} maxlength="7" />
+        <select class="stroke-select" bind:value={spotMapStrokeStation} on:change={onMapColorCommit}><option value="black">Black outline</option><option value="white">White outline</option></select>
+      </div>
+      <div class="color-picker-group">
+        <label>Spotter</label>
+        <hex-color-picker use:mapColorPicker={{ getValue: () => spotMapSpotter, setValue: (v) => { spotMapSpotter = v; } }}></hex-color-picker>
+        <input type="text" class="color-hex-input" bind:value={spotMapSpotter} on:input={onMapColorInput} on:blur={onMapColorCommit} maxlength="7" />
+        <select class="stroke-select" bind:value={spotMapStrokeSpotter} on:change={onMapColorCommit}><option value="black">Black outline</option><option value="white">White outline</option></select>
+      </div>
+      <div class="color-picker-group">
+        <label>2nd Spotter</label>
+        <hex-color-picker use:mapColorPicker={{ getValue: () => spotMapSecondary, setValue: (v) => { spotMapSecondary = v; } }}></hex-color-picker>
+        <input type="text" class="color-hex-input" bind:value={spotMapSecondary} on:input={onMapColorInput} on:blur={onMapColorCommit} maxlength="7" />
+        <select class="stroke-select" bind:value={spotMapStrokeSecondary} on:change={onMapColorCommit}><option value="black">Black outline</option><option value="white">White outline</option></select>
+      </div>
+    </div>
+    {/if}
+  </section>
   <section class="settings-section">
     <h3>Theme</h3>
     <div class="setting-row toggle-row">
@@ -1327,24 +1758,6 @@
     </div>
   </section>
   <section class="settings-section">
-    <h3>Map Tiles</h3>
-    <div class="setting-row">
-      <label for="map_theme">Map Tiles</label>
-      <select id="map_theme" bind:value={map_theme} on:change={onMapThemeChange}>
-        {#each TILE_THEMES as t}
-          <option value={t.value}>{t.label}</option>
-        {/each}
-      </select>
-    </div>
-    {#if map_theme === "custom"}
-      <div class="setting-row">
-        <label for="map_custom_url">Tile URL</label>
-        <input id="map_custom_url" type="text" bind:value={map_custom_url} on:input={onMapCustomUrlInput} on:blur={() => onFieldBlur("map_custom_url")} placeholder="https://&#123;s&#125;.tile.example.com/&#123;z&#125;/&#123;x&#125;/&#123;y&#125;.png" />
-      </div>
-    {/if}
-    <div class="map-preview" bind:this={previewEl}></div>
-  </section>
-  <section class="settings-section">
     <h3>Wide Mode</h3>
     <div class="setting-row toggle-row">
       <label>
@@ -1367,7 +1780,7 @@
   {/if}
 
   {#if activeTab === "updates"}
-  <div class="tab-content">
+  <div class="tab-content" use:masonry>
   <section class="settings-section">
     <h3>Update Checker</h3>
     {#if updateOfficialBuild}
@@ -1454,7 +1867,7 @@
   {/if}
 
   {#if activeTab === "system"}
-  <div class="tab-content">
+  <div class="tab-content" use:masonry>
   <section class="settings-section">
     <h3>Cache</h3>
     <p class="hint">Cached data: QRZ callsign lookups, SKCC member list. Clearing forces fresh lookups on next use.</p>
@@ -1608,8 +2021,19 @@
   }
 
   .tab-content {
-    columns: 320px 2;
-    column-gap: 1rem;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0 1rem;
+  }
+
+  /* Single-column fallback (no masonry columns created) */
+  .tab-content > :global(.settings-section) {
+    width: 100%;
+  }
+
+  :global(.masonry-col) {
+    flex: 1;
+    min-width: 0;
   }
 
   h2 {
@@ -1625,10 +2049,21 @@
   }
 
   .map-preview {
-    height: 240px;
+    height: 300px;
     border-radius: 4px;
     border: 1px solid var(--border);
+    margin-top: 0.75rem;
     margin-bottom: 0.75rem;
+  }
+
+  .spot-map-colors {
+    margin-top: 0.75rem;
+  }
+
+  .stroke-select {
+    font-size: 0.7rem;
+    padding: 0.15rem 0.3rem;
+    width: 5.5rem;
   }
 
   :global(.qth-label) {
@@ -1651,7 +2086,6 @@
     border-radius: 4px;
     padding: 0.75rem 1rem;
     margin-bottom: 1rem;
-    break-inside: avoid;
   }
 
   h3 {

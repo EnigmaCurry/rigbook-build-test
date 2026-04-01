@@ -40,6 +40,47 @@
     modalParkLoading = false;
   }
 
+  // Spot map colors (loaded from settings, defaults match Aurora Borealis preset)
+  const SPOT_MAP_DEFAULTS = {
+    qth: "#ff4444", station: "#00ff88", spotter: "#00ccff", secondary: "#7744aa",
+    strokeQth: "black", strokeStation: "black", strokeSpotter: "black", strokeSecondary: "white",
+  };
+  let mapColors = { ...SPOT_MAP_DEFAULTS };
+
+  async function loadMapColors() {
+    try {
+      const res = await fetch("/api/settings/spot_map_colors");
+      if (res.ok) {
+        const d = await res.json();
+        if (d.value) {
+          const c = JSON.parse(d.value);
+          mapColors = {
+            qth: c.qth || SPOT_MAP_DEFAULTS.qth,
+            station: c.station || SPOT_MAP_DEFAULTS.station,
+            spotter: c.spotter || SPOT_MAP_DEFAULTS.spotter,
+            secondary: c.secondary || SPOT_MAP_DEFAULTS.secondary,
+            strokeQth: c.strokeQth || SPOT_MAP_DEFAULTS.strokeQth,
+            strokeStation: c.strokeStation || SPOT_MAP_DEFAULTS.strokeStation,
+            strokeSpotter: c.strokeSpotter || SPOT_MAP_DEFAULTS.strokeSpotter,
+            strokeSecondary: c.strokeSecondary || SPOT_MAP_DEFAULTS.strokeSecondary,
+          };
+        }
+      }
+    } catch {}
+  }
+
+  function strokeRgba(name) {
+    return name === "white" ? "rgba(255,255,255,0.85)" : "rgba(0,0,0,0.85)";
+  }
+
+  function darkenColor(hex, factor = 0.5) {
+    const h = hex.replace("#", "");
+    const r = Math.round(parseInt(h.slice(0, 2), 16) * factor);
+    const g = Math.round(parseInt(h.slice(2, 4), 16) * factor);
+    const b = Math.round(parseInt(h.slice(4, 6), 16) * factor);
+    return `#${r.toString(16).padStart(2,"0")}${g.toString(16).padStart(2,"0")}${b.toString(16).padStart(2,"0")}`;
+  }
+
   let spots = [];
   let myGrid = "";
   let myCallsign = "";
@@ -154,6 +195,25 @@
     } else {
       dispatch("addqso", spot);
     }
+  }
+
+  function homeLatLon(callsign, grid) {
+    const pos = gridToLatLon(grid);
+    if (!pos || isNaN(pos.lat) || isNaN(pos.lon)) return null;
+    const hc = homeHoneycomb.get(callsign);
+    if (hc) {
+      const zoom = leafletMap ? leafletMap.getZoom() : 4;
+      // ~20px offset at any zoom, but cap at 0.5° so zoomed-out views don't scatter markers
+      const pixelStep = 20;
+      const degreesPerPixel = 360 / (256 * Math.pow(2, zoom));
+      const maxDeg = 0.5;
+      const step = Math.min(pixelStep * degreesPerPixel * hc.ring, maxDeg * hc.ring);
+      const dlat = Math.sin(hc.angle) * step;
+      const cosLat = Math.cos(pos.lat * Math.PI / 180);
+      const dlon = cosLat > 0.01 ? Math.cos(hc.angle) * step / cosLat : 0;
+      return { lat: pos.lat + dlat, lon: pos.lon + dlon };
+    }
+    return pos;
   }
 
   function spotHomeGrid(spot) {
@@ -486,6 +546,7 @@
   }
 
   onMount(async () => {
+    await loadMapColors();
     checkQrzConfigured();
     fetchStatus();
     fetchBands();
@@ -559,6 +620,8 @@
   let homeMarkers = {};      // callsign -> marker
   let homeSpotterCounts = new Map();
   let homeApproxSet = new Set();
+  let homeHoneycomb = new Map(); // callsign -> { ring, angle } for honeycomb layout
+  let homeBaseGrids = new Map(); // callsign -> grid (for recomputing offsets on zoom)
   let spotterLines = {};     // closest_call -> polyline (to my QTH)
   let myMarker = null;
   let selectionLines = [];   // active triangle lines
@@ -577,6 +640,7 @@
     const latField = g.charCodeAt(1) - 65;
     const lonSq = parseInt(g[2]);
     const latSq = parseInt(g[3]);
+    if (isNaN(lonSq) || isNaN(latSq)) return null;
     let lon = lonField * 20 - 180 + lonSq * 2 + 1;
     let lat = latField * 10 - 90 + latSq * 1 + 0.5;
     if (grid.length >= 6) {
@@ -596,33 +660,70 @@
     return lon;
   }
 
+  function validLL(ll) {
+    if (Array.isArray(ll)) return !isNaN(ll[0]) && !isNaN(ll[1]);
+    if (ll && typeof ll === "object") return !isNaN(ll.lat) && !isNaN(ll.lon || ll.lng);
+    return false;
+  }
+
   /** Normalize a [lat, lon] point relative to a base longitude. */
   function nearLL(baseLon, pt) {
     return [pt[0], nearLon(baseLon, pt[1])];
   }
 
-  const spotterIcon = L.divIcon({ className: "spot-marker", html: '<div class="spot-marker-dot spotter"></div>', iconSize: [10, 10], iconAnchor: [5, 5] });
-  const spotterSecondaryIcon = L.divIcon({ className: "spot-marker", html: '<div class="spot-marker-dot spotter-secondary"></div>', iconSize: [10, 10], iconAnchor: [5, 5] });
+  // Scale markers based on zoom: 1x at zoom 4, grows up to 2x at zoom 12+
+  function zoomScale() {
+    const zoom = leafletMap ? leafletMap.getZoom() : 4;
+    return 1 + Math.max(0, Math.min(zoom - 4, 8)) * 0.125;
+  }
+
+  function getSpotterIcon() {
+    const s = zoomScale();
+    const w = Math.round(8 * s); const sz = Math.round(10 * s); const h = Math.round(sz / 2);
+    return L.divIcon({ className: "spot-marker", html: `<div class="spot-marker-dot" style="width:${w}px;height:${w}px;background:${mapColors.spotter};border:2px solid ${darkenColor(mapColors.spotter)};border-radius:50%"></div>`, iconSize: [sz, sz], iconAnchor: [h, h] });
+  }
+  function getSecondaryIcon() {
+    const s = zoomScale();
+    const w = Math.round(8 * s); const sz = Math.round(10 * s); const h = Math.round(sz / 2);
+    return L.divIcon({ className: "spot-marker", html: `<div class="spot-marker-dot" style="width:${w}px;height:${w}px;background:${mapColors.secondary};border:2px solid ${darkenColor(mapColors.secondary)};border-radius:50%"></div>`, iconSize: [sz, sz], iconAnchor: [h, h] });
+  }
   function homeLocIcon(spotterCount, approx = false) {
-    const bg = approx ? "rgba(255,238,0,0.35)" : "#ffee00";
-    const border = approx ? "#ffee00" : "#997700";
+    const sc = zoomScale();
+    const color = mapColors.station;
+    const borderColor = darkenColor(color);
+    const bg = approx ? color + "88" : color;
+    const border = approx ? color : borderColor;
     const borderStyle = approx ? "2px dashed" : "2px solid";
-    const size = spotterCount > 10 ? 15 : Math.round(10 + (spotterCount / 10) * 5);
+    const qColor = mapColors.strokeStation === "white" ? "#fff" : "#000";
+    const baseSize = spotterCount > 10 ? 15 : Math.round(10 + (spotterCount / 10) * 5);
+    const size = Math.round(baseSize * sc);
     const half = Math.round(size / 2);
     return L.divIcon({
       className: "spot-marker",
-      html: `<div class="spot-marker-dot" style="width:${size-2}px;height:${size-2}px;background:${bg};border:${borderStyle} ${border};border-radius:50%;display:flex;align-items:center;justify-content:center">${approx ? `<span style="color:#997700;font-size:${Math.max(size-4,7)}px;font-weight:bold;line-height:1">?</span>` : ""}</div>`,
+      html: `<div class="spot-marker-dot" style="width:${size-2}px;height:${size-2}px;background:${bg};border:${borderStyle} ${border};border-radius:50%;display:flex;align-items:center;justify-content:center">${approx ? `<span style="color:${qColor};font-size:${Math.max(size-2,8)}px;font-weight:bold;line-height:1">?</span>` : `<span style="color:${qColor};font-size:${Math.max(size-5,6)}px;font-weight:bold;line-height:1">@</span>`}</div>`,
       iconSize: [size, size],
       iconAnchor: [half, half],
     });
   }
-  const homeActiveIcon = L.divIcon({
-    className: "spot-marker",
-    html: '<div class="spot-marker-dot" style="width:13px;height:13px;background:#ffee00;border:2px solid #997700;border-radius:50%"></div>',
-    iconSize: [15, 15],
-    iconAnchor: [7, 7],
-  });
-  const myIcon = L.divIcon({ className: "spot-marker", html: '<div class="spot-marker-dot my-pos"></div>', iconSize: [14, 14], iconAnchor: [7, 7] });
+  function getHomeActiveIcon(approx = false) {
+    const sc = zoomScale();
+    const size = Math.round(13 * sc);
+    const outer = size + 2;
+    const half = Math.round(outer / 2);
+    const qColor = mapColors.strokeStation === "white" ? "#fff" : "#000";
+    const inner = approx ? "" : `<span style="color:${qColor};font-size:${Math.max(size-5,6)}px;font-weight:bold;line-height:1">@</span>`;
+    return L.divIcon({
+      className: "spot-marker",
+      html: `<div class="spot-marker-dot" style="width:${size}px;height:${size}px;background:${mapColors.station};border:2px solid ${darkenColor(mapColors.station)};border-radius:50%;display:flex;align-items:center;justify-content:center">${inner}</div>`,
+      iconSize: [outer, outer],
+      iconAnchor: [half, half],
+    });
+  }
+  function getMyIcon() {
+    const sc = zoomScale();
+    const w = Math.round(12 * sc); const sz = Math.round(14 * sc); const h = Math.round(sz / 2);
+    return L.divIcon({ className: "spot-marker", html: `<div class="spot-marker-dot" style="width:${w}px;height:${w}px;background:${mapColors.qth};border:2px solid ${darkenColor(mapColors.qth)};border-radius:50%;box-shadow:0 0 8px ${mapColors.qth}99"></div>`, iconSize: [sz, sz], iconAnchor: [h, h] });
+  }
 
   function addExpandControl(map, wrapEl) {
     const ExpandControl = L.Control.extend({
@@ -743,13 +844,13 @@
       const visible = coWitnesses.has(call);
       setMarkerVisible(marker, visible);
       if (visible) {
-        marker.setIcon(call === spot.closest_call ? spotterIcon : spotterSecondaryIcon);
+        marker.setIcon(call === spot.closest_call ? getSpotterIcon() : getSecondaryIcon());
       }
     }
     for (const [call, marker] of Object.entries(homeMarkers)) {
       const active = call === spot.callsign;
       setMarkerVisible(marker, active);
-      if (active) marker.setIcon(homeActiveIcon);
+      if (active) marker.setIcon(getHomeActiveIcon(homeApproxSet.has(call)));
     }
   }
 
@@ -765,7 +866,7 @@
     const closest = globalClosestCalls();
     for (const [call, m] of Object.entries(spotterMarkers)) {
       setMarkerVisible(m, true);
-      m.setIcon(closest.has(call) ? spotterIcon : spotterSecondaryIcon);
+      m.setIcon(closest.has(call) ? getSpotterIcon() : getSecondaryIcon());
     }
     for (const [call, m] of Object.entries(homeMarkers)) {
       setMarkerVisible(m, true);
@@ -787,9 +888,9 @@
     return result;
   }
 
-  function spotterLine(from, to, stationCall) {
+  function spotterLine(from, to, stationCall, color) {
     const dash = cqDash(stationCall);
-    const line = L.polyline([from, to], { color: "#00ccff", weight: 2, opacity: 0.6, dashArray: dash.dashArray, className: "line-spotter" }).addTo(leafletMap);
+    const line = L.polyline([from, to], { color: color || mapColors.spotter, weight: 2, opacity: 0.6, dashArray: dash.dashArray, className: "line-spotter" }).addTo(leafletMap);
     const el = line.getElement();
     if (el) {
       const speed = 34;
@@ -800,7 +901,7 @@
   }
 
   function hunterLine(from, to) {
-    const line = L.polyline([from, to], { color: "#ffaa00", weight: 2, opacity: 0.6, dashArray: hunterDash.dashArray, className: "line-hunter" }).addTo(leafletMap);
+    const line = L.polyline([from, to], { color: mapColors.station, weight: 2, opacity: 0.6, dashArray: hunterDash.dashArray, className: "line-hunter" }).addTo(leafletMap);
     const el = line.getElement();
     if (el) {
       const speed = 34; // px per second
@@ -830,6 +931,44 @@
     return a;
   }
 
+  function _refreshMarkerSizes() {
+    if (!leafletMap) return;
+    // Skip generic refresh if a spot/spotter is selected — _redrawTriangle handles it
+    if (lockedSpot || selectedSpotter) return;
+    const closest = globalClosestCalls();
+    for (const [call, marker] of Object.entries(spotterMarkers)) {
+      marker.setIcon(closest.has(call) ? getSpotterIcon() : getSecondaryIcon());
+    }
+    for (const [call, marker] of Object.entries(homeMarkers)) {
+      const count = homeSpotterCounts.get(call) || 1;
+      marker.setIcon(homeLocIcon(count, homeApproxSet.has(call)));
+    }
+    if (myMarker) myMarker.setIcon(getMyIcon());
+  }
+
+  function _redrawTriangle() {
+    if (myMarker) myMarker.setIcon(getMyIcon());
+    if (lockedSpot) drawTriangleForSpot(lockedSpot);
+    else if (selectedSpotter) drawTrianglesForSpotter(selectedSpotter);
+  }
+
+  function _repositionHoneycomb() {
+    if (!leafletMap) return;
+    const lockedCall = lockedSpot?.callsign;
+    const baseLon = gridToLatLon(myGrid)?.lon || 0;
+    for (const [call, marker] of Object.entries(homeMarkers)) {
+      if (!homeHoneycomb.has(call)) continue;
+      if (call === lockedCall) continue; // don't move the selected station
+      const grid = homeBaseGrids.get(call);
+      if (!grid) continue;
+      const hpos = homeLatLon(call, grid);
+      if (!hpos) continue;
+      const ll = nearLL(baseLon, [hpos.lat, hpos.lon]);
+      if (!validLL(ll)) continue;
+      marker.setLatLng(ll);
+    }
+  }
+
   function _updateDistLabels() {
     if (!leafletMap) return;
     // Collect all callsign label pixel positions (always shown)
@@ -852,14 +991,18 @@
     }
   }
 
-  function distanceLabel(from, to, color = "white", t = 0.5) {
+  function distanceLabel(from, to, color = "white", strokeName = "black", t = 0.5) {
+    if (!validLL(from) || !validLL(to)) return L.layerGroup(); // noop
     const mi = haversineMi(from, to);
     const mid = [from[0] + (to[0] - from[0]) * t, from[1] + (to[1] - from[1]) * t];
     const angle = _labelAngle(from, to);
+    const stroke = strokeRgba(strokeName);
     const span = document.createElement("span");
     span.textContent = `${mi} mi`;
     span.style.transform = `rotate(${angle}deg)`;
     span.style.color = color;
+    span.style.webkitTextStroke = `3px ${stroke}`;
+    span.style.textShadow = `0 0 4px ${stroke}`;
     const icon = L.divIcon({
       className: "distance-label",
       html: span.outerHTML,
@@ -871,16 +1014,27 @@
     return marker;
   }
 
-  function markerLabel(ll, text, color) {
+  function markerLabel(ll, text, color, strokeName = "black", zOffset = 2000) {
+    if (!validLL(ll)) return L.layerGroup(); // noop
+    const stroke = strokeRgba(strokeName);
     const icon = L.divIcon({
       className: "marker-label",
-      html: `<span style="color:${color}">${text}</span>`,
+      html: `<span style="color:${color};-webkit-text-stroke:3px ${stroke};text-shadow:0 0 4px ${stroke}">${text}</span>`,
       iconSize: [0, 0],
       iconAnchor: [0, 16],
     });
-    const m = L.marker(ll, { icon, interactive: false, zIndexOffset: 2000 }).addTo(leafletMap);
+    const m = L.marker(ll, { icon, interactive: false, zIndexOffset: zOffset }).addTo(leafletMap);
     _markerLabels.push({ ll });
     return m;
+  }
+
+  /** Check if a pixel position is too close to any occupied positions.
+   *  Min distance shrinks as you zoom in (more room), grows when zoomed out. */
+  function _isTooClose(px, occupied) {
+    const zoom = leafletMap ? leafletMap.getZoom() : 4;
+    // 100px at zoom 3, shrinking to 40px at zoom 10+
+    const minDist = Math.max(40, 100 - (zoom - 3) * 8.5);
+    return occupied.some(p => Math.hypot(p.x - px.x, p.y - px.y) < minDist);
   }
 
   function drawTriangleForSpot(spot) {
@@ -894,50 +1048,61 @@
     const spotterGrid = spot.closest_grid;
     const homeGrid = spotHomeGrid(spot);
     const spotterPos = spotterGrid ? gridToLatLon(spotterGrid) : null;
-    const homePos = homeGrid ? gridToLatLon(homeGrid) : null;
+    const homePos = homeGrid ? homeLatLon(spot.callsign, homeGrid) : null;
 
     // Normalize all points relative to my QTH longitude
     const homeLL = homePos ? nearLL(baseLon, [homePos.lat, homePos.lon]) : null;
     const spotterLL = spotterPos ? nearLL(baseLon, [spotterPos.lat, spotterPos.lon]) : null;
 
-    // Draw dashed cyan lines from secondary spotters first (lower z-order)
-    // Lines point FROM spotter TO station so animation flows toward station
+    // --- Primary labels first (highest z-order) ---
+    // These are always shown: QTH, station, closest spotter
+    const primaryPositions = []; // pixel positions of primary labels
+    selectionLines.push(markerLabel(myLL, myCallsign || "QTH", mapColors.qth, mapColors.strokeQth, 4000));
+    primaryPositions.push(leafletMap.latLngToContainerPoint(myLL));
+    if (homeLL) {
+      selectionLines.push(markerLabel(homeLL, spot.callsign, mapColors.station, mapColors.strokeStation, 3500));
+      primaryPositions.push(leafletMap.latLngToContainerPoint(homeLL));
+    }
+    if (spotterLL) {
+      selectionLines.push(markerLabel(spotterLL, spot.closest_call, mapColors.spotter, mapColors.strokeSpotter, 3000));
+      primaryPositions.push(leafletMap.latLngToContainerPoint(spotterLL));
+    }
+
+    // --- Secondary spotter lines and labels (lower z-order, culled if overlapping) ---
     if (homeLL && spot.spotter_grids) {
       for (const [call, grid] of Object.entries(spot.spotter_grids)) {
         if (call === spot.closest_call) continue;
         const pos = gridToLatLon(grid);
         if (!pos) continue;
-        selectionLines.push(
-          spotterLine(nearLL(baseLon, [pos.lat, pos.lon]), homeLL, spot.callsign),
-        );
+        const secLL = nearLL(baseLon, [pos.lat, pos.lon]);
+        selectionLines.push(spotterLine(secLL, homeLL, spot.callsign, mapColors.secondary));
+        // Only show label if it won't overlap primary labels
+        const secPx = leafletMap.latLngToContainerPoint(secLL);
+        if (!_isTooClose(secPx, primaryPositions)) {
+          selectionLines.push(markerLabel(secLL, call, mapColors.secondary, mapColors.strokeSecondary, 1000));
+          primaryPositions.push(secPx); // prevent subsequent secondaries from overlapping each other too
+        }
       }
     }
-
-    // Primary triangle lines drawn last (higher z-order)
-    // Spotter->Station, Station->QTH, QTH->Spotter — all animate toward their endpoint
-    // Site labels
-    selectionLines.push(markerLabel(myLL, myCallsign || "QTH", "#ff4444"));
-    if (homeLL) selectionLines.push(markerLabel(homeLL, spot.callsign, "#ffaa00"));
-    if (spotterLL) selectionLines.push(markerLabel(spotterLL, spot.closest_call, "#00ccff"));
 
     if (spotterLL && homeLL) {
       selectionLines.push(
         spotterLine(spotterLL, homeLL, spot.callsign),
-        distanceLabel(spotterLL, homeLL, "#00ccff", 0.33),
+        distanceLabel(spotterLL, homeLL, mapColors.spotter, mapColors.strokeSpotter, 0.33),
         hunterLine(homeLL, myLL),
-        distanceLabel(homeLL, myLL, "#ffaa00", 0.5),
-        L.polyline([myLL, spotterLL], { color: "#00ccff", weight: 2, opacity: 0.6, dashArray: "2 16", lineCap: "round" }).addTo(leafletMap),
-        distanceLabel(myLL, spotterLL, "#00ccff", 0.67),
+        distanceLabel(homeLL, myLL, mapColors.station, mapColors.strokeStation, 0.5),
+        L.polyline([myLL, spotterLL], { color: mapColors.spotter, weight: 2, opacity: 0.6, dashArray: "2 16", lineCap: "round" }).addTo(leafletMap),
+        distanceLabel(myLL, spotterLL, mapColors.spotter, mapColors.strokeSpotter, 0.67),
       );
     } else if (spotterLL) {
       selectionLines.push(
-        L.polyline([myLL, spotterLL], { color: "#00ccff", weight: 2, opacity: 0.6, dashArray: "2 16", lineCap: "round" }).addTo(leafletMap),
-        distanceLabel(myLL, spotterLL, "#00ccff"),
+        L.polyline([myLL, spotterLL], { color: mapColors.spotter, weight: 2, opacity: 0.6, dashArray: "2 16", lineCap: "round" }).addTo(leafletMap),
+        distanceLabel(myLL, spotterLL, mapColors.spotter, mapColors.strokeSpotter),
       );
     } else if (homeLL) {
       selectionLines.push(
         hunterLine(myLL, homeLL),
-        distanceLabel(myLL, homeLL, "#ffaa00"),
+        distanceLabel(myLL, homeLL, mapColors.station, mapColors.strokeStation),
       );
     }
     _updateDistLabels();
@@ -955,27 +1120,47 @@
     const rawLL = spotterMarker.getLatLng();
     const sLL = nearLL(baseLon, [rawLL.lat, rawLL.lng]);
 
+    // Determine if this spotter is primary or secondary (could be both for different spots)
+    const isPrimaryForAny = spots.some(s => s.closest_call === call);
+    const spotterColor = isPrimaryForAny ? mapColors.spotter : mapColors.secondary;
+    const spotterStroke = isPrimaryForAny ? mapColors.strokeSpotter : mapColors.strokeSecondary;
+
+    // Primary labels (QTH, spotter) always shown at high z-order
+    const occupied = [];
     selectionLines.push(
-      markerLabel(myLL, myCallsign || "QTH", "#ff4444"),
-      markerLabel(sLL, call, "#00ccff"),
+      markerLabel(myLL, myCallsign || "QTH", mapColors.qth, mapColors.strokeQth, 4000),
+      markerLabel(sLL, call, spotterColor, spotterStroke, 3500),
     );
+    occupied.push(leafletMap.latLngToContainerPoint(myLL));
+    occupied.push(leafletMap.latLngToContainerPoint(sLL));
 
     for (const s of spots) {
       const hg = spotHomeGrid(s);
       const hearsThis = s.closest_call === call || (s.spotter_grids && s.spotter_grids[call]);
       if (!hearsThis || !hg) continue;
-      const homePos = gridToLatLon(hg);
+      const homePos = homeLatLon(s.callsign, hg);
       if (!homePos) continue;
       const homeLL = nearLL(baseLon, [homePos.lat, homePos.lon]);
+      const isPrimary = s.closest_call === call;
+      const lineColor = isPrimary ? mapColors.spotter : mapColors.secondary;
+      const lineStroke = isPrimary ? mapColors.strokeSpotter : mapColors.strokeSecondary;
+      // Always draw lines
       selectionLines.push(
-        markerLabel(homeLL, s.callsign, "#ffaa00"),
-        spotterLine(sLL, homeLL, s.callsign),
-        distanceLabel(sLL, homeLL, "#00ccff", 0.33),
+        spotterLine(sLL, homeLL, s.callsign, lineColor),
         hunterLine(homeLL, myLL),
-        distanceLabel(homeLL, myLL, "#ffaa00", 0.5),
-        L.polyline([myLL, sLL], { color: "#00ccff", weight: 2, opacity: 0.6, dashArray: "2 16", lineCap: "round" }).addTo(leafletMap),
-        distanceLabel(myLL, sLL, "#00ccff", 0.67),
+        L.polyline([myLL, sLL], { color: lineColor, weight: 2, opacity: 0.6, dashArray: "2 16", lineCap: "round" }).addTo(leafletMap),
       );
+      // Only show station label if it won't overlap existing labels
+      const homePx = leafletMap.latLngToContainerPoint(homeLL);
+      if (!_isTooClose(homePx, occupied)) {
+        selectionLines.push(markerLabel(homeLL, s.callsign, mapColors.station, mapColors.strokeStation, 2000));
+        selectionLines.push(
+          distanceLabel(sLL, homeLL, lineColor, lineStroke, 0.33),
+          distanceLabel(homeLL, myLL, mapColors.station, mapColors.strokeStation, 0.5),
+          distanceLabel(myLL, sLL, lineColor, lineStroke, 0.67),
+        );
+        occupied.push(homePx);
+      }
     }
     _updateDistLabels();
   }
@@ -1083,6 +1268,9 @@
     leafletMap.on("click", clearAll);
     leafletMap.on("zoomanim", _updateDistLabels);
     leafletMap.on("zoomend", _updateDistLabels);
+    leafletMap.on("zoomend", _repositionHoneycomb);
+    leafletMap.on("zoomend", _refreshMarkerSizes);
+    leafletMap.on("zoomend", _redrawTriangle);
     addExpandControl(leafletMap, mapEl.parentElement);
     mapResizeObserver = new ResizeObserver(() => { leafletMap?.invalidateSize(); });
     mapResizeObserver.observe(mapEl);
@@ -1096,7 +1284,7 @@
 
     // User's home marker
     if (!myMarker) {
-      myMarker = L.marker([myPos.lat, myPos.lon], { icon: myIcon })
+      myMarker = L.marker([myPos.lat, myPos.lon], { icon: getMyIcon() })
         .addTo(leafletMap);
     }
 
@@ -1142,10 +1330,11 @@
 
     // Add/update spotter markers (normalized to QTH longitude)
     for (const [call, grid] of currentSpotters) {
-      const icon = closestCalls.has(call) ? spotterIcon : spotterSecondaryIcon;
+      const icon = closestCalls.has(call) ? getSpotterIcon() : getSecondaryIcon();
       const pos = gridToLatLon(grid);
       if (!pos) continue;
       const ll = nearLL(baseLon, [pos.lat, pos.lon]);
+      if (!validLL(ll)) continue;
       if (spotterMarkers[call]) {
         spotterMarkers[call].setIcon(icon);
         spotterMarkers[call].setLatLng(ll);
@@ -1158,15 +1347,45 @@
     }
 
     // Add/update home location markers (normalized to QTH longitude)
+    // Group approximate markers by grid so we can honeycomb-offset overlapping ones
+    const approxByGrid = new Map();
+    for (const [call, grid] of currentHomes) {
+      if (homeApproxSet.has(call)) {
+        if (!approxByGrid.has(grid)) approxByGrid.set(grid, []);
+        approxByGrid.get(grid).push(call);
+      }
+    }
+    // Build honeycomb layout: call -> { ring, angle }
+    homeHoneycomb = new Map();
+    homeBaseGrids = new Map();
+    for (const [grid, calls] of approxByGrid) {
+      if (calls.length <= 1) continue;
+      let idx = 0;
+      for (const call of calls) {
+        homeBaseGrids.set(call, grid);
+        if (idx === 0) { idx++; continue; } // first stays at center
+        let ring = 1, pos_in_ring = idx - 1;
+        while (pos_in_ring >= ring * 6) {
+          pos_in_ring -= ring * 6;
+          ring++;
+        }
+        const angle = (pos_in_ring / (ring * 6)) * Math.PI * 2;
+        homeHoneycomb.set(call, { ring, angle });
+        idx++;
+      }
+    }
+
     for (const [call, grid] of currentHomes) {
       const count = homeSpotterCounts.get(call) || 1;
       const icon = homeLocIcon(count, homeApproxSet.has(call));
-      const pos = gridToLatLon(grid);
-      if (!pos) continue;
-      const ll = nearLL(baseLon, [pos.lat, pos.lon]);
+      const hpos = homeLatLon(call, grid);
+      if (!hpos) continue;
+      let ll = nearLL(baseLon, [hpos.lat, hpos.lon]);
+      if (!validLL(ll)) continue;
       if (homeMarkers[call]) {
         homeMarkers[call].setIcon(icon);
-        homeMarkers[call].setLatLng(ll);
+        // Don't move the locked station's marker
+        if (call !== lockedSpot?.callsign) homeMarkers[call].setLatLng(ll);
         continue;
       }
       const hm = L.marker(ll, { icon, zIndexOffset: 1000 })
@@ -1178,8 +1397,8 @@
     // Fit bounds on first load only
     if (!mapInitialFitDone) {
       const allLatLngs = [[myPos.lat, myPos.lon]];
-      for (const m of Object.values(spotterMarkers)) { const ll = m.getLatLng(); allLatLngs.push([ll.lat, ll.lng]); }
-      for (const m of Object.values(homeMarkers)) { const ll = m.getLatLng(); allLatLngs.push([ll.lat, ll.lng]); }
+      for (const m of Object.values(spotterMarkers)) { const ll = m.getLatLng(); if (validLL([ll.lat, ll.lng])) allLatLngs.push([ll.lat, ll.lng]); }
+      for (const m of Object.values(homeMarkers)) { const ll = m.getLatLng(); if (validLL([ll.lat, ll.lng])) allLatLngs.push([ll.lat, ll.lng]); }
       if (allLatLngs.length > 1) {
         leafletMap.fitBounds(allLatLngs, { padding: [30, 30], maxZoom: 8 });
         mapInitialFitDone = true;
@@ -1698,19 +1917,6 @@
     transition: all 0.15s;
   }
 
-  :global(.spot-marker-dot.spotter) {
-    width: 8px;
-    height: 8px;
-    background: #00ccff;
-    border: 2px solid #006688;
-  }
-
-  :global(.spot-marker-dot.spotter-secondary) {
-    width: 8px;
-    height: 8px;
-    background: #7744aa;
-    border: 2px solid #553388;
-  }
 
 
   :global(.line-spotter) {
@@ -1738,8 +1944,6 @@
     font-weight: bold;
     white-space: nowrap;
     paint-order: stroke fill;
-    -webkit-text-stroke: 3px rgba(0,0,0,0.8);
-    text-shadow: 0 0 4px rgba(0,0,0,0.9);
     pointer-events: none;
   }
 
@@ -1752,17 +1956,7 @@
     font-weight: bold;
     white-space: nowrap;
     paint-order: stroke fill;
-    -webkit-text-stroke: 3px rgba(0,0,0,0.8);
-    text-shadow: 0 0 4px rgba(0,0,0,0.9);
     pointer-events: none;
-  }
-
-  :global(.spot-marker-dot.my-pos) {
-    width: 12px;
-    height: 12px;
-    background: #ff4444;
-    border: 2px solid #880000;
-    box-shadow: 0 0 8px rgba(255, 68, 68, 0.6);
   }
 
   :global(.map-fullscreen) {
