@@ -1388,7 +1388,7 @@
       {#if customHeader || myCallsign}
         <!-- svelte-ignore a11y-click-events-have-key-events -->
         <!-- svelte-ignore a11y-no-static-element-interactions -->
-        <span class={customHeader ? "custom-header" : "callsign"} on:click={() => { settingsTab = customHeader ? "appearance" : "station"; settingsHighlight = customHeader ? "content" : "station"; navigate("settings"); }} style="cursor: pointer">{customHeader || myCallsign}{#if currentLogbook && currentLogbook !== "rigbook"}<span class="logbook-name" title={"Current database: " + currentLogbook}>{currentLogbook}</span>{/if}</span>
+        <span class={customHeader ? "custom-header" : "callsign"} on:click={() => { settingsTab = customHeader ? "appearance" : "station"; settingsHighlight = customHeader ? "content" : "station"; navigate("settings"); }} style="cursor: pointer">{customHeader || myCallsign}{#if currentLogbook}<span class="logbook-name" title={"Current database: " + currentLogbook}>{currentLogbook}</span>{/if}</span>
       {/if}
       {#if vfoEditing}
         <span class="vfo-edit">
