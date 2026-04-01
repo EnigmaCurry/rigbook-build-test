@@ -63,7 +63,7 @@ async def list_logbooks():
     last_opened = await db_manager.read_last_opened()
     dbs = []
     for f in DB_DIR.glob("*.db"):
-        if f.stem == "__meta":
+        if f.stem == "__global":
             continue
         dbs.append(
             {

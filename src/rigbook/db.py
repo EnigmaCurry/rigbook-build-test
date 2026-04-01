@@ -16,10 +16,10 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 logger = logging.getLogger("rigbook")
 
 DB_DIR = Path.home() / ".local" / "rigbook"
-META_DB_PATH = DB_DIR / "__meta.db"
+META_DB_PATH = DB_DIR / "__global.db"
 _LAST_OPENED_FILE = DB_DIR / "last_opened.json"
 
-# Settings that can be set globally in __meta.db and overridden per-logbook
+# Settings that can be set globally in __global.db and overridden per-logbook
 GLOBAL_DEFAULTABLE_KEYS = {
     "my_callsign",
     "my_grid",
@@ -33,7 +33,7 @@ GLOBAL_DEFAULTABLE_KEYS = {
     "flrig_enabled",
 }
 
-# Settings that live exclusively in __meta.db (not per-logbook)
+# Settings that live exclusively in __global.db (not per-logbook)
 GLOBAL_ONLY_KEYS = {
     "update_check_enabled",
     "default_pick_mode",
@@ -191,7 +191,7 @@ class PotaPark(Base):
     fetched_at: Mapped[float] = mapped_column(Float, nullable=False)
 
 
-# --- Meta database models (shared __meta.db) ---
+# --- Meta database models (shared __global.db) ---
 
 
 class MetaBase(DeclarativeBase):
@@ -281,7 +281,7 @@ class DatabaseManager:
         self._lock_file = None
         self._host: str | None = None
         self._port: int | None = None
-        # Meta database (shared __meta.db)
+        # Meta database (shared __global.db)
         self.meta_engine = None
         self._meta_session_factory = None
 
@@ -452,7 +452,7 @@ class DatabaseManager:
         self._release_lock()
 
     async def open_meta(self) -> None:
-        """Open the shared __meta.db with WAL mode for multi-process safety."""
+        """Open the shared __global.db with WAL mode for multi-process safety."""
         if self.meta_engine is not None:
             return
         META_DB_PATH.parent.mkdir(parents=True, exist_ok=True)
