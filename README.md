@@ -178,6 +178,18 @@ podman run --rm -it --name rigbook \
   ghcr.io/enigmacurry/rigbook:latest
 ```
 
+### Updating
+
+Rigbook has a built-in self-updater. Go to **Settings → Updates** and
+enable "Check for new Rigbook releases on GitHub." When a new version
+is available, a notification appears with an **Apply Update** button.
+Rigbook downloads the new binary, swaps it in place, and restarts
+automatically.
+
+The updater works with official builds from GitHub Releases. If the
+binary directory is not writable, Rigbook shows a download link
+instead.
+
 ### Environment variables
 
 | Variable | Description |
