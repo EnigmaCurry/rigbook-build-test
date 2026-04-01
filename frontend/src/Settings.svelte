@@ -2191,7 +2191,7 @@
   </section>
 
   <section class="settings-section">
-    <h3>Application Defaults</h3>
+    <h3>Logbook</h3>
     <div class="setting-row toggle-row">
       <label>
         <input type="checkbox" bind:checked={global_default_pick_mode} on:change={() => saveGlobalSetting("default_pick_mode", global_default_pick_mode ? "true" : "false")} />
@@ -2211,6 +2211,10 @@
       {/if}
       <span class="hint">Logbook opened when running rigbook without arguments</span>
     </div>
+  </section>
+
+  <section class="settings-section">
+    <h3>Network</h3>
     <div class="setting-row">
       <label for="global_default_port">Default Port</label>
       <input id="global_default_port" type="text" bind:value={global_default_port} on:blur={() => saveGlobalSetting("default_port", global_default_port.trim())} autocomplete="off" style="max-width: 6rem" />
