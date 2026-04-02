@@ -126,16 +126,6 @@ class Contact(Base):
     updated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
 
-class Cache(Base):
-    __tablename__ = "cache"
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    namespace: Mapped[str] = mapped_column(String, nullable=False)
-    key: Mapped[str] = mapped_column(String, nullable=False)
-    value: Mapped[str | None] = mapped_column(String, nullable=True)
-    expires_at: Mapped[float] = mapped_column(nullable=False)
-
-
 class Setting(Base):
     __tablename__ = "settings"
 
@@ -156,46 +146,6 @@ class Notification(Base):
     timestamp: Mapped[datetime] = mapped_column(
         DateTime, default=lambda: datetime.now(timezone.utc)
     )
-
-
-class PotaProgram(Base):
-    __tablename__ = "pota_programs"
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    program_id: Mapped[int] = mapped_column(Integer, nullable=False)
-    prefix: Mapped[str] = mapped_column(String, nullable=False)
-    name: Mapped[str] = mapped_column(String, nullable=False)
-    fetched_at: Mapped[float] = mapped_column(Float, nullable=False)
-
-
-class PotaLocation(Base):
-    __tablename__ = "pota_locations"
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    location_id: Mapped[int] = mapped_column(Integer, nullable=False)
-    program_prefix: Mapped[str] = mapped_column(String, nullable=False)
-    descriptor: Mapped[str] = mapped_column(String, nullable=False)
-    name: Mapped[str] = mapped_column(String, nullable=False)
-    latitude: Mapped[float | None] = mapped_column(Float, nullable=True)
-    longitude: Mapped[float | None] = mapped_column(Float, nullable=True)
-    fetched_at: Mapped[float] = mapped_column(Float, nullable=False)
-    parks_fetched_at: Mapped[float | None] = mapped_column(Float, nullable=True)
-
-
-class PotaPark(Base):
-    __tablename__ = "pota_parks"
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    reference: Mapped[str] = mapped_column(String, nullable=False)
-    name: Mapped[str] = mapped_column(String, nullable=False)
-    location_desc: Mapped[str] = mapped_column(String, nullable=False)
-    latitude: Mapped[float | None] = mapped_column(Float, nullable=True)
-    longitude: Mapped[float | None] = mapped_column(Float, nullable=True)
-    grid: Mapped[str | None] = mapped_column(String, nullable=True)
-    attempts: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    activations: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    qsos: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    fetched_at: Mapped[float] = mapped_column(Float, nullable=False)
 
 
 # --- Global database models (shared __global.db) ---

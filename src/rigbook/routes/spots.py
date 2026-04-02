@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from rigbook.db import Cache, Setting, get_session, resolve_setting
+from rigbook.db import GlobalCache, Setting, get_global_session, get_session, resolve_setting
 from rigbook.geo_centers import approx_grid_for_country, approx_grid_for_state
 from rigbook.routes.qrz import qrz_lookup
 from rigbook.routes.skcc import _ensure_cache as ensure_skcc_cache
@@ -55,10 +55,10 @@ async def _batch_cache_lookup(
     if not callsigns:
         return {}
     result = await session.execute(
-        select(Cache.key, Cache.value).where(
-            Cache.namespace == namespace,
-            Cache.key.in_(callsigns),
-            Cache.expires_at > time.time(),
+        select(GlobalCache.key, GlobalCache.value).where(
+            GlobalCache.namespace == namespace,
+            GlobalCache.key.in_(callsigns),
+            GlobalCache.expires_at > time.time(),
         )
     )
     return dict(result.all())
@@ -76,6 +76,7 @@ async def query_spots(
     max_distance: int | None = None,
     limit: int = 200,
     session: AsyncSession = Depends(get_session),
+    gdb: AsyncSession = Depends(get_global_session),
 ):
     bands = {b.strip().lower() for b in band.split(",") if b.strip()} if band else None
     spots = await spot_cache.query(
@@ -98,7 +99,7 @@ async def query_spots(
     ]
     if cw_calls:
         await ensure_skcc_cache(session)
-    skcc_map = await _batch_cache_lookup("skcc", cw_calls, session) if cw_calls else {}
+    skcc_map = await _batch_cache_lookup("skcc", cw_calls, gdb) if cw_calls else {}
 
     for s in spots:
         s["skcc"] = skcc_map.get(s["callsign"].upper())
@@ -149,7 +150,7 @@ async def query_spots(
 
     # Enrich with country/state from QRZ cache (after all filters to minimize lookups)
     filtered_calls = list({s["callsign"].upper() for s in spots})
-    qrz_map = await _batch_cache_lookup("qrz", filtered_calls, session)
+    qrz_map = await _batch_cache_lookup("qrz", filtered_calls, gdb)
     for s in spots:
         qrz_json = qrz_map.get(s["callsign"].upper())
         if qrz_json:
