@@ -494,8 +494,11 @@
     showLogbookSwitcher = true;
   }
 
+  let switchingLogbook = false;
+
   async function switchLogbook(name) {
     showLogbookSwitcher = false;
+    switchingLogbook = true;
     try {
       await fetch("/api/logbooks/close", { method: "POST" });
       const res = await fetch("/api/logbooks/open", {
@@ -505,6 +508,7 @@
       });
       if (res.ok) location.reload();
     } catch {}
+    switchingLogbook = false;
   }
 
   let serverShutdown = false;
@@ -628,7 +632,7 @@
       setShutdownState();
     });
     eventSource.addEventListener("logbook-changed", () => {
-      // Another client switched the logbook — reload to pick up the new state
+      if (switchingLogbook) return; // this client initiated the switch
       location.reload();
     });
     eventSource.onerror = () => {
