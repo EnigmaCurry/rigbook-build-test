@@ -627,6 +627,10 @@
       if (eventSource) { eventSource.close(); eventSource = null; }
       setShutdownState();
     });
+    eventSource.addEventListener("logbook-changed", () => {
+      // Another client switched the logbook — reload to pick up the new state
+      location.reload();
+    });
     eventSource.onerror = () => {
       if (serverShutdown) return;
       // EventSource auto-reconnects; nothing to do

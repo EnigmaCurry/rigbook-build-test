@@ -13,7 +13,7 @@ from rigbook.db import (
     db_manager,
 )
 from rigbook.spots import start_feeds, stop_feeds
-from rigbook.sse import notify_shutdown
+from rigbook.sse import broadcast, notify_shutdown
 
 router = APIRouter(prefix="/api/logbooks", tags=["logbooks"])
 
@@ -102,6 +102,7 @@ async def confirm_create():
     except DatabaseLockError as e:
         raise HTTPException(status_code=409, detail=str(e))
     await start_feeds()
+    broadcast("logbook-changed", {"name": name, "action": "opened"})
     return {"name": name, "is_open": True}
 
 
@@ -151,6 +152,7 @@ async def open_logbook(body: LogbookName):
     except DatabaseLockError as e:
         raise HTTPException(status_code=409, detail=str(e))
     await start_feeds()
+    broadcast("logbook-changed", {"name": body.name, "action": "opened"})
     return {"name": body.name, "is_open": True}
 
 
@@ -160,8 +162,10 @@ async def close_logbook():
         raise HTTPException(
             status_code=400, detail="Close is only available in picker mode"
         )
+    name = db_manager.db_name
     await stop_feeds()
     await db_manager.close()
+    broadcast("logbook-changed", {"name": name, "action": "closed"})
     return {"is_open": False}
 
 
@@ -196,4 +200,5 @@ async def create_logbook(body: LogbookName):
     except DatabaseLockError as e:
         raise HTTPException(status_code=409, detail=str(e))
     await start_feeds()
+    broadcast("logbook-changed", {"name": body.name, "action": "created"})
     return {"name": body.name, "is_open": True}
