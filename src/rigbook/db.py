@@ -561,8 +561,12 @@ class DatabaseManager:
                     "UPDATE contacts SET uuid = lower(hex(randomblob(4)) || '-' || hex(randomblob(2)) || '-4' || substr(hex(randomblob(2)),2) || '-' || substr('89ab', abs(random()) % 4 + 1, 1) || substr(hex(randomblob(2)),2) || '-' || hex(randomblob(6))) WHERE uuid IS NULL"
                 )
             )
+        async with self.engine.connect() as conn:
+            sv = await conn.run_sync(
+                lambda c: _get_schema_version(c, "settings")
+            )
         await self.record_last_opened(db_path.stem)
-        logger.info("Opened logbook: %s", db_path)
+        logger.info("Opened logbook: %s (schema v%d)", db_path, sv)
 
     async def close(self) -> None:
         if self.engine:
@@ -591,7 +595,11 @@ class DatabaseManager:
             )
         # Migrate last_opened.json if it exists
         await self._migrate_last_opened()
-        logger.info("Opened global database: %s", META_DB_PATH)
+        async with self.global_engine.connect() as conn:
+            gsv = await conn.run_sync(
+                lambda c: _get_schema_version(c, "settings")
+            )
+        logger.info("Opened global database: %s (schema v%d)", META_DB_PATH, gsv)
 
     async def close_global(self) -> None:
         """Dispose of the global database engine."""
