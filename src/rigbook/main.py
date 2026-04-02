@@ -366,6 +366,139 @@ if static_dir.is_dir():
     app.mount("/", StaticFiles(directory=static_dir, html=True), name="static")
 
 
+def _detect_browser_name() -> str:
+    import subprocess
+    import webbrowser
+
+    name = webbrowser.get().name
+    if name == "xdg-open":
+        try:
+            result = subprocess.run(
+                ["xdg-settings", "get", "default-web-browser"],
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+            desktop = result.stdout.strip()
+            if desktop:
+                return desktop.removesuffix(".desktop")
+        except (OSError, subprocess.TimeoutExpired):
+            pass
+    return name
+
+
+def _check_running_instance(host: str, port: int, no_browser: bool, pid: int | None = None) -> bool:
+    """Check if rigbook is already running at host:port.
+
+    Returns True if we replaced the running instance (caller should continue startup).
+    Calls sys.exit() if we should defer to the running instance.
+    Returns False if nothing is running.
+    """
+    import json as _json
+    import urllib.request
+
+    url = f"http://{host}:{port}"
+
+    # Quick probe — is anything listening?
+    try:
+        urllib.request.urlopen(f"{url}/api/version", timeout=2)
+    except Exception:
+        return False  # nothing running
+
+    # Something is running — gather info
+    running_version = None
+    running_origin = None
+    running_sha = None
+    try:
+        resp = urllib.request.urlopen(f"{url}/api/version", timeout=2)
+        running_version = _json.loads(resp.read()).get("version")
+    except Exception:
+        pass
+    try:
+        resp = urllib.request.urlopen(f"{url}/api/update/platform", timeout=2)
+        platform_info = _json.loads(resp.read())
+        running_origin = platform_info.get("build_origin_repo")
+        running_sha = platform_info.get("build_git_sha")
+    except Exception:
+        pass
+
+    current = version("rigbook")
+    my_origin = BUILD_ORIGIN_REPO or None
+    my_sha = GIT_SHA or None
+    same_lineage = (my_origin == running_origin) or (
+        not my_origin and not running_origin
+    )
+
+    # Check if we should replace the running instance
+    should_replace = False
+    if same_lineage and running_version:
+        if running_version != current:
+            try:
+                from packaging.version import Version
+
+                should_replace = Version(current) > Version(running_version)
+            except Exception:
+                pass
+        elif my_sha and running_sha and my_sha != running_sha:
+            should_replace = True
+
+    if should_replace and pid:
+        import signal
+
+        if running_version == current and my_sha:
+            reason = f"v{current} ({running_sha} → {my_sha})"
+        else:
+            reason = f"v{running_version} → v{current}"
+        print(f"Stopping Rigbook {reason} (PID {pid})...")
+        try:
+            os.kill(pid, signal.SIGTERM)
+            for _ in range(20):
+                time.sleep(0.5)
+                try:
+                    os.kill(pid, 0)
+                except OSError:
+                    break
+        except OSError:
+            pass
+        return True  # replaced — continue startup
+
+    # Not replacing — either open browser or error out
+    if not same_lineage:
+        import platform as _platform
+
+        running_desc = running_origin or "unknown"
+        my_desc = my_origin or "unknown"
+        pid_str = str(pid) if pid else "?"
+        if _platform.system() == "Windows":
+            kill_cmd = f"taskkill /PID {pid_str} /F"
+        else:
+            kill_cmd = f"kill {pid_str}"
+        rv = running_version or "unknown"
+        print(
+            f"Error: Rigbook v{rv} is already running (PID {pid_str}) "
+            f"from build origin {running_desc}.\n"
+            f"This binary is v{current} from {my_desc}. "
+            f"Stop the other instance first:\n"
+            f"  {kill_cmd}",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    if not no_browser:
+        import webbrowser
+
+        browser_name = _detect_browser_name()
+        rv = running_version or current
+        origin = running_origin or "local"
+        print(
+            f"Rigbook v{rv} ({origin}) is already running — opening {url} in {browser_name}"
+        )
+        webbrowser.open(url)
+    else:
+        print(f"Rigbook is already running on {url}")
+    sys.exit(0)
+
+
 def run() -> None:
     import argparse
 
@@ -416,38 +549,19 @@ def run() -> None:
     if args.no_shutdown:
         NO_SHUTDOWN = True
 
-    import subprocess
     import webbrowser
-
-    def _detect_browser_name() -> str:
-        name = webbrowser.get().name
-        if name == "xdg-open":
-            try:
-                result = subprocess.run(
-                    ["xdg-settings", "get", "default-web-browser"],
-                    capture_output=True,
-                    text=True,
-                    timeout=5,
-                )
-                desktop = result.stdout.strip()
-                if desktop:
-                    return desktop.removesuffix(".desktop")
-            except (OSError, subprocess.TimeoutExpired):
-                pass
-        return name
 
     if not db_manager.picker_mode:
         db_path = db_manager.default_db_path
         if db_path.exists() or not db_manager._db_override:
             try:
                 db_manager.check_lock(db_path)
-            except DatabaseLockError as e:
+            except DatabaseLockError:
                 no_browser = args.no_browser or os.environ.get(
                     "RIGBOOK_NO_BROWSER", ""
                 ).lower() in ("1", "true", "yes")
                 lock_info = db_manager.read_lock_info(db_path)
                 if not lock_info or "host" not in lock_info:
-                    # Fallback: can't read lock/addr file (Windows byte-range lock)
                     lock_info = lock_info or {}
                     lock_info.setdefault(
                         "host", os.environ.get("RIGBOOK_HOST", "127.0.0.1")
@@ -455,116 +569,12 @@ def run() -> None:
                     lock_info.setdefault(
                         "port", int(os.environ.get("RIGBOOK_PORT", "8073"))
                     )
-                replaced = False
-                same_lineage = True
-                running_version = None
-                running_origin = None
-
-                if lock_info and "host" in lock_info:
-                    import json as _json
-                    import urllib.request
-
-                    url = f"http://{lock_info['host']}:{lock_info['port']}"
-                    for _ in range(10):
-                        try:
-                            urllib.request.urlopen(f"{url}/api/settings/", timeout=1)
-                            break
-                        except Exception:
-                            time.sleep(0.5)
-
-                    # Check if we're newer or a different build than the running instance
-                    running_version = None
-                    running_origin = None
-                    running_sha = None
-                    try:
-                        resp = urllib.request.urlopen(f"{url}/api/version", timeout=2)
-                        running_version = _json.loads(resp.read()).get("version")
-                    except Exception:
-                        pass
-                    try:
-                        resp = urllib.request.urlopen(
-                            f"{url}/api/update/platform", timeout=2
-                        )
-                        platform_info = _json.loads(resp.read())
-                        running_origin = platform_info.get("build_origin_repo")
-                        running_sha = platform_info.get("build_git_sha")
-                    except Exception:
-                        pass
-
-                    current = version("rigbook")
-                    my_origin = BUILD_ORIGIN_REPO or None
-                    my_sha = GIT_SHA or None
-                    same_lineage = (my_origin == running_origin) or (
-                        not my_origin and not running_origin
-                    )
-                    should_replace = False
-                    if same_lineage and running_version:
-                        if running_version != current:
-                            try:
-                                from packaging.version import Version
-
-                                should_replace = Version(current) > Version(
-                                    running_version
-                                )
-                            except Exception:
-                                pass
-                        elif my_sha and running_sha and my_sha != running_sha:
-                            should_replace = True
-                    if should_replace:
-                        pid = lock_info.get("pid")
-                        if pid:
-                            import signal
-
-                            if running_version == current and my_sha:
-                                reason = f"v{current} ({running_sha} → {my_sha})"
-                            else:
-                                reason = f"v{running_version} → v{current}"
-                            print(f"Stopping Rigbook {reason} (PID {pid})...")
-                            try:
-                                os.kill(pid, signal.SIGTERM)
-                                for _ in range(20):
-                                    time.sleep(0.5)
-                                    try:
-                                        os.kill(pid, 0)
-                                    except OSError:
-                                        break
-                            except OSError:
-                                pass
-                            replaced = True
-
-                if not replaced:
-                    if not same_lineage:
-                        import platform as _platform
-
-                        running_desc = running_origin or "unknown"
-                        my_desc = my_origin or "unknown"
-                        pid = lock_info.get("pid", "?")
-                        if _platform.system() == "Windows":
-                            kill_cmd = f"taskkill /PID {pid} /F"
-                        else:
-                            kill_cmd = f"kill {pid}"
-                        rv = running_version or "unknown"
-                        print(
-                            f"Error: Rigbook v{rv} is already running (PID {pid}) "
-                            f"from build origin {running_desc}.\n"
-                            f"This binary is v{current} from {my_desc}. "
-                            f"Stop the other instance first:\n"
-                            f"  {kill_cmd}",
-                            file=sys.stderr,
-                        )
-                        sys.exit(1)
-                    if not no_browser and lock_info and "host" in lock_info:
-                        url = f"http://{lock_info['host']}:{lock_info['port']}"
-                        browser_name = _detect_browser_name()
-                        rv = running_version or current
-                        origin = running_origin or "local"
-                        print(
-                            f"Rigbook v{rv} ({origin}) is already running — opening {url} in {browser_name}"
-                        )
-                        webbrowser.open(url)
-                    else:
-                        print(f"Error: {e}", file=sys.stderr)
-                    sys.exit(0 if not no_browser and lock_info else 1)
+                _check_running_instance(
+                    lock_info["host"],
+                    lock_info["port"],
+                    no_browser,
+                    pid=lock_info.get("pid"),
+                )
 
     log_level = "DEBUG" if args.verbose else "INFO"
 
@@ -616,6 +626,12 @@ def run() -> None:
 
     host = os.environ.get("RIGBOOK_HOST", "127.0.0.1")
     port = args.port or int(os.environ.get("RIGBOOK_PORT", "8073"))
+
+    # Check if rigbook is already running on this port (works in all modes including picker)
+    no_browser = args.no_browser or os.environ.get(
+        "RIGBOOK_NO_BROWSER", ""
+    ).lower() in ("1", "true", "yes")
+    _check_running_instance(host, port, no_browser)
 
     db_manager.set_listen_addr(host, port)
 
