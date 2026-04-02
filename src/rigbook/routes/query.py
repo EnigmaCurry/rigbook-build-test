@@ -12,7 +12,7 @@ from fastapi import Depends
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from rigbook.db import Setting, db_manager, get_session
+from rigbook.db import META_DB_PATH, Setting, db_manager, get_session
 
 logger = logging.getLogger("rigbook")
 
@@ -23,9 +23,7 @@ async def _download_filename(session: AsyncSession, ext: str) -> str:
     from datetime import datetime, timezone
 
     row = (
-        await session.execute(
-            select(Setting).where(Setting.key == "my_callsign")
-        )
+        await session.execute(select(Setting).where(Setting.key == "my_callsign"))
     ).scalar_one_or_none()
     callsign = (row.value or "").strip().upper().replace("/", "-") if row else ""
     db_name = db_manager.db_name or "rigbook"
@@ -36,42 +34,50 @@ async def _download_filename(session: AsyncSession, ext: str) -> str:
 
 async def _check_enabled(session: AsyncSession) -> None:
     row = (
-        await session.execute(
-            select(Setting).where(Setting.key == "sql_query_enabled")
-        )
+        await session.execute(select(Setting).where(Setting.key == "sql_query_enabled"))
     ).scalar_one_or_none()
     if not row or row.value != "true":
         raise HTTPException(status_code=403, detail="SQL query is disabled")
 
-ALLOWED_TABLES = {"cache", "contacts", "notifications", "pota_programs", "pota_locations", "pota_parks"}
+
+ALLOWED_TABLES = {"contacts", "notifications"}
+META_ALLOWED_TABLES = {
+    "cache",
+    "pota_programs",
+    "pota_locations",
+    "pota_parks",
+}
 MAX_ROWS = 10000
 QUERY_TIMEOUT_OPS = 1_000_000  # SQLite VM operations before abort
 
 
 def _authorizer(action, arg1, arg2, db_name, trigger):
-    """SQLite authorizer that only allows reading the contacts table."""
-    # Allow SELECT statements
+    """SQLite authorizer: allows reading logbook tables and attached meta tables."""
     if action == sqlite3.SQLITE_SELECT:
         return sqlite3.SQLITE_OK
-    # Allow reading from contacts table only
     if action == sqlite3.SQLITE_READ:
-        if arg1 in ALLOWED_TABLES:
+        if db_name == "meta" and arg1 in META_ALLOWED_TABLES:
+            return sqlite3.SQLITE_OK
+        if (db_name == "main" or db_name is None) and arg1 in ALLOWED_TABLES:
             return sqlite3.SQLITE_OK
         return sqlite3.SQLITE_DENY
-    # Allow function calls (count, sum, etc.)
     if action == sqlite3.SQLITE_FUNCTION:
         return sqlite3.SQLITE_OK
-    # Deny everything else
+    if action == sqlite3.SQLITE_ATTACH:
+        return sqlite3.SQLITE_OK
     return sqlite3.SQLITE_DENY
 
 
 def _execute_query(
     db_path: str, sql: str, limit: int | None = MAX_ROWS
 ) -> tuple[list[str], list[list]]:
-    """Execute a read-only query against contacts table, returns (columns, rows)."""
+    """Execute a read-only query against logbook + attached global DB."""
     conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
     try:
         conn.set_authorizer(_authorizer)
+        # Attach global database for cross-DB queries
+        if META_DB_PATH.exists():
+            conn.execute(f"ATTACH DATABASE 'file:{META_DB_PATH}?mode=ro' AS meta")
         ops = [0]
 
         def progress():
@@ -91,27 +97,50 @@ def _execute_query(
 
 @router.get("/schema")
 async def get_schema(session: AsyncSession = Depends(get_session)):
-    """Return schema for all allowed tables."""
+    """Return schema for all allowed tables (logbook + meta)."""
     await _check_enabled(session)
     if not db_manager.db_path:
         raise HTTPException(status_code=503, detail="No logbook is currently open")
 
+    tables = {}
     conn = sqlite3.connect(f"file:{db_manager.db_path}?mode=ro", uri=True)
     try:
-        tables = {}
         for table in sorted(ALLOWED_TABLES):
             cursor = conn.execute(f"PRAGMA table_info('{table}')")
             cols = []
             for row in cursor.fetchall():
-                cols.append({
-                    "name": row[1],
-                    "type": row[2],
-                    "notnull": bool(row[3]),
-                    "pk": bool(row[5]),
-                })
+                cols.append(
+                    {
+                        "name": row[1],
+                        "type": row[2],
+                        "notnull": bool(row[3]),
+                        "pk": bool(row[5]),
+                    }
+                )
             tables[table] = cols
     finally:
         conn.close()
+
+    # Add global database tables
+    if META_DB_PATH.exists():
+        meta_conn = sqlite3.connect(f"file:{META_DB_PATH}?mode=ro", uri=True)
+        try:
+            for table in sorted(META_ALLOWED_TABLES):
+                cursor = meta_conn.execute(f"PRAGMA table_info('{table}')")
+                cols = []
+                for row in cursor.fetchall():
+                    cols.append(
+                        {
+                            "name": row[1],
+                            "type": row[2],
+                            "notnull": bool(row[3]),
+                            "pk": bool(row[5]),
+                        }
+                    )
+                if cols:
+                    tables[f"meta.{table}"] = cols
+        finally:
+            meta_conn.close()
 
     return {"tables": tables}
 
@@ -136,7 +165,7 @@ async def run_query(
         if "not authorized" in str(e).lower():
             raise HTTPException(
                 status_code=403,
-                detail="Access denied: only the contacts table may be queried",
+                detail="Access denied: query references a table that is not allowed",
             )
         if "interrupted" in str(e).lower():
             raise HTTPException(status_code=408, detail="Query timed out")
@@ -145,7 +174,12 @@ async def run_query(
         raise HTTPException(status_code=400, detail=str(e))
 
     truncated = len(rows) == MAX_ROWS
-    return {"columns": columns, "rows": rows, "count": len(rows), "truncated": truncated}
+    return {
+        "columns": columns,
+        "rows": rows,
+        "count": len(rows),
+        "truncated": truncated,
+    }
 
 
 @router.get("/csv")
@@ -168,7 +202,7 @@ async def run_query_csv(
         if "not authorized" in str(e).lower():
             raise HTTPException(
                 status_code=403,
-                detail="Access denied: only the contacts table may be queried",
+                detail="Access denied: query references a table that is not allowed",
             )
         if "interrupted" in str(e).lower():
             raise HTTPException(status_code=408, detail="Query timed out")
@@ -185,7 +219,9 @@ async def run_query_csv(
     return StreamingResponse(
         iter([buf.getvalue()]),
         media_type="text/csv",
-        headers={"Content-Disposition": f"attachment; filename={await _download_filename(session, 'csv')}"},
+        headers={
+            "Content-Disposition": f"attachment; filename={await _download_filename(session, 'csv')}"
+        },
     )
 
 
@@ -209,7 +245,7 @@ async def run_query_json(
         if "not authorized" in str(e).lower():
             raise HTTPException(
                 status_code=403,
-                detail="Access denied: only the contacts table may be queried",
+                detail="Access denied: query references a table that is not allowed",
             )
         if "interrupted" in str(e).lower():
             raise HTTPException(status_code=408, detail="Query timed out")
@@ -223,5 +259,7 @@ async def run_query_json(
     return StreamingResponse(
         iter([content]),
         media_type="application/json",
-        headers={"Content-Disposition": f"inline; filename={await _download_filename(session, 'json')}"},
+        headers={
+            "Content-Disposition": f"inline; filename={await _download_filename(session, 'json')}"
+        },
     )

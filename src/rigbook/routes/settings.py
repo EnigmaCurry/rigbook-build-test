@@ -8,7 +8,14 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from rigbook.db import Setting, db_manager, get_session
+from rigbook.db import (
+    GLOBAL_DEFAULTABLE_KEYS,
+    GlobalSetting,
+    Setting,
+    db_manager,
+    get_global_session,
+    get_session,
+)
 
 logger = logging.getLogger("rigbook")
 
@@ -22,6 +29,7 @@ class SettingValue(BaseModel):
 class SettingResponse(BaseModel):
     key: str
     value: str | None
+    source: str = "logbook"
 
     model_config = {"from_attributes": True}
 
@@ -29,25 +37,66 @@ class SettingResponse(BaseModel):
 HIDDEN_KEYS = {"qrz_password", "hamalert_password"}
 
 
-def _redact(setting: Setting) -> SettingResponse:
+def _redact(setting: Setting, source: str = "logbook") -> SettingResponse:
     if setting.key in HIDDEN_KEYS:
-        return SettingResponse(key=setting.key, value="***" if setting.value else None)
-    return SettingResponse.model_validate(setting)
+        return SettingResponse(
+            key=setting.key,
+            value="***" if setting.value else None,
+            source=source,
+        )
+    return SettingResponse(key=setting.key, value=setting.value, source=source)
 
 
 @router.get("/", response_model=list[SettingResponse])
-async def list_settings(session: AsyncSession = Depends(get_session)):
+async def list_settings(
+    session: AsyncSession = Depends(get_session),
+    gdb: AsyncSession = Depends(get_global_session),
+):
     result = await session.execute(select(Setting))
-    return [_redact(s) for s in result.scalars().all()]
+    logbook_settings = result.scalars().all()
+    # Track which defaultable keys have a non-blank logbook value
+    logbook_filled = {
+        s.key for s in logbook_settings if s.key not in GLOBAL_DEFAULTABLE_KEYS or s.value
+    }
+    responses = [_redact(s, "logbook") for s in logbook_settings if s.key in logbook_filled]
+
+    # Fill in global defaults for defaultable keys that are missing or blank
+    meta_result = await gdb.execute(
+        select(GlobalSetting).where(GlobalSetting.key.in_(GLOBAL_DEFAULTABLE_KEYS))
+    )
+    for ms in meta_result.scalars().all():
+        if ms.key not in logbook_filled and ms.value:
+            responses.append(
+                _redact(Setting(key=ms.key, value=ms.value), source="global")
+            )
+
+    return responses
 
 
 @router.get("/{key}", response_model=SettingResponse)
-async def get_setting(key: str, session: AsyncSession = Depends(get_session)):
+async def get_setting(
+    key: str,
+    session: AsyncSession = Depends(get_session),
+    gdb: AsyncSession = Depends(get_global_session),
+):
     result = await session.execute(select(Setting).where(Setting.key == key))
     setting = result.scalar_one_or_none()
-    if not setting:
-        return SettingResponse(key=key, value=None)
-    return _redact(setting)
+    if setting and setting.value:
+        return _redact(setting, "logbook")
+    # Fall back to global default if applicable
+    if key in GLOBAL_DEFAULTABLE_KEYS:
+        meta_result = await gdb.execute(
+            select(GlobalSetting).where(GlobalSetting.key == key)
+        )
+        meta_setting = meta_result.scalar_one_or_none()
+        if meta_setting and meta_setting.value:
+            return _redact(
+                Setting(key=meta_setting.key, value=meta_setting.value),
+                source="global",
+            )
+    if setting:
+        return _redact(setting, "logbook")
+    return SettingResponse(key=key, value=None)
 
 
 @router.put("/{key}", response_model=SettingResponse)
@@ -67,16 +116,6 @@ async def upsert_setting(
     await session.refresh(setting)
     log_value = "***" if key in HIDDEN_KEYS else data.value
     logger.info("Setting changed: %s = %s", key, log_value)
-
-    # Start or stop auto-shutdown watcher when the setting changes
-    if key == "auto_shutdown_on_disconnect":
-        from rigbook.main import NO_SHUTDOWN
-        from rigbook.sse import start_auto_shutdown, stop_auto_shutdown
-
-        if not NO_SHUTDOWN and data.value == "true":
-            await start_auto_shutdown()
-        else:
-            await stop_auto_shutdown()
 
     return setting
 
@@ -169,7 +208,6 @@ async def backup_status(session: AsyncSession = Depends(get_session)):
     }
 
 
-
 # --- Auto-backup background task ---
 
 _auto_backup_task: asyncio.Task | None = None
@@ -204,7 +242,9 @@ def _prune_auto_backups(backup_dir, stem: str, max_keep: int) -> int:
     for f in to_delete:
         f.unlink()
     if to_delete:
-        logger.info("Auto-backup: pruned %d old backups, keeping %d", len(to_delete), max_keep)
+        logger.info(
+            "Auto-backup: pruned %d old backups, keeping %d", len(to_delete), max_keep
+        )
     return len(to_delete)
 
 
@@ -229,7 +269,9 @@ async def _auto_backup_loop():
                 continue
 
             hours = max(1, int(await _get_setting("auto_backup_hours", "24")))
-            max_keep = max(1, min(100, int(await _get_setting("auto_backup_max", "10"))))
+            max_keep = max(
+                1, min(100, int(await _get_setting("auto_backup_max", "10")))
+            )
             last_str = await _get_setting("auto_backup_last", "")
 
             next_due = _compute_next_due(last_str, hours)
@@ -245,13 +287,13 @@ async def _auto_backup_loop():
                     dest = backup_dir / name
                     shutil.copy2(str(db_path), str(dest))
                     size_kb = dest.stat().st_size / 1024
-                    await _set_setting(
-                        "auto_backup_last", now.isoformat()
-                    )
+                    await _set_setting("auto_backup_last", now.isoformat())
                     next_after = now + timedelta(hours=hours)
                     logger.info(
                         "Auto-backup: saved %s (%.1f KB), next due at %s",
-                        name, size_kb, next_after.strftime("%Y-%m-%d %H:%M:%Sz"),
+                        name,
+                        size_kb,
+                        next_after.strftime("%Y-%m-%d %H:%M:%Sz"),
                     )
                     _prune_auto_backups(backup_dir, db_path.stem, max_keep)
         except asyncio.CancelledError:
@@ -268,9 +310,7 @@ async def start_auto_backup():
     _auto_backup_task = asyncio.create_task(_auto_backup_loop())
 
     # Log initial status
-    enabled = (
-        await _get_setting("auto_backup_enabled", "true")
-    ).lower() == "true"
+    enabled = (await _get_setting("auto_backup_enabled", "true")).lower() == "true"
     if enabled:
         hours = int(await _get_setting("auto_backup_hours", "24"))
         last_str = await _get_setting("auto_backup_last", "")

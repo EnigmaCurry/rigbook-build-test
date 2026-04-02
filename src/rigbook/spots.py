@@ -20,9 +20,7 @@ from datetime import datetime, timedelta, timezone
 from dataclasses import dataclass, field
 
 import httpx
-from sqlalchemy import select
-
-from rigbook.db import Setting, async_session
+from rigbook.db import async_session, resolve_setting
 
 logger = logging.getLogger("rigbook.spots")
 
@@ -891,9 +889,8 @@ async def _read_feed_settings() -> dict[str, str]:
     settings: dict[str, str] = {}
     try:
         async with async_session() as session:
-            result = await session.execute(select(Setting).where(Setting.key.in_(keys)))
-            for s in result.scalars().all():
-                settings[s.key] = s.value or ""
+            for key in keys:
+                settings[key] = await resolve_setting(key, session)
     except RuntimeError:
         pass
     return settings

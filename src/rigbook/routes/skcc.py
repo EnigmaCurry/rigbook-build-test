@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from rigbook.db import Cache, get_session
+from rigbook.db import GlobalCache, get_global_session
 
 logger = logging.getLogger("rigbook")
 
@@ -23,10 +23,10 @@ NAMESPACE = "skcc"
 
 async def _has_valid_cache(session: AsyncSession) -> bool:
     result = await session.execute(
-        select(Cache.id)
+        select(GlobalCache.id)
         .where(
-            Cache.namespace == NAMESPACE,
-            Cache.expires_at > time.time(),
+            GlobalCache.namespace == NAMESPACE,
+            GlobalCache.expires_at > time.time(),
         )
         .limit(1)
     )
@@ -44,7 +44,7 @@ async def _fetch_and_store(session: AsyncSession):
         logger.warning("SKCC fetch failed")
         return
 
-    await session.execute(delete(Cache).where(Cache.namespace == NAMESPACE))
+    await session.execute(delete(GlobalCache).where(GlobalCache.namespace == NAMESPACE))
 
     expires = time.time() + CACHE_TTL
     count = 0
@@ -56,7 +56,7 @@ async def _fetch_and_store(session: AsyncSession):
             base_call = callsign.split("/")[0]
             if base_call and skcc_nr:
                 session.add(
-                    Cache(
+                    GlobalCache(
                         namespace=NAMESPACE,
                         key=base_call,
                         value=skcc_nr,
@@ -81,10 +81,10 @@ async def _ensure_cache(session: AsyncSession):
 
 async def _lookup_db(call: str, session: AsyncSession) -> str | None:
     result = await session.execute(
-        select(Cache.value).where(
-            Cache.namespace == NAMESPACE,
-            Cache.key == call,
-            Cache.expires_at > time.time(),
+        select(GlobalCache.value).where(
+            GlobalCache.namespace == NAMESPACE,
+            GlobalCache.key == call,
+            GlobalCache.expires_at > time.time(),
         )
     )
     row = result.scalar_one_or_none()
@@ -92,7 +92,7 @@ async def _lookup_db(call: str, session: AsyncSession) -> str | None:
 
 
 @router.get("/lookup/{callsign}")
-async def skcc_lookup(callsign: str, session: AsyncSession = Depends(get_session)):
+async def skcc_lookup(callsign: str, session: AsyncSession = Depends(get_global_session)):
     await _ensure_cache(session)
 
     call_upper = callsign.upper().strip()
@@ -106,18 +106,18 @@ async def skcc_lookup(callsign: str, session: AsyncSession = Depends(get_session
 
 
 @router.get("/search")
-async def skcc_search(q: str = "", session: AsyncSession = Depends(get_session)):
+async def skcc_search(q: str = "", session: AsyncSession = Depends(get_global_session)):
     if len(q) < 2:
         return []
     await _ensure_cache(session)
 
     pattern = f"%{q}%"
     result = await session.execute(
-        select(Cache.key, Cache.value)
+        select(GlobalCache.key, GlobalCache.value)
         .where(
-            Cache.namespace == NAMESPACE,
-            Cache.expires_at > time.time(),
-            (Cache.value.ilike(pattern) | Cache.key.ilike(pattern)),
+            GlobalCache.namespace == NAMESPACE,
+            GlobalCache.expires_at > time.time(),
+            (GlobalCache.value.ilike(pattern) | GlobalCache.key.ilike(pattern)),
         )
         .limit(5)
     )
@@ -125,7 +125,7 @@ async def skcc_search(q: str = "", session: AsyncSession = Depends(get_session))
 
 
 @router.delete("/cache")
-async def clear_skcc_cache(session: AsyncSession = Depends(get_session)):
-    await session.execute(delete(Cache).where(Cache.namespace == NAMESPACE))
+async def clear_skcc_cache(session: AsyncSession = Depends(get_global_session)):
+    await session.execute(delete(GlobalCache).where(GlobalCache.namespace == NAMESPACE))
     await session.commit()
     return {"ok": True}

@@ -664,11 +664,22 @@
   }
 
   $: stripCall = () => { call = call.replace(/\s/g, ""); };
-  $: stripGrid = () => {
-    grid = grid.replace(/[^A-Za-z0-9]/g, "");
-    if (grid.length >= 2) grid = grid.substring(0, 2).toUpperCase() + grid.substring(2);
-    if (grid.length >= 5) grid = grid.substring(0, 4) + grid.substring(4).toLowerCase();
-  };
+  function normalizeGrid(g) {
+    let out = "";
+    for (let i = 0; i < g.length && out.length < 6; i++) {
+      const c = g[i];
+      const pos = out.length;
+      if (pos < 2) {
+        if (/[A-Ra-r]/.test(c)) out += c.toUpperCase();
+      } else if (pos < 4) {
+        if (/[0-9]/.test(c)) out += c;
+      } else {
+        if (/[A-Xa-x]/.test(c)) out += c.toLowerCase();
+      }
+    }
+    return out;
+  }
+  $: stripGrid = () => { grid = normalizeGrid(grid); };
   const SKCC_NUMBER_RE = /^\d{1,6}[A-Z]?$/;
   function isValidSkccNumber(val) { return SKCC_NUMBER_RE.test(val.trim().toUpperCase()); }
   $: skccValid = isValidSkccNumber(skcc);
@@ -1192,7 +1203,7 @@
     <div class="field" class:changed={orig && grid !== orig.grid}>
       <label for="grid">Grid</label>
       <div class="grid-input-row">
-        <input id="grid" type="text" bind:value={grid} on:input={stripGrid} />
+        <input id="grid" type="text" bind:value={grid} on:input={stripGrid} maxlength="6" />
         <button type="button" class="grid-picker-btn" on:click={() => showGridPicker = !showGridPicker} title="Pick from map">🌍</button>
       </div>
       {#if showGridPicker}

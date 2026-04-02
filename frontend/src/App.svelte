@@ -14,6 +14,7 @@
   import Notifications from "./Notifications.svelte";
   import Spots from "./Spots.svelte";
   import LogbookPicker from "./LogbookPicker.svelte";
+  import Welcome from "./Welcome.svelte";
   import SearchResults from "./SearchResults.svelte";
   import Query from "./Query.svelte";
   import { bandColor, bandTextColor } from "./bandColors.js";
@@ -230,11 +231,53 @@
   let popupNotifEnabled = false;
   let showPopup = false;
   let activeDesktopNotif = null;
+  let welcomeAcknowledged = true; // assume true until checked
+  let welcomeChecked = false;
   let pickerMode = false;
   let logbookReady = false;
   let logbookOpen = false;
   let currentLogbook = "";
   let pendingLogbook = "";
+  let showLogbookSwitcher = false;
+  let switcherLogbooks = [];
+
+  async function checkWelcome() {
+    try {
+      const res = await fetch("/api/global-settings/welcome_acknowledged");
+      if (res.ok) {
+        const data = await res.json();
+        welcomeAcknowledged = data.value === "true";
+      }
+    } catch {}
+    welcomeChecked = true;
+  }
+
+  async function handleWelcomeComplete(e) {
+    welcomeAcknowledged = true;
+    const logbook = e.detail.logbook;
+    if (logbook) {
+      currentLogbook = logbook;
+      logbookOpen = true;
+      logbookReady = true;
+      setLogbook(logbook);
+      applyTheme();
+      await startAppServices();
+      await checkNeedsSetup();
+      navigate(isWide() ? "dual" : "log");
+    } else {
+      // Skip was clicked — proceed with normal startup
+      await checkLogbookMode();
+      if (logbookOpen) {
+        setLogbook(currentLogbook);
+        applyTheme();
+        fetchWideBreakpoint();
+        await startAppServices();
+        await checkNeedsSetup();
+      } else if (pickerMode) {
+        page = "picker";
+      }
+    }
+  }
 
   async function checkLogbookMode() {
     try {
@@ -440,6 +483,37 @@
     location.reload();
   }
 
+  async function openLogbookSwitcher() {
+    try {
+      const res = await fetch("/api/logbooks/");
+      if (res.ok) {
+        const data = await res.json();
+        switcherLogbooks = data.filter(lb => lb.name !== currentLogbook && !lb.locked);
+      }
+    } catch {}
+    showLogbookSwitcher = true;
+  }
+
+  let switchingLogbook = false;
+
+  async function switchLogbook(name) {
+    showLogbookSwitcher = false;
+    switchingLogbook = true;
+    try {
+      await fetch("/api/logbooks/close", { method: "POST" });
+      const res = await fetch("/api/logbooks/open", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name }),
+      });
+      if (res.ok) {
+          window.location.hash = "/";
+          location.reload();
+        }
+    } catch {}
+    switchingLogbook = false;
+  }
+
   let serverShutdown = false;
   let serverDisconnected = false;
   let shutdownPendingSince = 0;
@@ -559,6 +633,12 @@
       }
       if (eventSource) { eventSource.close(); eventSource = null; }
       setShutdownState();
+    });
+    eventSource.addEventListener("logbook-changed", () => {
+      if (switchingLogbook) return; // this client initiated the switch
+      // Navigate home before reloading — the new logbook may not support the current page
+      window.location.hash = "/";
+      setTimeout(() => location.reload(), 100);
     });
     eventSource.onerror = () => {
       if (serverShutdown) return;
@@ -897,7 +977,7 @@
 
   async function fetchShutdownMenuEnabled() {
     try {
-      const res = await fetch("/api/settings/shutdown_in_menu");
+      const res = await fetch("/api/global-settings/shutdown_in_menu");
       if (res.ok) {
         const data = await res.json();
         shutdownMenuEnabled = data.value === "true";
@@ -1256,6 +1336,9 @@
     clockInterval = setInterval(() => { utcNow = new Date().toISOString().slice(0, 19).replace("T", " ") + "z"; }, 1000);
     window.addEventListener("hashchange", onHashChange);
     window.addEventListener("resize", onResize);
+    connectSSE(); // connect early to prevent auto-shutdown during welcome
+    await checkWelcome();
+    if (!welcomeAcknowledged) return; // Welcome screen will handle the rest
     await checkLogbookMode();
     setLogbook(currentLogbook);
     dualSplit = parseFloat(storageGet("dualSplit")) || 50;
@@ -1309,6 +1392,8 @@
         <button class="welcome-btn" on:click={reloadIfAlive}>Reconnect</button>
       </div>
     </div>
+  {:else if welcomeChecked && !welcomeAcknowledged}
+    <Welcome on:complete={handleWelcomeComplete} />
   {:else if pendingLogbook}
     <header>
       <div class="header-left">
@@ -1342,7 +1427,7 @@
       {#if customHeader || myCallsign}
         <!-- svelte-ignore a11y-click-events-have-key-events -->
         <!-- svelte-ignore a11y-no-static-element-interactions -->
-        <span class={customHeader ? "custom-header" : "callsign"} on:click={() => { settingsTab = customHeader ? "appearance" : "station"; settingsHighlight = customHeader ? "content" : "station"; navigate("settings"); }} style="cursor: pointer">{customHeader || myCallsign}{#if currentLogbook && currentLogbook !== "rigbook"}<span class="logbook-name" title={"Current database: " + currentLogbook}>{currentLogbook}</span>{/if}</span>
+        <span class={customHeader ? "custom-header" : "callsign"} on:click={() => { settingsTab = customHeader ? "appearance" : "station"; settingsHighlight = customHeader ? "content" : "station"; navigate("settings"); }} style="cursor: pointer">{customHeader || myCallsign}{#if currentLogbook}<span class="logbook-name" class:logbook-switchable={pickerMode} title={pickerMode ? "Switch logbook" : "Current database: " + currentLogbook} on:click|stopPropagation={() => { if (pickerMode) openLogbookSwitcher(); }}>{currentLogbook}</span>{/if}</span>
       {/if}
       {#if vfoEditing}
         <span class="vfo-edit">
@@ -1502,6 +1587,27 @@
     </div>
   {/if}
   {/if}
+{#if showLogbookSwitcher}
+  <!-- svelte-ignore a11y-click-events-have-key-events -->
+  <!-- svelte-ignore a11y-no-static-element-interactions -->
+  <div class="switcher-overlay" on:click|self={() => showLogbookSwitcher = false}>
+    <div class="switcher-panel">
+      <h3>Switch Logbook</h3>
+      {#if switcherLogbooks.length > 0}
+        <div class="switcher-list">
+          {#each switcherLogbooks as lb}
+            <button class="switcher-item" on:click={() => switchLogbook(lb.name)}>{lb.name}</button>
+          {/each}
+        </div>
+      {:else}
+        <p class="switcher-empty">No other logbooks available</p>
+      {/if}
+      <div class="switcher-actions">
+        <button class="switcher-cancel" on:click={() => showLogbookSwitcher = false}>Cancel</button>
+      </div>
+    </div>
+  </div>
+{/if}
 </main>
 
 {#if serverDisconnected}
@@ -1686,6 +1792,80 @@
     font-weight: normal;
     line-height: 1;
     margin-top: 0.05rem;
+  }
+  .logbook-switchable {
+    cursor: pointer;
+    text-decoration: underline;
+    text-decoration-style: dotted;
+  }
+  .logbook-switchable:hover {
+    color: var(--accent);
+  }
+  .switcher-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+  }
+  .switcher-panel {
+    background: var(--bg-card, #24252b);
+    border: 1px solid var(--border, #3a3b3f);
+    border-radius: 12px;
+    padding: 1.5rem 2rem;
+    min-width: 240px;
+    max-width: 360px;
+    width: 90vw;
+  }
+  .switcher-panel h3 {
+    margin: 0 0 1rem;
+    font-size: 1.1rem;
+    color: var(--text);
+  }
+  .switcher-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    max-height: 300px;
+    overflow-y: auto;
+  }
+  .switcher-item {
+    background: var(--bg-input, transparent);
+    border: 1px solid var(--border, #3a3b3f);
+    border-radius: 6px;
+    padding: 0.5rem 0.75rem;
+    color: var(--text);
+    font-size: 0.9rem;
+    cursor: pointer;
+    text-align: left;
+  }
+  .switcher-item:hover {
+    background: var(--menu-hover, #333);
+    border-color: var(--accent);
+  }
+  .switcher-empty {
+    color: var(--text-dim);
+    font-size: 0.85rem;
+  }
+  .switcher-actions {
+    margin-top: 1rem;
+    display: flex;
+    justify-content: flex-end;
+  }
+  .switcher-cancel {
+    background: none;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 0.4rem 1rem;
+    color: var(--text-dim);
+    cursor: pointer;
+    font-size: 0.85rem;
+  }
+  .switcher-cancel:hover {
+    color: var(--text);
+    border-color: var(--text-dim);
   }
 
   .up-to-date-check {

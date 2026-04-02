@@ -8,13 +8,13 @@ from pydantic import BaseModel
 from rigbook.db import (
     DB_DIR,
     DatabaseLockError,
+    DatabaseTooNewError,
     _lock_exclusive,
-    _read_last_opened,
     _unlock,
     db_manager,
 )
 from rigbook.spots import start_feeds, stop_feeds
-from rigbook.sse import notify_shutdown
+from rigbook.sse import broadcast, notify_shutdown
 
 router = APIRouter(prefix="/api/logbooks", tags=["logbooks"])
 
@@ -31,6 +31,11 @@ def _validate_name(name: str) -> None:
         raise HTTPException(
             status_code=400,
             detail="Name must contain only letters, digits, hyphens, and underscores",
+        )
+    if name.startswith("__"):
+        raise HTTPException(
+            status_code=400,
+            detail="Name must not start with '__' (reserved for system databases)",
         )
 
 
@@ -61,14 +66,18 @@ def _is_locked(db_path) -> bool:
 
 @router.get("/")
 async def list_logbooks():
-    last_opened = _read_last_opened()
+    last_opened = await db_manager.read_last_opened()
     dbs = []
     for f in DB_DIR.glob("*.db"):
-        dbs.append({
-            "name": f.stem,
-            "size_bytes": f.stat().st_size,
-            "locked": _is_locked(f),
-        })
+        if f.stem == "__global":
+            continue
+        dbs.append(
+            {
+                "name": f.stem,
+                "size_bytes": f.stat().st_size,
+                "locked": _is_locked(f),
+            }
+        )
     dbs.sort(key=lambda d: last_opened.get(d["name"], 0), reverse=True)
     return dbs
 
@@ -93,7 +102,10 @@ async def confirm_create():
         await db_manager.open(db_path)
     except DatabaseLockError as e:
         raise HTTPException(status_code=409, detail=str(e))
+    except DatabaseTooNewError as e:
+        raise HTTPException(status_code=409, detail=str(e))
     await start_feeds()
+    broadcast("logbook-changed", {"name": name, "action": "opened"})
     return {"name": name, "is_open": True}
 
 
@@ -142,7 +154,10 @@ async def open_logbook(body: LogbookName):
         await db_manager.open(db_path)
     except DatabaseLockError as e:
         raise HTTPException(status_code=409, detail=str(e))
+    except DatabaseTooNewError as e:
+        raise HTTPException(status_code=409, detail=str(e))
     await start_feeds()
+    broadcast("logbook-changed", {"name": body.name, "action": "opened"})
     return {"name": body.name, "is_open": True}
 
 
@@ -152,8 +167,10 @@ async def close_logbook():
         raise HTTPException(
             status_code=400, detail="Close is only available in picker mode"
         )
+    name = db_manager.db_name
     await stop_feeds()
     await db_manager.close()
+    broadcast("logbook-changed", {"name": name, "action": "closed"})
     return {"is_open": False}
 
 
@@ -187,5 +204,8 @@ async def create_logbook(body: LogbookName):
         await db_manager.open(db_path)
     except DatabaseLockError as e:
         raise HTTPException(status_code=409, detail=str(e))
+    except DatabaseTooNewError as e:
+        raise HTTPException(status_code=409, detail=str(e))
     await start_feeds()
+    broadcast("logbook-changed", {"name": body.name, "action": "created"})
     return {"name": body.name, "is_open": True}

@@ -10,12 +10,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from rigbook.db import (
     Contact,
-    PotaLocation,
-    PotaPark,
-    PotaProgram,
-    Setting,
-    async_session,
+    GlobalPotaLocation,
+    GlobalPotaPark,
+    GlobalPotaProgram,
+    GlobalSetting,
+    get_global_session,
     get_session,
+    global_async_session,
 )
 
 logger = logging.getLogger(__name__)
@@ -107,12 +108,12 @@ async def _fetch_and_cache_programs(session: AsyncSession):
         )
         loc_res.raise_for_status()
 
-    await session.execute(delete(PotaProgram))
-    await session.execute(delete(PotaLocation))
+    await session.execute(delete(GlobalPotaProgram))
+    await session.execute(delete(GlobalPotaLocation))
 
     for p in prog_res.json():
         session.add(
-            PotaProgram(
+            GlobalPotaProgram(
                 program_id=p.get("programId", 0),
                 prefix=p.get("programPrefix", ""),
                 name=p.get("programName", ""),
@@ -124,7 +125,7 @@ async def _fetch_and_cache_programs(session: AsyncSession):
         descriptor = loc.get("locationDesc", "")
         prefix = descriptor.split("-")[0] if "-" in descriptor else descriptor
         session.add(
-            PotaLocation(
+            GlobalPotaLocation(
                 location_id=loc.get("locationId", 0),
                 program_prefix=prefix,
                 descriptor=descriptor,
@@ -139,28 +140,30 @@ async def _fetch_and_cache_programs(session: AsyncSession):
 
 
 @router.get("/programs")
-async def get_programs(session: AsyncSession = Depends(get_session)):
-    row = (await session.execute(select(func.min(PotaProgram.fetched_at)))).scalar()
+async def get_programs(
+    gdb: AsyncSession = Depends(get_global_session),
+):
+    row = (await gdb.execute(select(func.min(GlobalPotaProgram.fetched_at)))).scalar()
 
     if row is None or time.time() - row > TTL:
-        await _fetch_and_cache_programs(session)
+        await _fetch_and_cache_programs(gdb)
 
-    programs = (await session.execute(select(PotaProgram))).scalars().all()
+    programs = (await gdb.execute(select(GlobalPotaProgram))).scalars().all()
     _build_name_cache(programs)
 
     # Park counts per program prefix
     park_counts = dict(
         (
-            await session.execute(
-                select(PotaPark.location_desc, func.count()).group_by(
-                    PotaPark.location_desc
+            await gdb.execute(
+                select(GlobalPotaPark.location_desc, func.count()).group_by(
+                    GlobalPotaPark.location_desc
                 )
             )
         ).all()
     )
 
     # Map location descriptors to program prefixes
-    loc_rows = (await session.execute(select(PotaLocation))).scalars().all()
+    loc_rows = (await gdb.execute(select(GlobalPotaLocation))).scalars().all()
     prefix_park_count: dict[str, int] = {}
     prefix_loc_count: dict[str, int] = {}
     for loc in loc_rows:
@@ -171,8 +174,8 @@ async def get_programs(session: AsyncSession = Depends(get_session)):
             prefix_loc_count.get(loc.program_prefix, 0) + 1
         )
 
-    # Get selected programs
-    selected = await _get_selected(session)
+    # Get selected programs (global setting)
+    selected = await _get_selected(gdb)
 
     return [
         {
@@ -186,9 +189,11 @@ async def get_programs(session: AsyncSession = Depends(get_session)):
     ]
 
 
-async def _get_selected(session: AsyncSession) -> set[str]:
+async def _get_selected(gdb: AsyncSession) -> set[str]:
     row = (
-        await session.execute(select(Setting.value).where(Setting.key == SELECTED_KEY))
+        await gdb.execute(
+            select(GlobalSetting.value).where(GlobalSetting.key == SELECTED_KEY)
+        )
     ).scalar()
     if row:
         return set(json.loads(row))
@@ -196,11 +201,13 @@ async def _get_selected(session: AsyncSession) -> set[str]:
 
 
 @router.get("/programs/{prefix}/locations")
-async def get_locations(prefix: str, session: AsyncSession = Depends(get_session)):
+async def get_locations(prefix: str, gdb: AsyncSession = Depends(get_global_session)):
     locations = (
         (
-            await session.execute(
-                select(PotaLocation).where(PotaLocation.program_prefix == prefix)
+            await gdb.execute(
+                select(GlobalPotaLocation).where(
+                    GlobalPotaLocation.program_prefix == prefix
+                )
             )
         )
         .scalars()
@@ -211,10 +218,10 @@ async def get_locations(prefix: str, session: AsyncSession = Depends(get_session
     park_counts = {}
     if descriptors:
         rows = (
-            await session.execute(
-                select(PotaPark.location_desc, func.count())
-                .where(PotaPark.location_desc.in_(descriptors))
-                .group_by(PotaPark.location_desc)
+            await gdb.execute(
+                select(GlobalPotaPark.location_desc, func.count())
+                .where(GlobalPotaPark.location_desc.in_(descriptors))
+                .group_by(GlobalPotaPark.location_desc)
             )
         ).all()
         park_counts = dict(rows)
@@ -231,32 +238,38 @@ async def get_locations(prefix: str, session: AsyncSession = Depends(get_session
 
 @router.put("/selected-programs")
 async def set_selected_programs(
-    body: dict, session: AsyncSession = Depends(get_session)
+    body: dict, gdb: AsyncSession = Depends(get_global_session)
 ):
     prefixes = body.get("prefixes", [])
     existing = (
-        await session.execute(select(Setting).where(Setting.key == SELECTED_KEY))
+        await gdb.execute(
+            select(GlobalSetting).where(GlobalSetting.key == SELECTED_KEY)
+        )
     ).scalar_one_or_none()
     if existing:
         existing.value = json.dumps(prefixes)
     else:
-        session.add(Setting(key=SELECTED_KEY, value=json.dumps(prefixes)))
-    await session.commit()
+        gdb.add(GlobalSetting(key=SELECTED_KEY, value=json.dumps(prefixes)))
+    await gdb.commit()
     return {"status": "ok"}
 
 
 @router.post("/fetch-parks")
-async def fetch_parks_for_selected(session: AsyncSession = Depends(get_session)):
+async def fetch_parks_for_selected(
+    gdb: AsyncSession = Depends(get_global_session),
+):
     """Stream progress as SSE while fetching parks for all selected programs."""
-    selected = await _get_selected(session)
+    selected = await _get_selected(gdb)
     if not selected:
         return {"status": "none_selected"}
 
     # Get locations for selected programs
     locations = (
         (
-            await session.execute(
-                select(PotaLocation).where(PotaLocation.program_prefix.in_(selected))
+            await gdb.execute(
+                select(GlobalPotaLocation).where(
+                    GlobalPotaLocation.program_prefix.in_(selected)
+                )
             )
         )
         .scalars()
@@ -288,17 +301,19 @@ async def fetch_parks_for_selected(session: AsyncSession = Depends(get_session))
                     parks_data = res.json()
 
                 try:
-                    session_ctx = async_session()
+                    session_ctx = global_async_session()
                 except RuntimeError:
                     continue
                 async with session_ctx as s:
                     await s.execute(
-                        delete(PotaPark).where(PotaPark.location_desc == loc.descriptor)
+                        delete(GlobalPotaPark).where(
+                            GlobalPotaPark.location_desc == loc.descriptor
+                        )
                     )
                     t = time.time()
                     for p in parks_data:
                         s.add(
-                            PotaPark(
+                            GlobalPotaPark(
                                 reference=p.get("reference", ""),
                                 name=p.get("name", ""),
                                 location_desc=loc.descriptor,
@@ -332,7 +347,7 @@ async def fetch_parks_for_selected(session: AsyncSession = Depends(get_session))
 
 
 @router.get("/parks/search")
-async def search_parks(q: str = "", session: AsyncSession = Depends(get_session)):
+async def search_parks(q: str = "", gdb: AsyncSession = Depends(get_global_session)):
     if len(q) < 2:
         return []
     # Insert hyphen if query looks like a reference missing one (e.g. "US1024" -> "US-1024")
@@ -344,39 +359,39 @@ async def search_parks(q: str = "", session: AsyncSession = Depends(get_session)
     # Subquery to count locations per reference
     loc_count_sub = (
         select(
-            PotaPark.reference.label("ref"),
+            GlobalPotaPark.reference.label("ref"),
             func.count().label("loc_count"),
         )
-        .group_by(PotaPark.reference)
+        .group_by(GlobalPotaPark.reference)
         .subquery()
     )
     rows = (
-        await session.execute(
+        await gdb.execute(
             select(
-                PotaPark,
-                PotaLocation.name.label("location_name"),
-                PotaProgram.name.label("program_name"),
+                GlobalPotaPark,
+                GlobalPotaLocation.name.label("location_name"),
+                GlobalPotaProgram.name.label("program_name"),
                 loc_count_sub.c.loc_count,
             )
             .outerjoin(
-                PotaLocation,
-                PotaPark.location_desc == PotaLocation.descriptor,
+                GlobalPotaLocation,
+                GlobalPotaPark.location_desc == GlobalPotaLocation.descriptor,
             )
             .outerjoin(
-                PotaProgram,
-                PotaLocation.program_prefix == PotaProgram.prefix,
+                GlobalPotaProgram,
+                GlobalPotaLocation.program_prefix == GlobalPotaProgram.prefix,
             )
             .outerjoin(
                 loc_count_sub,
-                PotaPark.reference == loc_count_sub.c.ref,
+                GlobalPotaPark.reference == loc_count_sub.c.ref,
             )
             .where(
-                PotaPark.reference.ilike(ref_pattern)
-                | PotaPark.name.ilike(pattern)
-                | PotaPark.location_desc.ilike(pattern)
-                | PotaPark.grid.ilike(pattern)
+                GlobalPotaPark.reference.ilike(ref_pattern)
+                | GlobalPotaPark.name.ilike(pattern)
+                | GlobalPotaPark.location_desc.ilike(pattern)
+                | GlobalPotaPark.grid.ilike(pattern)
             )
-            .group_by(PotaPark.reference)
+            .group_by(GlobalPotaPark.reference)
             .limit(20)
         )
     ).all()
@@ -397,7 +412,10 @@ async def search_parks(q: str = "", session: AsyncSession = Depends(get_session)
 
 
 @router.get("/my-parks")
-async def get_my_parks(session: AsyncSession = Depends(get_session)):
+async def get_my_parks(
+    session: AsyncSession = Depends(get_session),
+    gdb: AsyncSession = Depends(get_global_session),
+):
     """Return parks where the user has logged at least one QSO, ordered by most recent."""
     rows = (
         await session.execute(
@@ -416,8 +434,8 @@ async def get_my_parks(session: AsyncSession = Depends(get_session)):
     for pota_park, qso_count, last_contact in rows:
         park = (
             (
-                await session.execute(
-                    select(PotaPark).where(PotaPark.reference == pota_park)
+                await gdb.execute(
+                    select(GlobalPotaPark).where(GlobalPotaPark.reference == pota_park)
                 )
             )
             .scalars()
@@ -439,24 +457,28 @@ async def get_my_parks(session: AsyncSession = Depends(get_session)):
 
 
 @router.get("/park/{reference}")
-async def get_park(reference: str, session: AsyncSession = Depends(get_session)):
+async def get_park(
+    reference: str,
+    session: AsyncSession = Depends(get_session),
+    gdb: AsyncSession = Depends(get_global_session),
+):
     ref = reference.upper()
     park = (
-        await session.execute(
+        await gdb.execute(
             select(
-                PotaPark,
-                PotaLocation.name.label("location_name"),
-                PotaProgram.name.label("program_name"),
+                GlobalPotaPark,
+                GlobalPotaLocation.name.label("location_name"),
+                GlobalPotaProgram.name.label("program_name"),
             )
             .outerjoin(
-                PotaLocation,
-                PotaPark.location_desc == PotaLocation.descriptor,
+                GlobalPotaLocation,
+                GlobalPotaPark.location_desc == GlobalPotaLocation.descriptor,
             )
             .outerjoin(
-                PotaProgram,
-                PotaLocation.program_prefix == PotaProgram.prefix,
+                GlobalPotaProgram,
+                GlobalPotaLocation.program_prefix == GlobalPotaProgram.prefix,
             )
-            .where(PotaPark.reference == ref)
+            .where(GlobalPotaPark.reference == ref)
         )
     ).first()
     if not park:
@@ -465,10 +487,13 @@ async def get_park(reference: str, session: AsyncSession = Depends(get_session))
 
     # All locations for this park (multi-state parks have multiple rows)
     all_locs = (
-        await session.execute(
-            select(PotaPark.location_desc, PotaLocation.name)
-            .outerjoin(PotaLocation, PotaPark.location_desc == PotaLocation.descriptor)
-            .where(PotaPark.reference == ref)
+        await gdb.execute(
+            select(GlobalPotaPark.location_desc, GlobalPotaLocation.name)
+            .outerjoin(
+                GlobalPotaLocation,
+                GlobalPotaPark.location_desc == GlobalPotaLocation.descriptor,
+            )
+            .where(GlobalPotaPark.reference == ref)
         )
     ).all()
     locations = [{"descriptor": d, "name": n or ""} for d, n in all_locs]
@@ -520,11 +545,11 @@ async def get_park(reference: str, session: AsyncSession = Depends(get_session))
 
 
 @router.get("/locations/{descriptor}/parks")
-async def get_parks(descriptor: str, session: AsyncSession = Depends(get_session)):
+async def get_parks(descriptor: str, gdb: AsyncSession = Depends(get_global_session)):
     parks = (
         (
-            await session.execute(
-                select(PotaPark).where(PotaPark.location_desc == descriptor)
+            await gdb.execute(
+                select(GlobalPotaPark).where(GlobalPotaPark.location_desc == descriptor)
             )
         )
         .scalars()

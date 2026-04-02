@@ -9,7 +9,12 @@ from fastapi import APIRouter, Depends
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from rigbook.db import Cache, Setting, get_session
+from rigbook.db import (
+    GlobalCache,
+    get_global_session,
+    get_session,
+    resolve_setting,
+)
 
 logger = logging.getLogger("rigbook")
 
@@ -25,32 +30,20 @@ _session_key: str | None = None
 
 
 async def _get_credentials(session: AsyncSession) -> tuple[str, str]:
-    """Return (username, api_key) from settings. Username defaults to my_callsign."""
-    result = await session.execute(
-        select(Setting).where(
-            Setting.key.in_(["qrz_password", "qrz_username", "my_callsign"])
-        )
-    )
-    api_key = ""
-    username = ""
-    callsign = ""
-    for s in result.scalars():
-        if s.key == "qrz_password" and s.value:
-            api_key = s.value
-        if s.key == "qrz_username" and s.value:
-            username = s.value
-        if s.key == "my_callsign" and s.value:
-            callsign = s.value
-    # Use explicit QRZ username, fall back to my_callsign
-    return username or callsign, api_key
+    """Return (username, api_key) from settings with global-default fallback."""
+    api_key = await resolve_setting("qrz_password", session)
+    username = await resolve_setting("qrz_username", session)
+    if not username:
+        username = await resolve_setting("my_callsign", session)
+    return username, api_key
 
 
 async def _get_cached(call: str, session: AsyncSession) -> dict | None:
     result = await session.execute(
-        select(Cache).where(
-            Cache.namespace == NAMESPACE,
-            Cache.key == call,
-            Cache.expires_at > time.time(),
+        select(GlobalCache).where(
+            GlobalCache.namespace == NAMESPACE,
+            GlobalCache.key == call,
+            GlobalCache.expires_at > time.time(),
         )
     )
     row = result.scalar_one_or_none()
@@ -63,10 +56,10 @@ async def _get_cached(call: str, session: AsyncSession) -> dict | None:
 async def _store_cached(call: str, data: dict, session: AsyncSession):
     # Remove old entry
     await session.execute(
-        delete(Cache).where(Cache.namespace == NAMESPACE, Cache.key == call)
+        delete(GlobalCache).where(GlobalCache.namespace == NAMESPACE, GlobalCache.key == call)
     )
     session.add(
-        Cache(
+        GlobalCache(
             namespace=NAMESPACE,
             key=call,
             value=json.dumps(data),
@@ -183,11 +176,15 @@ async def _fetch_callsign(callsign: str, username: str, api_key: str) -> dict | 
 
 
 @router.get("/lookup/{callsign}")
-async def qrz_lookup(callsign: str, session: AsyncSession = Depends(get_session)):
+async def qrz_lookup(
+    callsign: str,
+    session: AsyncSession = Depends(get_session),
+    gdb: AsyncSession = Depends(get_global_session),
+):
     call_upper = callsign.upper().strip()
 
     # Check DB cache (fast path, no lock needed)
-    cached = await _get_cached(call_upper, session)
+    cached = await _get_cached(call_upper, gdb)
     if cached:
         return cached
 
@@ -196,7 +193,7 @@ async def qrz_lookup(callsign: str, session: AsyncSession = Depends(get_session)
         _call_locks[call_upper] = asyncio.Lock()
     async with _call_locks[call_upper]:
         # Re-check cache after acquiring lock
-        cached = await _get_cached(call_upper, session)
+        cached = await _get_cached(call_upper, gdb)
         if cached:
             return cached
 
@@ -212,15 +209,17 @@ async def qrz_lookup(callsign: str, session: AsyncSession = Depends(get_session)
             return {"error": "QRZ lookup failed"}
         if result == _NOT_FOUND:
             not_found = {"error": "Callsign not found"}
-            await _store_cached(call_upper, not_found, session)
+            await _store_cached(call_upper, not_found, gdb)
             return not_found
 
-        await _store_cached(call_upper, result, session)
+        await _store_cached(call_upper, result, gdb)
         return result
 
 
 @router.get("/status")
-async def qrz_status(session: AsyncSession = Depends(get_session)):
+async def qrz_status(
+    session: AsyncSession = Depends(get_session),
+):
     global _session_key
     username, api_key = await _get_credentials(session)
     if not username:
@@ -236,20 +235,20 @@ async def qrz_status(session: AsyncSession = Depends(get_session)):
 
 
 @router.get("/cache/stats")
-async def cache_stats(session: AsyncSession = Depends(get_session)):
+async def cache_stats(gdb: AsyncSession = Depends(get_global_session)):
     """Return QRZ cache statistics for diagnostics."""
     from sqlalchemy import func
 
     now = time.time()
     # Total cached entries (including expired)
     total = (
-        await session.execute(select(func.count()).where(Cache.namespace == NAMESPACE))
+        await gdb.execute(select(func.count()).where(GlobalCache.namespace == NAMESPACE))
     ).scalar() or 0
     # Valid (non-expired) entries
     valid = (
-        await session.execute(
+        await gdb.execute(
             select(func.count()).where(
-                Cache.namespace == NAMESPACE, Cache.expires_at > now
+                GlobalCache.namespace == NAMESPACE, GlobalCache.expires_at > now
             )
         )
     ).scalar() or 0
@@ -260,9 +259,9 @@ async def cache_stats(session: AsyncSession = Depends(get_session)):
     if valid > 0:
         rows = (
             (
-                await session.execute(
-                    select(Cache.value).where(
-                        Cache.namespace == NAMESPACE, Cache.expires_at > now
+                await gdb.execute(
+                    select(GlobalCache.value).where(
+                        GlobalCache.namespace == NAMESPACE, GlobalCache.expires_at > now
                     )
                 )
             )
@@ -288,7 +287,7 @@ async def cache_stats(session: AsyncSession = Depends(get_session)):
 
 
 @router.delete("/cache")
-async def clear_cache(session: AsyncSession = Depends(get_session)):
-    await session.execute(delete(Cache).where(Cache.namespace == NAMESPACE))
-    await session.commit()
+async def clear_cache(gdb: AsyncSession = Depends(get_global_session)):
+    await gdb.execute(delete(GlobalCache).where(GlobalCache.namespace == NAMESPACE))
+    await gdb.commit()
     return {"ok": True}

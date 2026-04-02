@@ -16,7 +16,18 @@ from sqlalchemy import delete, select
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from rigbook.db import Cache, DatabaseLockError, Setting, async_session, db_manager, get_session, init_db
+from rigbook.db import (
+    DatabaseLockError,
+    DatabaseTooNewError,
+    GlobalCache,
+    GlobalSetting,
+    Setting,
+    db_manager,
+    get_global_session,
+    get_session,
+    init_db,
+    global_async_session,
+)
 from rigbook.flrig import router as flrig_router
 from rigbook.routes.logbooks import router as logbooks_router
 from rigbook.routes.spots import router as spots_router
@@ -30,19 +41,23 @@ from rigbook.routes.skcc import router as skcc_router
 from rigbook.routes.contacts import router as contacts_router
 from rigbook.routes.geo import router as geo_router
 from rigbook.routes.notifications import router as notifications_router
-from rigbook.sse import router as sse_router, start_auto_shutdown, stop_auto_shutdown as stop_sse_auto_shutdown
+from rigbook.sse import (
+    router as sse_router,
+    start_auto_shutdown,
+    stop_auto_shutdown as stop_sse_auto_shutdown,
+)
 from rigbook.routes.settings import (
     router as settings_router,
     start_auto_backup,
     stop_auto_backup,
 )
 from rigbook.routes.query import router as query_router
+from rigbook.routes.global_settings import router as global_settings_router
 from rigbook.routes.solar import router as solar_router
 from rigbook.routes.update import router as update_router
 from rigbook._build_info import BUILD_GITHUB_ACTIONS, BUILD_ORIGIN_REPO, GIT_SHA
 
 logger = logging.getLogger("rigbook")
-
 
 
 def _resource_path(relative: str) -> Path:
@@ -84,30 +99,37 @@ async def lifespan(app: FastAPI):
     sha = f" {GIT_SHA}" if GIT_SHA else ""
     logger.info("Rigbook v%s (%s%s)", version("rigbook"), origin, sha)
     if GITHUB_REPO != "EnigmaCurry/rigbook":
-        logger.warning(
-            "Custom update source: BUILD_ORIGIN_REPO=%s", GITHUB_REPO
-        )
+        logger.warning("Custom update source: BUILD_ORIGIN_REPO=%s", GITHUB_REPO)
     from rigbook.routes.update import _cleanup_old_binaries
 
     _cleanup_old_binaries()
-    await init_db()
-    if db_manager.is_open:
-        # Clear update check cache so we always check once on startup
-        async with async_session() as session:
-            await session.execute(
-                delete(Cache).where(
-                    Cache.namespace == UPDATE_CACHE_NS,
-                    Cache.key == UPDATE_CACHE_KEY,
-                )
+    try:
+        await init_db()
+    except DatabaseTooNewError as e:
+        logger.error("%s", e)
+        print(f"Error: {e}", file=sys.stderr)
+        os.kill(os.getpid(), signal.SIGTERM)
+        yield
+        return
+    # Clear update check cache so we always check once on startup
+    async with global_async_session() as gdb:
+        await gdb.execute(
+            delete(GlobalCache).where(
+                GlobalCache.namespace == UPDATE_CACHE_NS,
+                GlobalCache.key == UPDATE_CACHE_KEY,
             )
-            await session.commit()
+        )
+        await gdb.commit()
+    if db_manager.is_open:
         await start_feeds()
         await start_auto_backup()
         if not NO_SHUTDOWN:
-            async with async_session() as session:
+            async with global_async_session() as gdb:
                 row = (
-                    await session.execute(
-                        select(Setting).where(Setting.key == "auto_shutdown_on_disconnect")
+                    await gdb.execute(
+                        select(GlobalSetting).where(
+                            GlobalSetting.key == "auto_shutdown_on_disconnect"
+                        )
                     )
                 ).scalar_one_or_none()
                 if row and row.value == "true":
@@ -117,6 +139,7 @@ async def lifespan(app: FastAPI):
     await stop_auto_backup()
     await stop_feeds()
     await db_manager.close()
+    await db_manager.close_global()
 
 
 app = FastAPI(title="Rigbook", lifespan=lifespan)
@@ -143,7 +166,11 @@ NO_SHUTDOWN = os.environ.get("RIGBOOK_NO_SHUTDOWN", "").lower() in ("1", "true",
 
 @app.get("/api/version")
 async def get_version():
-    return {"version": version("rigbook"), "no_shutdown": NO_SHUTDOWN, "frozen": getattr(sys, "frozen", False)}
+    return {
+        "version": version("rigbook"),
+        "no_shutdown": NO_SHUTDOWN,
+        "frozen": getattr(sys, "frozen", False),
+    }
 
 
 GITHUB_REPO = BUILD_ORIGIN_REPO or "EnigmaCurry/rigbook"
@@ -154,7 +181,9 @@ UPDATE_CACHE_TTL = 3600  # 1 hour
 
 @app.get("/api/update-check")
 async def check_for_update(
-    session: AsyncSession = Depends(get_session), bust: bool = False
+    gdb: AsyncSession = Depends(get_global_session),
+    session: AsyncSession = Depends(get_session),
+    bust: bool = False,
 ):
     current = version("rigbook")
 
@@ -174,21 +203,21 @@ async def check_for_update(
 
     # Bust cache if requested
     if bust:
-        await session.execute(
-            delete(Cache).where(
-                Cache.namespace == UPDATE_CACHE_NS,
-                Cache.key == UPDATE_CACHE_KEY,
+        await gdb.execute(
+            delete(GlobalCache).where(
+                GlobalCache.namespace == UPDATE_CACHE_NS,
+                GlobalCache.key == UPDATE_CACHE_KEY,
             )
         )
-        await session.commit()
+        await gdb.commit()
 
     # Check cache
     cached = (
-        await session.execute(
-            select(Cache).where(
-                Cache.namespace == UPDATE_CACHE_NS,
-                Cache.key == UPDATE_CACHE_KEY,
-                Cache.expires_at > time.time(),
+        await gdb.execute(
+            select(GlobalCache).where(
+                GlobalCache.namespace == UPDATE_CACHE_NS,
+                GlobalCache.key == UPDATE_CACHE_KEY,
+                GlobalCache.expires_at > time.time(),
             )
         )
     ).scalar_one_or_none()
@@ -213,7 +242,12 @@ async def check_for_update(
                 release = resp.json()
                 latest = release["tag_name"].lstrip("v")
                 url = release["html_url"]
-                logger.info("Update check (%s): current=%s, latest=%s", GITHUB_REPO, current, latest)
+                logger.info(
+                    "Update check (%s): current=%s, latest=%s",
+                    GITHUB_REPO,
+                    current,
+                    latest,
+                )
         except Exception:
             logger.info("Update check failed: could not reach GitHub")
             return {"current": current, "latest": None, "update_available": False}
@@ -221,14 +255,14 @@ async def check_for_update(
         checked_at = time.time()
 
         # Store in cache
-        await session.execute(
-            delete(Cache).where(
-                Cache.namespace == UPDATE_CACHE_NS,
-                Cache.key == UPDATE_CACHE_KEY,
+        await gdb.execute(
+            delete(GlobalCache).where(
+                GlobalCache.namespace == UPDATE_CACHE_NS,
+                GlobalCache.key == UPDATE_CACHE_KEY,
             )
         )
-        session.add(
-            Cache(
+        gdb.add(
+            GlobalCache(
                 namespace=UPDATE_CACHE_NS,
                 key=UPDATE_CACHE_KEY,
                 value=json.dumps(
@@ -237,7 +271,7 @@ async def check_for_update(
                 expires_at=time.time() + UPDATE_CACHE_TTL,
             )
         )
-        await session.commit()
+        await gdb.commit()
 
     dev_suffixes = ("-dev", "-alpha", "-beta", "-rc")
     is_dev = any(s in current for s in dev_suffixes)
@@ -280,14 +314,17 @@ async def check_for_update(
 
 
 @app.post("/api/update-check/skip")
-async def skip_update(session: AsyncSession = Depends(get_session)):
+async def skip_update(
+    gdb: AsyncSession = Depends(get_global_session),
+    session: AsyncSession = Depends(get_session),
+):
     """Skip the currently available update version."""
-    # Get the latest known version
+    # Get the latest known version from meta cache
     cached = (
-        await session.execute(
-            select(Cache).where(
-                Cache.namespace == UPDATE_CACHE_NS,
-                Cache.key == UPDATE_CACHE_KEY,
+        await gdb.execute(
+            select(GlobalCache).where(
+                GlobalCache.namespace == UPDATE_CACHE_NS,
+                GlobalCache.key == UPDATE_CACHE_KEY,
             )
         )
     ).scalar_one_or_none()
@@ -298,7 +335,7 @@ async def skip_update(session: AsyncSession = Depends(get_session)):
     if not latest:
         return {"status": "no_update"}
 
-    # Store the skipped version
+    # Store the skipped version in logbook settings (will move to meta in Phase 4)
     row = (
         await session.execute(
             select(Setting).where(Setting.key == "update_skip_version")
@@ -316,6 +353,7 @@ async def skip_update(session: AsyncSession = Depends(get_session)):
 app.include_router(logbooks_router)
 app.include_router(contacts_router)
 app.include_router(settings_router)
+app.include_router(global_settings_router)
 app.include_router(flrig_router)
 app.include_router(geo_router)
 app.include_router(adif_router)
@@ -336,12 +374,147 @@ if static_dir.is_dir():
     app.mount("/", StaticFiles(directory=static_dir, html=True), name="static")
 
 
+def _detect_browser_name() -> str:
+    import subprocess
+    import webbrowser
+
+    name = webbrowser.get().name
+    if name == "xdg-open":
+        try:
+            result = subprocess.run(
+                ["xdg-settings", "get", "default-web-browser"],
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+            desktop = result.stdout.strip()
+            if desktop:
+                return desktop.removesuffix(".desktop")
+        except (OSError, subprocess.TimeoutExpired):
+            pass
+    return name
+
+
+def _check_running_instance(host: str, port: int, no_browser: bool, pid: int | None = None) -> bool:
+    """Check if rigbook is already running at host:port.
+
+    Returns True if we replaced the running instance (caller should continue startup).
+    Calls sys.exit() if we should defer to the running instance.
+    Returns False if nothing is running.
+    """
+    import json as _json
+    import urllib.request
+
+    url = f"http://{host}:{port}"
+
+    # Quick probe — is anything listening?
+    try:
+        urllib.request.urlopen(f"{url}/api/version", timeout=2)
+    except Exception:
+        return False  # nothing running
+
+    # Something is running — gather info
+    running_version = None
+    running_origin = None
+    running_sha = None
+    try:
+        resp = urllib.request.urlopen(f"{url}/api/version", timeout=2)
+        running_version = _json.loads(resp.read()).get("version")
+    except Exception:
+        pass
+    try:
+        resp = urllib.request.urlopen(f"{url}/api/update/platform", timeout=2)
+        platform_info = _json.loads(resp.read())
+        running_origin = platform_info.get("build_origin_repo")
+        running_sha = platform_info.get("build_git_sha")
+    except Exception:
+        pass
+
+    current = version("rigbook")
+    my_origin = BUILD_ORIGIN_REPO or None
+    my_sha = GIT_SHA or None
+    same_lineage = (my_origin == running_origin) or (
+        not my_origin and not running_origin
+    )
+
+    # Check if we should replace the running instance
+    should_replace = False
+    if same_lineage and running_version:
+        if running_version != current:
+            try:
+                from packaging.version import Version
+
+                should_replace = Version(current) > Version(running_version)
+            except Exception:
+                pass
+        elif my_sha and running_sha and my_sha != running_sha:
+            should_replace = True
+
+    if should_replace and pid:
+        import signal
+
+        if running_version == current and my_sha:
+            reason = f"v{current} ({running_sha} → {my_sha})"
+        else:
+            reason = f"v{running_version} → v{current}"
+        print(f"Stopping Rigbook {reason} (PID {pid})...")
+        try:
+            os.kill(pid, signal.SIGTERM)
+            for _ in range(20):
+                time.sleep(0.5)
+                try:
+                    os.kill(pid, 0)
+                except OSError:
+                    break
+        except OSError:
+            pass
+        return True  # replaced — continue startup
+
+    # Not replacing — either open browser or error out
+    if not same_lineage:
+        import platform as _platform
+
+        running_desc = running_origin or "unknown"
+        my_desc = my_origin or "unknown"
+        pid_str = str(pid) if pid else "?"
+        if _platform.system() == "Windows":
+            kill_cmd = f"taskkill /PID {pid_str} /F"
+        else:
+            kill_cmd = f"kill {pid_str}"
+        rv = running_version or "unknown"
+        print(
+            f"Error: Rigbook v{rv} is already running (PID {pid_str}) "
+            f"from build origin {running_desc}.\n"
+            f"This binary is v{current} from {my_desc}. "
+            f"Stop the other instance first:\n"
+            f"  {kill_cmd}",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    if not no_browser:
+        import webbrowser
+
+        browser_name = _detect_browser_name()
+        rv = running_version or current
+        origin = running_origin or "local"
+        print(
+            f"Rigbook v{rv} ({origin}) is already running — opening {url} in {browser_name}"
+        )
+        webbrowser.open(url)
+    else:
+        print(f"Rigbook is already running on {url}")
+    sys.exit(0)
+
+
 def run() -> None:
     import argparse
 
     parser = argparse.ArgumentParser(description="Rigbook - Ham Radio Logbook")
     parser.add_argument(
-        "--version", action="version", version=f"rigbook {version('rigbook')} ({BUILD_ORIGIN_REPO or 'local build'}{' ' + GIT_SHA if GIT_SHA else ''})"
+        "--version",
+        action="version",
+        version=f"rigbook {version('rigbook')} ({BUILD_ORIGIN_REPO or 'local build'}{' ' + GIT_SHA if GIT_SHA else ''})",
     )
     parser.add_argument(
         "-v", "--verbose", action="store_true", help="Enable verbose/debug logging"
@@ -377,153 +550,46 @@ def run() -> None:
     args = parser.parse_args()
 
     global NO_SHUTDOWN
+    if args.name and args.name.startswith("__"):
+        print("Error: logbook name must not start with '__' (reserved for system databases)")
+        sys.exit(1)
     db_manager.configure(db_name=args.name, picker=args.pick)
     if args.no_shutdown:
         NO_SHUTDOWN = True
 
-    import subprocess
     import webbrowser
-
-    def _detect_browser_name() -> str:
-        name = webbrowser.get().name
-        if name == "xdg-open":
-            try:
-                result = subprocess.run(
-                    ["xdg-settings", "get", "default-web-browser"],
-                    capture_output=True, text=True, timeout=5,
-                )
-                desktop = result.stdout.strip()
-                if desktop:
-                    return desktop.removesuffix(".desktop")
-            except (OSError, subprocess.TimeoutExpired):
-                pass
-        return name
 
     if not db_manager.picker_mode:
         db_path = db_manager.default_db_path
         if db_path.exists() or not db_manager._db_override:
             try:
                 db_manager.check_lock(db_path)
-            except DatabaseLockError as e:
+            except DatabaseLockError:
                 no_browser = args.no_browser or os.environ.get(
                     "RIGBOOK_NO_BROWSER", ""
                 ).lower() in ("1", "true", "yes")
                 lock_info = db_manager.read_lock_info(db_path)
                 if not lock_info or "host" not in lock_info:
-                    # Fallback: can't read lock/addr file (Windows byte-range lock)
                     lock_info = lock_info or {}
-                    lock_info.setdefault("host", os.environ.get("RIGBOOK_HOST", "127.0.0.1"))
-                    lock_info.setdefault("port", int(os.environ.get("RIGBOOK_PORT", "8073")))
-                replaced = False
-                same_lineage = True
-                running_version = None
-                running_origin = None
-
-                if lock_info and "host" in lock_info:
-                    import json as _json
-                    import urllib.request
-
-                    url = f"http://{lock_info['host']}:{lock_info['port']}"
-                    for _ in range(10):
-                        try:
-                            urllib.request.urlopen(f"{url}/api/settings/", timeout=1)
-                            break
-                        except Exception:
-                            time.sleep(0.5)
-
-                    # Check if we're newer or a different build than the running instance
-                    running_version = None
-                    running_origin = None
-                    running_sha = None
-                    try:
-                        resp = urllib.request.urlopen(f"{url}/api/version", timeout=2)
-                        running_version = _json.loads(resp.read()).get("version")
-                    except Exception:
-                        pass
-                    try:
-                        resp = urllib.request.urlopen(f"{url}/api/update/platform", timeout=2)
-                        platform_info = _json.loads(resp.read())
-                        running_origin = platform_info.get("build_origin_repo")
-                        running_sha = platform_info.get("build_git_sha")
-                    except Exception:
-                        pass
-
-                    current = version("rigbook")
-                    my_origin = BUILD_ORIGIN_REPO or None
-                    my_sha = GIT_SHA or None
-                    same_lineage = (my_origin == running_origin) or (not my_origin and not running_origin)
-                    should_replace = False
-                    if same_lineage and running_version:
-                        if running_version != current:
-                            try:
-                                from packaging.version import Version
-                                should_replace = Version(current) > Version(running_version)
-                            except Exception:
-                                pass
-                        elif my_sha and running_sha and my_sha != running_sha:
-                            should_replace = True
-                    if should_replace:
-                            pid = lock_info.get("pid")
-                            if pid:
-                                import signal
-
-                                if running_version == current and my_sha:
-                                    reason = f"v{current} ({running_sha} → {my_sha})"
-                                else:
-                                    reason = f"v{running_version} → v{current}"
-                                print(
-                                    f"Stopping Rigbook {reason} (PID {pid})..."
-                                )
-                                try:
-                                    os.kill(pid, signal.SIGTERM)
-                                    for _ in range(20):
-                                        time.sleep(0.5)
-                                        try:
-                                            os.kill(pid, 0)
-                                        except OSError:
-                                            break
-                                except OSError:
-                                    pass
-                                replaced = True
-
-                if not replaced:
-                    if not same_lineage:
-                        import platform as _platform
-
-                        running_desc = running_origin or "unknown"
-                        my_desc = my_origin or "unknown"
-                        pid = lock_info.get("pid", "?")
-                        if _platform.system() == "Windows":
-                            kill_cmd = f"taskkill /PID {pid} /F"
-                        else:
-                            kill_cmd = f"kill {pid}"
-                        rv = running_version or "unknown"
-                        print(
-                            f"Error: Rigbook v{rv} is already running (PID {pid}) "
-                            f"from build origin {running_desc}.\n"
-                            f"This binary is v{current} from {my_desc}. "
-                            f"Stop the other instance first:\n"
-                            f"  {kill_cmd}",
-                            file=sys.stderr,
-                        )
-                        sys.exit(1)
-                    if not no_browser and lock_info and "host" in lock_info:
-                        url = f"http://{lock_info['host']}:{lock_info['port']}"
-                        browser_name = _detect_browser_name()
-                        rv = running_version or current
-                        origin = running_origin or "local"
-                        print(f"Rigbook v{rv} ({origin}) is already running — opening {url} in {browser_name}")
-                        webbrowser.open(url)
-                    else:
-                        print(f"Error: {e}", file=sys.stderr)
-                    sys.exit(0 if not no_browser and lock_info else 1)
+                    lock_info.setdefault(
+                        "host", os.environ.get("RIGBOOK_HOST", "127.0.0.1")
+                    )
+                    lock_info.setdefault(
+                        "port", int(os.environ.get("RIGBOOK_PORT", "8073"))
+                    )
+                _check_running_instance(
+                    lock_info["host"],
+                    lock_info["port"],
+                    no_browser,
+                    pid=lock_info.get("pid"),
+                )
 
     log_level = "DEBUG" if args.verbose else "INFO"
 
     class ColorFormatter(logging.Formatter):
         COLORS = {
-            logging.WARNING: "\033[33m",   # orange/yellow
-            logging.ERROR: "\033[31m",     # red
+            logging.WARNING: "\033[33m",  # orange/yellow
+            logging.ERROR: "\033[31m",  # red
             logging.CRITICAL: "\033[31;1m",  # bold red
         }
         RESET = "\033[0m"
@@ -569,6 +635,12 @@ def run() -> None:
     host = os.environ.get("RIGBOOK_HOST", "127.0.0.1")
     port = args.port or int(os.environ.get("RIGBOOK_PORT", "8073"))
 
+    # Check if rigbook is already running on this port (works in all modes including picker)
+    no_browser = args.no_browser or os.environ.get(
+        "RIGBOOK_NO_BROWSER", ""
+    ).lower() in ("1", "true", "yes")
+    _check_running_instance(host, port, no_browser)
+
     db_manager.set_listen_addr(host, port)
 
     import threading
@@ -577,12 +649,32 @@ def run() -> None:
         "RIGBOOK_NO_BROWSER", ""
     ).lower() in ("1", "true", "yes")
     if not no_browser:
-        url = f"http://{host}:{port}"
+        default_url = f"http://{host}:{port}"
+        env_browser_url = os.environ.get("RIGBOOK_BROWSER_URL", "").strip()
 
         def open_browser():
+            import sqlite3
             import time
 
             time.sleep(1)
+            url = env_browser_url or default_url
+            if not env_browser_url:
+                try:
+                    from rigbook.db import META_DB_PATH
+
+                    if META_DB_PATH.exists():
+                        conn = sqlite3.connect(str(META_DB_PATH))
+                        rows = conn.execute(
+                            "SELECT key, value FROM settings WHERE key IN ('browser_url_override', 'open_browser_on_startup')"
+                        ).fetchall()
+                        conn.close()
+                        settings = dict(rows)
+                        if settings.get("open_browser_on_startup") == "false":
+                            return
+                        if settings.get("browser_url_override"):
+                            url = settings["browser_url_override"]
+                except Exception:
+                    pass
             browser_name = _detect_browser_name()
             logger.info("Opening %s in %s", url, browser_name)
             webbrowser.open(url)

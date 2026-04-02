@@ -3,10 +3,9 @@ import xmlrpc.client
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from rigbook.db import Setting, get_session
+from rigbook.db import get_session, resolve_setting
 
 router = APIRouter(prefix="/api/flrig", tags=["flrig"])
 
@@ -22,24 +21,13 @@ _sim_mode: str = "CW"
 
 
 async def is_simulate(session: AsyncSession) -> bool:
-    result = await session.execute(
-        select(Setting.value).where(Setting.key == "flrig_simulate")
-    )
-    val = result.scalar_one_or_none()
+    val = await resolve_setting("flrig_simulate", session)
     return val == "true"
 
 
 async def get_flrig_url(session: AsyncSession = Depends(get_session)) -> str:
-    host = DEFAULT_FLRIG_HOST
-    port = DEFAULT_FLRIG_PORT
-    result = await session.execute(
-        select(Setting).where(Setting.key.in_(["flrig_host", "flrig_port"]))
-    )
-    for s in result.scalars():
-        if s.key == "flrig_host" and s.value:
-            host = s.value
-        if s.key == "flrig_port" and s.value:
-            port = s.value
+    host = await resolve_setting("flrig_host", session, DEFAULT_FLRIG_HOST)
+    port = await resolve_setting("flrig_port", session, DEFAULT_FLRIG_PORT)
     return f"http://{host}:{port}"
 
 

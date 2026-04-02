@@ -22,6 +22,7 @@
   let my_callsign = "";
   let my_grid = "";
   let default_rst = "599";
+  let qrz_username = "";
   let qrz_password = "";
   let hasQrzPassword = false;
   let pota_enabled = false;
@@ -103,7 +104,35 @@
   let hamalert_password = "";
   let hasHamalertPassword = false;
 
-  const validTabs = ["station", "features", "appearance", "updates", "system"];
+  // Global settings state
+  let global_my_callsign = "";
+  let global_my_grid = "";
+  let global_default_rst = "599";
+  let global_qrz_username = "";
+  let global_qrz_password = "";
+  let global_hasQrzPassword = false;
+  let global_hamalert_username = "";
+  let global_hamalert_password = "";
+  let global_hasHamalertPassword = false;
+  let global_flrig_enabled = false;
+  let global_flrig_simulate = false;
+  let global_flrig_host = "127.0.0.1";
+  let global_flrig_port = "12345";
+  let global_default_pick_mode = true;
+  let global_default_port = "8073";
+  let global_default_logbook_name = "rigbook";
+  let global_open_browser_on_startup = true;
+  let global_auto_shutdown_delay = "300";
+  let global_browser_url_override = "";
+  let availableLogbooks = [];
+  let globalSettingsLoaded = false;
+
+  // Track which per-logbook settings are from global defaults
+  let settingSources = {};
+  // Store global default values for use as placeholders
+  let globalPlaceholders = {};
+
+  const validTabs = ["station", "features", "appearance", "updates", "system", "global"];
   let activeTab = (initialTab && validTabs.includes(initialTab)) ? initialTab : "station";
   let settingsLoaded = false;
 
@@ -226,7 +255,7 @@
   function updatePreview() {
     if (!previewEl) return;
     const tiles = resolveTileConfig(map_theme, map_custom_url);
-    const pos = gridToLatLon(my_grid);
+    const pos = gridToLatLon(effectiveSetting(my_grid, "my_grid"));
     const center = pos ? [pos.lat, pos.lon] : [39, -98];
     // Reinitialize if the DOM node changed (tab switch destroys/recreates it)
     if (previewMap && previewMapEl !== previewEl) {
@@ -296,7 +325,7 @@
       previewDot(secLL, spotMapSecondary, secBorder, 8),
     );
 
-    const callLabel = my_callsign.trim().toUpperCase() || "QTH";
+    const callLabel = effectiveSetting(my_callsign.trim(), "my_callsign", "QTH").toUpperCase();
     add(
       previewLabel(staLL, "W1AW", spotMapStation, spotMapStrokeStation),
       previewLabel(sptLL, "K3LR", spotMapSpotter, spotMapStrokeSpotter),
@@ -768,6 +797,23 @@
   $: stripCallsign = () => { my_callsign = my_callsign.replace(/\s/g, ""); };
   $: stripGrid = () => { my_grid = my_grid.replace(/[^A-Za-z0-9]/g, ""); };
 
+  function normalizeGrid(g) {
+    // Maidenhead: AA99aa — pos 0-1 letters, 2-3 digits, 4-5 letters
+    let out = "";
+    for (let i = 0; i < g.length && out.length < 6; i++) {
+      const c = g[i];
+      const pos = out.length;
+      if (pos < 2) {
+        if (/[A-Ra-r]/.test(c)) out += c.toUpperCase();
+      } else if (pos < 4) {
+        if (/[0-9]/.test(c)) out += c;
+      } else {
+        if (/[A-Xa-x]/.test(c)) out += c.toLowerCase();
+      }
+    }
+    return out;
+  }
+
   // --- Auto-save helpers ---
 
   async function saveSetting(key, value) {
@@ -776,6 +822,26 @@
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ value }),
     });
+    // Re-check source: if saved value is blank, it may fall back to global
+    try {
+      const res = await fetch(`/api/settings/${key}`);
+      if (res.ok) {
+        const data = await res.json();
+        settingSources[key] = data.source || "logbook";
+        if (data.source === "global" && data.value) {
+          globalPlaceholders[key] = data.value;
+        } else {
+          delete globalPlaceholders[key];
+        }
+      }
+    } catch {}
+    settingSources = settingSources;
+    globalPlaceholders = globalPlaceholders;
+  }
+
+  /** Return the effective value for a setting: local value, global placeholder, or fallback. */
+  function effectiveSetting(localValue, key, fallback = "") {
+    return localValue || globalPlaceholders[key] || fallback;
   }
 
   const dirtyFields = new Set();
@@ -899,11 +965,16 @@
       dispatch("saved");
     },
     my_grid: async () => {
-      await saveSetting("my_grid", my_grid.trim().toUpperCase());
+      my_grid = normalizeGrid(my_grid.trim());
+      await saveSetting("my_grid", my_grid);
       dispatch("saved");
     },
     default_rst: async () => {
       await saveSetting("default_rst", default_rst.trim());
+    },
+    qrz_username: async () => {
+      await saveSetting("qrz_username", qrz_username.trim().toUpperCase());
+      dispatch("saved");
     },
     flrig_host: async () => {
       if (flrig_enabled && flrig_host.trim() && flrig_port.trim()) {
@@ -966,7 +1037,7 @@
   }
 
   function onGridInput() {
-    stripGrid();
+    my_grid = normalizeGrid(my_grid.slice(0, 6));
     markDirty("my_grid");
   }
 
@@ -1002,7 +1073,7 @@
   }
 
   async function onUpdateCheckEnabledChange() {
-    await saveSetting("update_check_enabled", update_check_enabled ? "true" : "false");
+    await saveGlobalSetting("update_check_enabled", update_check_enabled ? "true" : "false");
     if (update_check_enabled) {
       await fetchUpdateCheck();
     } else {
@@ -1167,10 +1238,20 @@
       const res = await fetch("/api/settings/");
       if (res.ok) {
         const data = await res.json();
+        settingSources = {};
+        globalPlaceholders = {};
         for (const s of data) {
-          if (s.key === "my_callsign") my_callsign = s.value || "";
-          if (s.key === "my_grid") my_grid = s.value || "";
-          if (s.key === "default_rst") default_rst = s.value || "599";
+          if (s.source) settingSources[s.key] = s.source;
+          const isGlobal = s.source === "global";
+          // Text fields: show global defaults as placeholders, not values
+          if (s.key === "my_callsign") { if (isGlobal) { globalPlaceholders.my_callsign = s.value; my_callsign = ""; } else my_callsign = s.value || ""; }
+          if (s.key === "my_grid") { if (isGlobal) { globalPlaceholders.my_grid = s.value; my_grid = ""; } else my_grid = s.value || ""; }
+          if (s.key === "default_rst") { if (isGlobal) { globalPlaceholders.default_rst = s.value; default_rst = ""; } else default_rst = s.value || "599"; }
+          if (s.key === "flrig_host") { if (isGlobal) { globalPlaceholders.flrig_host = s.value; flrig_host = ""; } else flrig_host = s.value || "127.0.0.1"; }
+          if (s.key === "flrig_port") { if (isGlobal) { globalPlaceholders.flrig_port = s.value; flrig_port = ""; } else flrig_port = s.value || "12345"; }
+          if (s.key === "hamalert_username") { if (isGlobal) { globalPlaceholders.hamalert_username = s.value; hamalert_username = ""; } else hamalert_username = s.value || ""; }
+          // Boolean/password fields: inherit global value normally
+          if (s.key === "qrz_username") { if (isGlobal) { globalPlaceholders.qrz_username = s.value; qrz_username = ""; } else qrz_username = s.value || ""; }
           if (s.key === "qrz_password") hasQrzPassword = !!s.value && s.value !== "";
           if (s.key === "pota_enabled") pota_enabled = s.value !== "false";
           if (s.key === "solar_enabled") solar_enabled = s.value === "true";
@@ -1178,8 +1259,6 @@
           if (s.key === "update_check_enabled") update_check_enabled = s.value !== "false";
           if (s.key === "flrig_enabled") flrig_enabled = s.value === "true";
           if (s.key === "flrig_simulate") flrig_simulate = s.value === "true";
-          if (s.key === "flrig_host") flrig_host = s.value || "127.0.0.1";
-          if (s.key === "flrig_port") flrig_port = s.value || "12345";
           if (s.key === "rbn_enabled") rbn_enabled = s.value === "true";
           if (s.key === "rbn_host") rbn_host = s.value || "telnet.reversebeacon.net";
           if (s.key === "rbn_feeds") {
@@ -1245,12 +1324,60 @@
             } catch {}
           }
           if (s.key === "popup_notifications_enabled") popupNotifEnabled = s.value === "true";
-          if (s.key === "auto_shutdown_on_disconnect") autoShutdownOnDisconnect = s.value === "true";
-          if (s.key === "shutdown_in_menu") shutdownInMenu = s.value === "true";
         }
       }
       settingsLoaded = true;
     } catch {}
+  }
+
+  async function fetchLogbookList() {
+    try {
+      const res = await fetch("/api/logbooks/");
+      if (res.ok) availableLogbooks = (await res.json()).map(d => d.name);
+    } catch {}
+  }
+
+  async function fetchGlobalSettings() {
+    try {
+      const res = await fetch("/api/global-settings/");
+      if (res.ok) {
+        const data = await res.json();
+        for (const s of data) {
+          if (s.key === "my_callsign") global_my_callsign = s.value || "";
+          if (s.key === "my_grid") global_my_grid = s.value || "";
+          if (s.key === "default_rst") global_default_rst = s.value || "599";
+          if (s.key === "qrz_username") global_qrz_username = s.value || "";
+          if (s.key === "qrz_password") global_hasQrzPassword = !!s.value && s.value !== "";
+          if (s.key === "hamalert_username") global_hamalert_username = s.value || "";
+          if (s.key === "hamalert_password") global_hasHamalertPassword = !!s.value && s.value !== "";
+          if (s.key === "flrig_enabled") global_flrig_enabled = s.value === "true";
+          if (s.key === "flrig_simulate") global_flrig_simulate = s.value === "true";
+          if (s.key === "flrig_host") global_flrig_host = s.value || "127.0.0.1";
+          if (s.key === "flrig_port") global_flrig_port = s.value || "12345";
+          if (s.key === "default_pick_mode") global_default_pick_mode = s.value !== "false";
+          if (s.key === "default_port") global_default_port = s.value || "8073";
+          if (s.key === "default_logbook_name") global_default_logbook_name = s.value || "rigbook";
+          if (s.key === "open_browser_on_startup") global_open_browser_on_startup = s.value !== "false";
+          if (s.key === "auto_shutdown_delay") global_auto_shutdown_delay = s.value || "300";
+          if (s.key === "browser_url_override") global_browser_url_override = s.value || "";
+          if (s.key === "shutdown_in_menu") shutdownInMenu = s.value === "true";
+          if (s.key === "auto_shutdown_on_disconnect") autoShutdownOnDisconnect = s.value === "true";
+          if (s.key === "update_check_enabled") update_check_enabled = s.value !== "false";
+        }
+        globalSettingsLoaded = true;
+      }
+    } catch {}
+  }
+
+  async function saveGlobalSetting(key, value) {
+    await fetch(`/api/global-settings/${key}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ value }),
+    });
+    // Re-fetch per-logbook settings so placeholders and fallbacks update
+    await fetchSettings();
+    dispatch("saved");
   }
 
   async function loadUpdateCheck() {
@@ -1397,6 +1524,8 @@
 
   onMount(() => {
     fetchSettings();
+    fetchGlobalSettings();
+    fetchLogbookList();
     fetchSpotStatus();
     fetchQsoCount();
     loadDbInfo();
@@ -1412,7 +1541,7 @@
 </script>
 
 <div class="settings">
-  <h2>Settings <span class="autosave-hint">(are automatically saved on change)</span></h2>
+  <h2>Settings <span class="autosave-hint">(are saved automatically on change)</span></h2>
 
   {#if needsSetup}
     <p class="setup-hint">Enter your callsign and grid square to get started.</p>
@@ -1424,6 +1553,7 @@
     <button class="tab" class:active={activeTab === "appearance"} on:click={() => switchTab("appearance")}>Appearance</button>
     <button class="tab" class:active={activeTab === "updates"} on:click={() => switchTab("updates")}>Updates</button>
     <button class="tab" class:active={activeTab === "system"} on:click={() => switchTab("system")}>System</button>
+    <button class="tab" class:active={activeTab === "global"} on:click={() => switchTab("global")}>Global</button>
   </div>
 
   {#if activeTab === "station"}
@@ -1431,13 +1561,13 @@
   <section class="settings-section" data-section="station">
     <h3>Station</h3>
     <div class="setting-row">
-      <label for="my_callsign">My Callsign{#if needsSetup && !my_callsign.trim()} <span class="required">*</span>{/if}</label>
-      <input id="my_callsign" type="text" bind:value={my_callsign} on:input={onCallsignInput} on:keydown={onFieldKeydown} on:blur={() => onFieldBlur("my_callsign")} maxlength="10" autocomplete="off" style="text-transform: uppercase; max-width: 7rem" class:input-required={needsSetup && !my_callsign.trim()} />
+      <label for="my_callsign">My Callsign{#if needsSetup && !my_callsign.trim()} <span class="required">*</span>{/if}{#if settingSources.my_callsign === "global"} <span class="global-hint">(global default)</span>{/if}</label>
+      <input id="my_callsign" type="text" bind:value={my_callsign} on:input={onCallsignInput} on:keydown={onFieldKeydown} on:blur={() => onFieldBlur("my_callsign")} maxlength="10" autocomplete="off" style="text-transform: uppercase; max-width: 7rem" class:input-required={needsSetup && !my_callsign.trim()} placeholder={globalPlaceholders.my_callsign || ""} />
     </div>
     <div class="setting-row">
-      <label for="my_grid">My Grid Square{#if needsSetup && !my_grid.trim()} <span class="required">*</span>{/if}</label>
+      <label for="my_grid">My Grid Square{#if needsSetup && !my_grid.trim()} <span class="required">*</span>{/if}{#if settingSources.my_grid === "global"} <span class="global-hint">(global default)</span>{/if}</label>
       <div class="grid-input-row">
-        <input id="my_grid" type="text" bind:value={my_grid} on:input={onGridInput} on:keydown={onFieldKeydown} on:blur={() => onFieldBlur("my_grid")} autocomplete="off" style="text-transform: uppercase; max-width: 7rem" class:input-required={needsSetup && !my_grid.trim()} />
+        <input id="my_grid" type="text" bind:value={my_grid} on:input={onGridInput} on:keydown={onFieldKeydown} on:blur={() => onFieldBlur("my_grid")} autocomplete="off" maxlength="6" style="max-width: 7rem" class:input-required={needsSetup && !my_grid.trim()} placeholder={globalPlaceholders.my_grid || ""} />
         <button type="button" class="grid-picker-btn" on:click={() => showGridPicker = !showGridPicker} title="Pick from map">🌍</button>
       </div>
       {#if showGridPicker}
@@ -1457,19 +1587,24 @@
     </div>
     <div class="setting-row">
       <label for="default_rst">Default RST</label>
-      <input id="default_rst" type="text" bind:value={default_rst} on:input={onDefaultRstInput} on:keydown={onFieldKeydown} on:blur={() => onFieldBlur("default_rst")} autocomplete="off" style="max-width: 7rem" />
+      <input id="default_rst" type="text" bind:value={default_rst} on:input={onDefaultRstInput} on:keydown={onFieldKeydown} on:blur={() => onFieldBlur("default_rst")} autocomplete="off" style="max-width: 7rem" placeholder={globalPlaceholders.default_rst || ""} />
     </div>
   </section>
 
   <section class="settings-section">
     <h3>QRZ</h3>
     <div class="setting-row">
-      <label for="qrz_password">{hasQrzPassword ? "Change QRZ Password" : "QRZ Password"}</label>
-      <input id="qrz_password" type="password" bind:value={qrz_password} autocomplete="off" disabled={!my_callsign.trim()} placeholder={hasQrzPassword ? "Leave blank to keep current" : "unset"} style="min-width: 8ch" />
+      <label for="rb-qrz-acct">QRZ Account{#if settingSources.qrz_username === "global"} <span class="global-hint">(global default)</span>{/if}</label>
+      <input id="rb-qrz-acct" type="text" bind:value={qrz_username} on:input={() => markDirty("qrz_username")} on:keydown={onFieldKeydown} on:blur={() => onFieldBlur("qrz_username")} autocomplete="nope" data-1p-ignore data-lpignore="true" data-form-type="other" style="text-transform: uppercase; max-width: 10rem" placeholder={globalPlaceholders.qrz_username || global_qrz_username || effectiveSetting(my_callsign, "my_callsign")} />
+      <span class="hint">Defaults to My Callsign if blank</span>
     </div>
     <div class="setting-row">
-      {#if qrz_password.trim()}<button type="button" class="theme-toggle" on:click={loginQrz}>Login</button>{/if}
-      <span class="hint">{#if !my_callsign.trim()}Set My Callsign first{:else if hasQrzPassword}Leave blank to remain unchanged{:else}Your QRZ account password (uses My Callsign as username){/if}</span>
+      <label for="rb-qrz-key">{hasQrzPassword ? "Change QRZ Password" : "QRZ Password"}</label>
+      <input id="rb-qrz-key" type="text" class="secret-field" bind:value={qrz_password} autocomplete="new-password" data-1p-ignore data-lpignore="true" data-form-type="other" placeholder={hasQrzPassword ? "Leave blank to keep current" : "unset"} style="min-width: 8ch" />
+    </div>
+    <div class="setting-row">
+      {#if qrz_password.trim()}<button type="button" class="check-now-btn" on:click={loginQrz}>Login</button>{/if}
+      <span class="hint">{#if hasQrzPassword}Leave blank to remain unchanged{:else}Your QRZ account password{/if}</span>
     </div>
     {#if hasQrzPassword}
       <div class="setting-row qrz-status-row">
@@ -1504,11 +1639,11 @@
     </div>
     <div class="setting-row">
       <label for="flrig_host">flrig Host</label>
-      <input id="flrig_host" type="text" bind:value={flrig_host} on:input={onFlrigHostInput} on:keydown={onFieldKeydown} on:blur={() => onFieldBlur("flrig_host")} autocomplete="off" disabled={!flrig_enabled || flrig_simulate} style="max-width: 7rem" />
+      <input id="flrig_host" type="text" bind:value={flrig_host} on:input={onFlrigHostInput} on:keydown={onFieldKeydown} on:blur={() => onFieldBlur("flrig_host")} autocomplete="off" disabled={!flrig_enabled || flrig_simulate} style="max-width: 7rem" placeholder={globalPlaceholders.flrig_host || ""} />
     </div>
     <div class="setting-row">
       <label for="flrig_port">flrig Port</label>
-      <input id="flrig_port" type="text" bind:value={flrig_port} on:input={onFlrigPortInput} on:keydown={onFieldKeydown} on:blur={() => onFieldBlur("flrig_port")} autocomplete="off" inputmode="numeric" disabled={!flrig_enabled || flrig_simulate} style="max-width: 7rem" />
+      <input id="flrig_port" type="text" bind:value={flrig_port} on:input={onFlrigPortInput} on:keydown={onFieldKeydown} on:blur={() => onFieldBlur("flrig_port")} autocomplete="off" inputmode="numeric" disabled={!flrig_enabled || flrig_simulate} style="max-width: 7rem" placeholder={globalPlaceholders.flrig_port || ""} />
     </div>
   </section>
   </div>
@@ -1638,12 +1773,12 @@
     </div>
     <div class="setting-row">
       <label for="hamalert_username">Telnet Username</label>
-      <input id="hamalert_username" type="text" bind:value={hamalert_username} on:input={onHamalertUsernameInput} on:keydown={onFieldKeydown} on:blur={() => onFieldBlur("hamalert_username")} autocomplete="off" disabled={!hamalert_enabled} />
+      <input id="hamalert_username" type="text" bind:value={hamalert_username} on:input={onHamalertUsernameInput} on:keydown={onFieldKeydown} on:blur={() => onFieldBlur("hamalert_username")} autocomplete="off" disabled={!hamalert_enabled} placeholder={globalPlaceholders.hamalert_username || ""} />
     </div>
     <div class="setting-row">
       <label for="hamalert_password">{hasHamalertPassword ? "Change Telnet Password" : "Telnet Password"}</label>
       <div class="grid-input-row">
-        <input id="hamalert_password" type="password" bind:value={hamalert_password} autocomplete="off" disabled={!hamalert_enabled} placeholder={hasHamalertPassword ? "Leave blank to keep current" : ""} />
+        <input id="hamalert_password" type="text" class="secret-field" bind:value={hamalert_password} autocomplete="off" disabled={!hamalert_enabled} placeholder={hasHamalertPassword ? "Leave blank to keep current" : ""} />
         <button type="button" class="theme-toggle" on:click={loginHamalert} disabled={!hamalert_password.trim()}>Login</button>
       </div>
     </div>
@@ -1888,13 +2023,6 @@
 
   {#if activeTab === "system"}
   <div class="tab-content" use:masonry>
-  <section class="settings-section">
-    <h3>Cache</h3>
-    <p class="hint">Cached data: QRZ callsign lookups, SKCC member list. Clearing forces fresh lookups on next use.</p>
-    <div class="setting-row toggle-row">
-      <button class="theme-toggle" on:click={clearCache}>Clear Cache</button>
-    </div>
-  </section>
 
   <section class="settings-section">
     <h3>Backup</h3>
@@ -1949,19 +2077,6 @@
         <button class="warning-btn" on:click={disconnectOthers}>Disconnect all other clients</button>
       </div>
     {/if}
-    <div class="setting-row toggle-row">
-      <label class="toggle-label">
-        <input type="checkbox" bind:checked={autoShutdownOnDisconnect} on:change={() => saveSetting("auto_shutdown_on_disconnect", autoShutdownOnDisconnect ? "true" : "false")} />
-        Shutdown automatically when last client disconnects
-      </label>
-    </div>
-    <p class="hint">When enabled, the server will shut down after 15 seconds with no connected clients.</p>
-    <div class="setting-row toggle-row">
-      <label class="toggle-label">
-        <input type="checkbox" bind:checked={shutdownInMenu} on:change={() => { saveSetting("shutdown_in_menu", shutdownInMenu ? "true" : "false"); dispatch("saved"); }} />
-        Add Shutdown action to the main menu
-      </label>
-    </div>
     <div class="setting-row">
       <button class="danger-btn" on:click={shutdownServer}>Shutdown Now</button>
     </div>
@@ -1997,6 +2112,156 @@
       </div>
     </section>
   {/if}
+  </div>
+  {/if}
+
+  {#if activeTab === "global"}
+  <p class="hint">Global defaults are used when a per-logbook setting is not set. Changes here apply across all logbooks.</p>
+  <div class="tab-content" use:masonry>
+
+  <section class="settings-section">
+    <h3>Station Defaults</h3>
+    <div class="setting-row">
+      <label for="global_my_callsign">Default Callsign</label>
+      <input id="global_my_callsign" type="text" bind:value={global_my_callsign} on:blur={() => saveGlobalSetting("my_callsign", global_my_callsign.trim().toUpperCase())} maxlength="10" autocomplete="off" style="text-transform: uppercase; max-width: 7rem" />
+    </div>
+    <div class="setting-row">
+      <label for="global_my_grid">Default Grid Square</label>
+      <input id="global_my_grid" type="text" bind:value={global_my_grid} on:input={() => { global_my_grid = normalizeGrid(global_my_grid.slice(0, 6)); }} on:blur={() => { global_my_grid = normalizeGrid(global_my_grid.trim()); saveGlobalSetting("my_grid", global_my_grid); }} autocomplete="off" maxlength="6" style="max-width: 7rem" />
+    </div>
+    <div class="setting-row">
+      <label for="global_default_rst">Default RST</label>
+      <input id="global_default_rst" type="text" bind:value={global_default_rst} on:blur={() => saveGlobalSetting("default_rst", global_default_rst.trim())} maxlength="3" autocomplete="off" style="max-width: 4rem" />
+    </div>
+  </section>
+
+  <section class="settings-section">
+    <h3>Default Credentials</h3>
+    <div class="setting-row">
+      <label for="rb-def-qrz-acct">Default QRZ Account</label>
+      <input id="rb-def-qrz-acct" type="text" bind:value={global_qrz_username} on:blur={() => saveGlobalSetting("qrz_username", global_qrz_username.trim().toUpperCase())} autocomplete="nope" data-1p-ignore data-lpignore="true" data-form-type="other" style="text-transform: uppercase; max-width: 14rem" />
+      <span class="hint">Defaults to Default Callsign if blank</span>
+    </div>
+    <div class="setting-row">
+      <label>Default QRZ Password</label>
+      {#if global_hasQrzPassword}
+        <span class="hint">Saved</span>
+        <button class="check-now-btn" on:click={async () => { await saveGlobalSetting("qrz_password", ""); global_hasQrzPassword = false; global_qrz_password = ""; }}>Clear</button>
+      {:else}
+        <input id="rb-def-qrz-key" type="text" class="secret-field" bind:value={global_qrz_password} placeholder="QRZ password" autocomplete="new-password" data-1p-ignore data-lpignore="true" data-form-type="other" style="max-width: 14rem" />
+        <button class="check-now-btn" on:click={async () => { if (global_qrz_password.trim()) { await saveGlobalSetting("qrz_password", global_qrz_password.trim()); global_hasQrzPassword = true; global_qrz_password = ""; } }}>Save</button>
+      {/if}
+    </div>
+    <div class="setting-row">
+      <label for="rb-def-ha-acct">Default HamAlert Account</label>
+      <input id="rb-def-ha-acct" type="text" bind:value={global_hamalert_username} on:blur={() => saveGlobalSetting("hamalert_username", global_hamalert_username.trim())} autocomplete="nope" data-1p-ignore data-lpignore="true" data-form-type="other" style="max-width: 14rem" />
+    </div>
+    <div class="setting-row">
+      <label>Default HamAlert Password</label>
+      {#if global_hasHamalertPassword}
+        <span class="hint">Saved</span>
+        <button class="check-now-btn" on:click={async () => { await saveGlobalSetting("hamalert_password", ""); global_hasHamalertPassword = false; global_hamalert_password = ""; }}>Clear</button>
+      {:else}
+        <input id="rb-def-ha-key" type="text" class="secret-field" bind:value={global_hamalert_password} placeholder="HamAlert password" autocomplete="new-password" data-1p-ignore data-lpignore="true" data-form-type="other" style="max-width: 14rem" />
+        <button class="check-now-btn" on:click={async () => { if (global_hamalert_password.trim()) { await saveGlobalSetting("hamalert_password", global_hamalert_password.trim()); global_hasHamalertPassword = true; global_hamalert_password = ""; } }}>Save</button>
+      {/if}
+    </div>
+  </section>
+
+  <section class="settings-section">
+    <h3>Default Radio Connection</h3>
+    <div class="setting-row toggle-row">
+      <label>
+        <input type="checkbox" bind:checked={global_flrig_enabled} on:change={() => saveGlobalSetting("flrig_enabled", global_flrig_enabled ? "true" : "false")} />
+        Default Enable flrig
+      </label>
+    </div>
+    <div class="setting-row toggle-row">
+      <label>
+        <input type="checkbox" bind:checked={global_flrig_simulate} on:change={() => saveGlobalSetting("flrig_simulate", global_flrig_simulate ? "true" : "false")} />
+        Default Simulate flrig
+      </label>
+    </div>
+    <div class="setting-row">
+      <label for="global_flrig_host">Default flrig Host</label>
+      <input id="global_flrig_host" type="text" bind:value={global_flrig_host} on:blur={() => saveGlobalSetting("flrig_host", global_flrig_host.trim())} autocomplete="off" style="max-width: 12rem" />
+    </div>
+    <div class="setting-row">
+      <label for="global_flrig_port">Default flrig Port</label>
+      <input id="global_flrig_port" type="text" bind:value={global_flrig_port} on:blur={() => saveGlobalSetting("flrig_port", global_flrig_port.trim())} autocomplete="off" style="max-width: 6rem" />
+    </div>
+  </section>
+
+  <section class="settings-section">
+    <h3>Logbook</h3>
+    <div class="setting-row toggle-row">
+      <label>
+        <input type="checkbox" bind:checked={global_default_pick_mode} on:change={() => saveGlobalSetting("default_pick_mode", global_default_pick_mode ? "true" : "false")} />
+        Ask which logbook to open on start
+      </label>
+    </div>
+    <div class="setting-row">
+      <label for="global_default_logbook">Default Logbook Name</label>
+      {#if availableLogbooks.length > 0}
+        <select id="global_default_logbook" bind:value={global_default_logbook_name} on:change={() => saveGlobalSetting("default_logbook_name", global_default_logbook_name)} style="max-width: 14rem">
+          {#each availableLogbooks as name}
+            <option value={name}>{name}</option>
+          {/each}
+        </select>
+      {:else}
+        <span class="hint">No logbooks exist yet</span>
+      {/if}
+      <span class="hint">Logbook opened when running rigbook without arguments</span>
+    </div>
+  </section>
+
+  <section class="settings-section">
+    <h3>Network</h3>
+    <div class="setting-row">
+      <label for="global_default_port">Default Port</label>
+      <input id="global_default_port" type="text" bind:value={global_default_port} on:blur={() => saveGlobalSetting("default_port", global_default_port.trim())} autocomplete="off" style="max-width: 6rem" />
+    </div>
+    <div class="setting-row toggle-row">
+      <label>
+        <input type="checkbox" bind:checked={global_open_browser_on_startup} on:change={() => saveGlobalSetting("open_browser_on_startup", global_open_browser_on_startup ? "true" : "false")} />
+        Open browser on startup (unless <code>--no-browser</code> argument given)
+      </label>
+    </div>
+    <div class="setting-row">
+      <label for="global_browser_url">Browser URL Override</label>
+      <input id="global_browser_url" type="text" bind:value={global_browser_url_override} on:blur={() => saveGlobalSetting("browser_url_override", global_browser_url_override.trim())} autocomplete="off" placeholder="e.g. https://rigbook.local" style="max-width: 20rem" disabled={!global_open_browser_on_startup} />
+      <span class="hint">Custom URL opened in browser on startup (for proxies/TLS). Leave blank for http://127.0.0.1:{global_default_port || "8073"}.</span>
+    </div>
+  </section>
+
+  <section class="settings-section">
+    <h3>Cache</h3>
+    <p class="hint">Cached data: QRZ callsign lookups, SKCC member list. Clearing forces fresh lookups on next use.</p>
+    <div class="setting-row toggle-row">
+      <button class="theme-toggle" on:click={clearCache}>Clear Cache</button>
+    </div>
+  </section>
+
+  <section class="settings-section">
+    <h3>Shutdown</h3>
+    <div class="setting-row toggle-row">
+      <label class="toggle-label">
+        <input type="checkbox" bind:checked={autoShutdownOnDisconnect} on:change={() => saveGlobalSetting("auto_shutdown_on_disconnect", autoShutdownOnDisconnect ? "true" : "false")} />
+        Shutdown automatically when no clients are connected
+      </label>
+    </div>
+    <div class="setting-row">
+      <label for="global_shutdown_delay">Shutdown delay (seconds)</label>
+      <input id="global_shutdown_delay" type="number" min="5" bind:value={global_auto_shutdown_delay} on:blur={() => { const v = Math.max(5, parseInt(global_auto_shutdown_delay) || 300); global_auto_shutdown_delay = String(v); saveGlobalSetting("auto_shutdown_delay", String(v)); }} autocomplete="off" style="max-width: 5rem" disabled={!autoShutdownOnDisconnect} />
+    </div>
+    <p class="hint">Shuts down the server after {global_auto_shutdown_delay} consecutive seconds with no connected clients.</p>
+    <div class="setting-row toggle-row">
+      <label class="toggle-label">
+        <input type="checkbox" bind:checked={shutdownInMenu} on:change={() => { saveGlobalSetting("shutdown_in_menu", shutdownInMenu ? "true" : "false"); }} />
+        Add Shutdown action to the main menu
+      </label>
+    </div>
+  </section>
   </div>
   {/if}
 </div>
@@ -2286,6 +2551,13 @@
     background: var(--menu-hover);
   }
 
+  .secret-field {
+    -webkit-text-security: disc;
+  }
+  .secret-field:focus {
+    -webkit-text-security: none;
+  }
+
   button {
     background: var(--accent);
     color: var(--bg);
@@ -2310,6 +2582,13 @@
   .hint {
     font-size: 0.7rem;
     color: var(--text-dim);
+  }
+
+  .global-hint {
+    font-size: 0.65rem;
+    color: var(--accent);
+    opacity: 0.7;
+    font-style: italic;
   }
 
   .toggle-row {
@@ -2470,6 +2749,7 @@
     border-radius: 4px;
     background: var(--bg-input, transparent);
     color: var(--text);
+    align-self: flex-start;
   }
   .check-now-btn:disabled {
     opacity: 0.5;
