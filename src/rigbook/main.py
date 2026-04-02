@@ -18,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from rigbook.db import (
     DatabaseLockError,
+    DatabaseTooNewError,
     GlobalCache,
     GlobalSetting,
     Setting,
@@ -102,7 +103,14 @@ async def lifespan(app: FastAPI):
     from rigbook.routes.update import _cleanup_old_binaries
 
     _cleanup_old_binaries()
-    await init_db()
+    try:
+        await init_db()
+    except DatabaseTooNewError as e:
+        logger.error("%s", e)
+        print(f"Error: {e}", file=sys.stderr)
+        os.kill(os.getpid(), signal.SIGTERM)
+        yield
+        return
     # Clear update check cache so we always check once on startup
     async with global_async_session() as gdb:
         await gdb.execute(

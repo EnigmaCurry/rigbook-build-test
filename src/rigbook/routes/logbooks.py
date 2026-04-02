@@ -8,6 +8,7 @@ from pydantic import BaseModel
 from rigbook.db import (
     DB_DIR,
     DatabaseLockError,
+    DatabaseTooNewError,
     _lock_exclusive,
     _unlock,
     db_manager,
@@ -101,6 +102,8 @@ async def confirm_create():
         await db_manager.open(db_path)
     except DatabaseLockError as e:
         raise HTTPException(status_code=409, detail=str(e))
+    except DatabaseTooNewError as e:
+        raise HTTPException(status_code=409, detail=str(e))
     await start_feeds()
     broadcast("logbook-changed", {"name": name, "action": "opened"})
     return {"name": name, "is_open": True}
@@ -151,6 +154,8 @@ async def open_logbook(body: LogbookName):
         await db_manager.open(db_path)
     except DatabaseLockError as e:
         raise HTTPException(status_code=409, detail=str(e))
+    except DatabaseTooNewError as e:
+        raise HTTPException(status_code=409, detail=str(e))
     await start_feeds()
     broadcast("logbook-changed", {"name": body.name, "action": "opened"})
     return {"name": body.name, "is_open": True}
@@ -198,6 +203,8 @@ async def create_logbook(body: LogbookName):
     try:
         await db_manager.open(db_path)
     except DatabaseLockError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+    except DatabaseTooNewError as e:
         raise HTTPException(status_code=409, detail=str(e))
     await start_feeds()
     broadcast("logbook-changed", {"name": body.name, "action": "created"})

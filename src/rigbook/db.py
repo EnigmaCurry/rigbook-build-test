@@ -274,7 +274,118 @@ class GlobalLastOpened(GlobalBase):
 class DatabaseLockError(Exception):
     """Raised when the database is already locked by another process."""
 
+
+class DatabaseTooNewError(Exception):
+    """Raised when the database schema is newer than this version supports."""
+
     pass
+
+
+# --- Migration framework ---
+
+
+def _get_schema_version(conn, table="settings") -> int:
+    """Read _schema_version from a settings table (sync, inside run_sync)."""
+    try:
+        row = conn.execute(
+            text(f"SELECT value FROM {table} WHERE key = '_schema_version'")
+        ).fetchone()
+        return int(row[0]) if row and row[0] else 0
+    except Exception:
+        return 0
+
+
+def _set_schema_version(conn, table, version_num):
+    """Write _schema_version to a settings table (sync, inside run_sync)."""
+    existing = conn.execute(
+        text(f"SELECT id FROM {table} WHERE key = '_schema_version'")
+    ).fetchone()
+    if existing:
+        conn.execute(
+            text(f"UPDATE {table} SET value = :v WHERE key = '_schema_version'"),
+            {"v": str(version_num)},
+        )
+    else:
+        conn.execute(
+            text(f"INSERT INTO {table} (key, value) VALUES ('_schema_version', :v)"),
+            {"v": str(version_num)},
+        )
+
+
+def _set_last_migrated_by(conn, table):
+    """Store which rigbook version last migrated this DB."""
+    from importlib.metadata import version as pkg_version
+
+    try:
+        v = pkg_version("rigbook")
+    except Exception:
+        v = "unknown"
+    existing = conn.execute(
+        text(f"SELECT id FROM {table} WHERE key = '_last_migrated_by'")
+    ).fetchone()
+    if existing:
+        conn.execute(
+            text(f"UPDATE {table} SET value = :v WHERE key = '_last_migrated_by'"),
+            {"v": v},
+        )
+    else:
+        conn.execute(
+            text(f"INSERT INTO {table} (key, value) VALUES ('_last_migrated_by', :v)"),
+            {"v": v},
+        )
+
+
+def _get_last_migrated_by(conn, table="settings") -> str:
+    """Read _last_migrated_by from a settings table."""
+    try:
+        row = conn.execute(
+            text(f"SELECT value FROM {table} WHERE key = '_last_migrated_by'")
+        ).fetchone()
+        return row[0] if row and row[0] else "unknown"
+    except Exception:
+        return "unknown"
+
+
+def _run_migrations(conn, migrations, table="settings"):
+    """Run pending migrations and update schema version. Raises DatabaseTooNewError."""
+    current = _get_schema_version(conn, table)
+    expected = len(migrations)
+    if current > expected:
+        last_by = _get_last_migrated_by(conn, table)
+        raise DatabaseTooNewError(
+            f"Database was migrated by Rigbook v{last_by} (schema v{current}). "
+            f"This version only supports schema up to v{expected}. "
+            f"Please upgrade Rigbook."
+        )
+    if current < expected:
+        for migrate_fn in migrations[current:]:
+            migrate_fn(conn)
+        _set_schema_version(conn, table, expected)
+        _set_last_migrated_by(conn, table)
+        logger.info(
+            "Migrated %s schema: v%d → v%d", table, current, expected
+        )
+
+
+# --- Logbook migrations ---
+
+
+def _migrate_logbook_v1_drop_global_tables(conn):
+    """Drop cache/POTA tables that moved to __global.db."""
+    for table in ("cache", "pota_programs", "pota_locations", "pota_parks"):
+        conn.execute(text(f"DROP TABLE IF EXISTS {table}"))
+
+
+LOGBOOK_MIGRATIONS = [
+    _migrate_logbook_v1_drop_global_tables,
+]
+
+
+# --- Global DB migrations ---
+
+GLOBAL_MIGRATIONS: list = [
+    # (none yet — global DB is new, created with correct schema)
+]
 
 
 class DatabaseManager:
@@ -437,6 +548,9 @@ class DatabaseManager:
         async with self.engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
             await conn.run_sync(_add_missing_columns)
+            await conn.run_sync(
+                lambda c: _run_migrations(c, LOGBOOK_MIGRATIONS, "settings")
+            )
             await conn.execute(
                 text(
                     "UPDATE contacts SET updated_at = timestamp WHERE updated_at IS NULL"
@@ -472,6 +586,9 @@ class DatabaseManager:
             await conn.execute(text("PRAGMA busy_timeout=5000"))
             await conn.run_sync(GlobalBase.metadata.create_all)
             await conn.run_sync(_add_missing_columns_global)
+            await conn.run_sync(
+                lambda c: _run_migrations(c, GLOBAL_MIGRATIONS, "settings")
+            )
         # Migrate last_opened.json if it exists
         await self._migrate_last_opened()
         logger.info("Opened global database: %s", META_DB_PATH)
