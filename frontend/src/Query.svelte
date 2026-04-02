@@ -29,6 +29,7 @@
     { label: "States worked", sql: "SELECT state, count(*) AS count FROM contacts WHERE state IS NOT NULL AND state != '' GROUP BY state ORDER BY count DESC" },
     { label: "Countries worked", sql: "SELECT country, count(*) AS count FROM contacts WHERE country IS NOT NULL AND country != '' GROUP BY country ORDER BY count DESC" },
     { label: "All POTA parks", sql: "SELECT reference, name, location_desc, grid, latitude, longitude FROM meta.pota_parks ORDER BY reference" },
+    { label: "QRZ cache stats", sql: "SELECT count(*) AS total, sum(CASE WHEN json_extract(value, '$.grid') IS NOT NULL AND json_extract(value, '$.grid') != '' THEN 1 ELSE 0 END) AS with_grid, sum(CASE WHEN json_extract(value, '$.grid') IS NULL OR json_extract(value, '$.grid') = '' THEN 1 ELSE 0 END) AS without_grid, sum(CASE WHEN json_extract(value, '$.error') IS NOT NULL THEN 1 ELSE 0 END) AS errors FROM meta.cache WHERE namespace = 'qrz'" },
     { label: "QRZ cache lookup", sql: "SELECT key AS call, value FROM meta.cache WHERE namespace = 'qrz' AND key = 'YOURCALL' LIMIT 1" },
     { label: "SKCC member lookup", sql: "SELECT key AS call, value FROM meta.cache WHERE namespace = 'skcc' AND key = 'YOURCALL' LIMIT 1" },
     { label: "All notifications", sql: "SELECT * FROM notifications ORDER BY timestamp DESC" },
