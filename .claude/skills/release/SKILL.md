@@ -69,16 +69,11 @@ allowed-tools: Bash(git *, gh *, uv *, cd *), Read, Edit, Write, AskUserQuestion
    git push origin v{NEW_VERSION}
    ```
 
-10. **Update the GitHub release with changelog notes:**
-    Extract the changelog entry for this version (the bullet points only, not the heading) and set it as the release body:
-    ```bash
-    gh release edit v{NEW_VERSION} --repo EnigmaCurry/rigbook --notes "CHANGELOG_BULLETS"
-    ```
-
-11. **Watch the GitHub Actions build in the background:**
+10. **Watch the GitHub Actions build in the background:**
+    The GitHub Actions workflow creates the release automatically from the tag. Do NOT run `gh release create` or `gh release edit`.
     ```bash
     gh run watch $(gh run list --limit 1 --json databaseId -q '.[0].databaseId')
     ```
     Run this with `run_in_background: true` so the user isn't blocked. When notified of completion, report the build result.
 
-12. **Report success** with the new version and tag.
+11. **Report success** with the new version and tag.
