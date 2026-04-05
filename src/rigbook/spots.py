@@ -760,7 +760,8 @@ class HamAlertFeed(BaseFeed):
             await asyncio.sleep(1)
             raw = await asyncio.wait_for(reader.read(4096), timeout=10)
             raw = _strip_iac(raw)
-            logger.debug("HamAlert server: %s", raw.decode("ascii", errors="replace"))
+            banner = raw.decode("ascii", errors="replace").strip()
+            logger.debug("HamAlert banner: %s", banner)
 
             writer.write(f"{username}\r\n".encode("ascii"))
             await writer.drain()
@@ -768,18 +769,28 @@ class HamAlertFeed(BaseFeed):
 
             raw = await asyncio.wait_for(reader.read(4096), timeout=10)
             raw = _strip_iac(raw)
-            logger.debug("HamAlert server: %s", raw.decode("ascii", errors="replace"))
+            prompt = raw.decode("ascii", errors="replace").strip()
+            logger.debug("HamAlert after username: %s", prompt)
 
             writer.write(f"{password}\r\n".encode("ascii"))
             await writer.drain()
             await asyncio.sleep(1)
+
+            raw = await asyncio.wait_for(reader.read(4096), timeout=10)
+            raw = _strip_iac(raw)
+            auth_response = raw.decode("ascii", errors="replace").strip()
+            logger.debug("HamAlert after password: %s", auth_response)
+
+            if "invalid" in auth_response.lower() or "denied" in auth_response.lower():
+                logger.warning("HamAlert: authentication failed: %s", auth_response)
+                return
 
             # Switch to JSON mode
             writer.write(b"set/json\r\n")
             await writer.drain()
 
             self._connected = True
-            logger.info("HamAlert: connected")
+            logger.info("HamAlert: connected and authenticated as %s", username)
 
             buffer = b""
             while self._should_run:
@@ -880,8 +891,6 @@ async def _read_feed_settings() -> dict[str, str]:
         "rbn_host",
         "rbn_feeds",
         "hamalert_enabled",
-        "hamalert_host",
-        "hamalert_port",
         "hamalert_username",
         "hamalert_password",
         "my_callsign",
@@ -1025,8 +1034,8 @@ async def _apply_settings(settings: dict[str, str]) -> None:
         password = settings.get("hamalert_password", "")
         if username and password:
             await hamalert_feed.start(
-                host=settings.get("hamalert_host") or "hamalert.org",
-                port=int(settings.get("hamalert_port", "") or "7300"),
+                host="hamalert.org",
+                port=7300,
                 username=username,
                 password=password,
             )
