@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.2.11 — 2026-04-05
+
+- Fix HamAlert and RBN not connecting when switching between logbooks
+- Clean up stale lock files on startup and in logbook listing
+- Remove HamAlert host/port settings — always use hamalert.org:7300
+- Detect and log HamAlert authentication failures
+
 ## v0.2.10 — 2026-04-04
 
 - Settings page no longer scrolls the whole page — tab content scrolls independently with title and tabs fixed
