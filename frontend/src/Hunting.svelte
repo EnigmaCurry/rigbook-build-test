@@ -5,6 +5,9 @@
   import { parkAward, parkAwardTitle } from "./parkAward.js";
   import ParkDetail from "./ParkDetail.svelte";
   import SkccSkimmer from "./SkccSkimmer.svelte";
+  import Icon from "@iconify/svelte";
+  import iconPause from "@iconify-icons/twemoji/pause-button";
+  import iconPlay from "@iconify-icons/twemoji/play-button";
   import { timeAgo } from "./qrzLookup.js";
 
   const dispatch = createEventDispatcher();
@@ -19,6 +22,7 @@
   let filterBands = new Set();
   let filterProgram = "";
   let skccSkimmerEnabled = false;
+  let paused = false;
   let filtersLoaded = false;
   let seenSpotKeys = new Set();
   let newSpotKeys = new Set();
@@ -195,7 +199,7 @@
   $: if (filtersLoaded) {
     const _filters = { m: filterMode, b: [...filterBands].join(","), p: filterProgram };
     saveFilters();
-    fetchSpots();
+    if (!paused) fetchSpots();
   }
 
   async function fetchSpots() {
@@ -333,7 +337,7 @@
     }
     fetchCallCounts();
     fetchTodayCw();
-    pollInterval = setInterval(() => { if (potaEnabled) fetchSpots(); }, 30000);
+    pollInterval = setInterval(() => { if (potaEnabled && !paused) fetchSpots(); }, 30000);
   });
 
   onDestroy(() => {
@@ -378,11 +382,12 @@
           <option value={p}>{p}</option>
         {/each}
       </select>
+      <button class="btn-pause" on:click={() => { paused = !paused; }}>{#if paused}<Icon icon={iconPlay} width={14} /> Resume{:else}<Icon icon={iconPause} width={14} /> Pause{/if}</button>
     </div>
   </div>
 
   {#if skccSkimmerEnabled && spotsEnabled}
-    <SkccSkimmer filterMode={filterMode} filterBands={filterBands} workedTodayKeys={workedTodayCwKeys} {potaEnabled} on:tune on:addqso />
+    <SkccSkimmer filterMode={filterMode} filterBands={filterBands} workedTodayKeys={workedTodayCwKeys} {potaEnabled} {paused} on:tune on:addqso />
   {/if}
 
   {#if potaEnabled}
@@ -481,13 +486,30 @@
   }
 
   .btn-clear-bands {
-    background: var(--bg2, #333);
-    color: var(--fg, #ccc);
-    border: 1px solid var(--border, #555);
-    border-radius: 4px;
-    padding: 0.2rem 0.5rem;
+    background: var(--bg-input);
+    color: var(--text);
+    border: 1px solid var(--border-input);
+    border-radius: 3px;
+    padding: 0.3rem 0.5rem;
+    font-family: inherit;
     font-size: 0.8rem;
     cursor: pointer;
+  }
+  .btn-pause {
+    background: var(--bg-input);
+    color: var(--text);
+    border: 1px solid var(--border-input);
+    border-radius: 3px;
+    padding: 0.3rem 0.5rem;
+    font-family: inherit;
+    font-size: 0.8rem;
+    cursor: pointer;
+    width: 5.5rem;
+    height: 1.6rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.25rem;
   }
 
   .controls {
