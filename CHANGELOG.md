@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.2.12 — 2026-04-07
+
+- Fix HamAlert and RBN feed connections timing out every ~2 minutes during idle periods
+
 ## v0.2.11 — 2026-04-05
 
 - Fix HamAlert and RBN not connecting when switching between logbooks
