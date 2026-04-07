@@ -10,6 +10,7 @@
   import Icon from "@iconify/svelte";
   import iconTree from "@iconify-icons/twemoji/evergreen-tree";
   import iconGlobe from "@iconify-icons/twemoji/globe-showing-americas";
+  import iconCheck from "@iconify-icons/twemoji/check-mark-button";
 
   export let editId = null;
   export let prefill = null;
@@ -1251,7 +1252,7 @@
       <label for="skcc">SKCC # / {skcc_exch ? "Validated!" : "Validated?"}</label>
       <div class="skcc-input-row">
         <input id="skcc" type="text" bind:value={skcc} on:input={stripSkcc} style="text-transform: uppercase" readonly={skcc_exch} />
-        <button type="button" class="skcc-exch-btn" class:active={skcc_exch} disabled={!skccValid} on:click={() => skcc_exch = !skcc_exch} title="Valid SKCC exchange (RST, QTH, Name, SKCC#)">✓</button>
+        <button type="button" class="skcc-exch-btn" class:active={skcc_exch} disabled={!skccValid} on:click={() => skcc_exch = !skcc_exch} title="Valid SKCC exchange (RST, QTH, Name, SKCC#)"><Icon icon={iconCheck} width={16} inline={true} /></button>
       </div>
     </div>
     <div class="field wide" class:changed={orig && comments !== orig.comments}>
