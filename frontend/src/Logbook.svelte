@@ -9,6 +9,7 @@
   import { storageGet, storageSet } from "./storage.js";
   import Icon from "@iconify/svelte";
   import iconTree from "@iconify-icons/twemoji/evergreen-tree";
+  import iconGlobe from "@iconify-icons/twemoji/globe-showing-americas";
 
   export let editId = null;
   export let prefill = null;
@@ -1206,7 +1207,7 @@
       <label for="grid">Grid</label>
       <div class="grid-input-row">
         <input id="grid" type="text" bind:value={grid} on:input={stripGrid} maxlength="6" />
-        <button type="button" class="grid-picker-btn" on:click={() => showGridPicker = !showGridPicker} title="Pick from map">🌍</button>
+        <button type="button" class="grid-picker-btn" on:click={() => showGridPicker = !showGridPicker} title="Pick from map"><Icon icon={iconGlobe} width={16} inline={true} /></button>
       </div>
       {#if showGridPicker}
         <!-- svelte-ignore a11y-click-events-have-key-events -->
