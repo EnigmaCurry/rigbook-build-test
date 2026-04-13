@@ -1,5 +1,14 @@
 # Changelog
 
+## v0.2.15 — 2026-04-13
+
+- Add QRZ Logbook API integration for uploading QSOs directly to QRZ (#166)
+- Per-row selection and exclude/include controls for QRZ uploads
+- Import contacts from QRZ logbook via Import from QRZ button
+- Automatic QRZ upload on new QSO creation and edits (opt-in setting)
+- QRZ sync tracking with pending/excluded views and preview table
+- Comment template applied to QRZ uploads matching ADIF export behavior
+
 ## v0.2.14 — 2026-04-08
 
 - Persist hunting pause/resume state in localStorage across page navigation
