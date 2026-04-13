@@ -37,6 +37,8 @@ GLOBAL_DEFAULTABLE_KEYS = {
     "flrig_port",
     "flrig_enabled",
     "flrig_simulate",
+    "qrz_api_key",
+    "qrz_auto_upload",
 }
 
 # Settings that live exclusively in __global.db (not per-logbook)
@@ -130,6 +132,9 @@ class Contact(Base):
     )
     timestamp_off: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     updated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    qrz_logid: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    qrz_synced_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    qrz_excluded: Mapped[int | None] = mapped_column(Integer, nullable=True, default=0)
 
 
 class Setting(Base):

@@ -8,6 +8,37 @@
   let importing = false;
   let message = "";
   let messageType = "";
+  let qrzImporting = false;
+  let hasQrzApiKey = false;
+
+  // QRZ sync state
+  let qrzSyncStatus = null;
+  let qrzSyncing = false;
+  let qrzSyncResult = null;
+  let qrzPreview = null;
+  let qrzSelected = new Set();
+  let qrzFilter = "pending";
+
+  $: qrzAllSelected = qrzPreview && qrzPreview.contacts && qrzPreview.contacts.length > 0 && qrzSelected.size === qrzPreview.contacts.length;
+  $: qrzExcludedCount = qrzPreview && qrzPreview.excluded ? qrzPreview.excluded.length : 0;
+
+  function toggleQrzSelect(id) {
+    if (qrzSelected.has(id)) {
+      qrzSelected.delete(id);
+    } else {
+      qrzSelected.add(id);
+    }
+    qrzSelected = new Set(qrzSelected);
+  }
+
+  function toggleQrzSelectAll() {
+    if (!qrzPreview || !qrzPreview.contacts) return;
+    if (qrzAllSelected) {
+      qrzSelected = new Set();
+    } else {
+      qrzSelected = new Set(qrzPreview.contacts.map(c => c.id));
+    }
+  }
 
   // Comment template
   const TEMPLATE_FIELDS = [
@@ -121,9 +152,16 @@
     if (byAlias) { countryFilter = byAlias.name; return; }
   }
 
-  onMount(() => {
+  onMount(async () => {
     fetchCountries();
     loadCommentTemplate();
+    try {
+      const res = await fetch("/api/qrz-sync/status");
+      if (res.ok) {
+        const data = await res.json();
+        hasQrzApiKey = !!data.configured;
+      }
+    } catch {}
   });
 
   // Export filter state
@@ -150,7 +188,7 @@
   let importFilter = "all";
 
   // Unified preview based on active tab
-  $: currentPreview = activeTab === "export" ? exportPreview : importPreview;
+  $: currentPreview = activeTab === "export" ? exportPreview : activeTab === "qrz" ? qrzPreview : importPreview;
   $: warningCount = importPreview ? (importPreview.contacts || []).filter(c => c.warnings && c.warnings.length > 0).length : 0;
   $: fixedCount = importPreview ? (importPreview.contacts || []).filter(c => c._fixed).length : 0;
   $: mergedCount = importPreview ? (importPreview.contacts || []).filter(c => c.merged).length : 0;
@@ -264,13 +302,15 @@
     if (remaining === 0) importFilter = "fixed";
   }
   $: displayContacts = currentPreview && currentPreview.contacts
-    ? (activeTab === "import" && importFilter === "warnings"
-      ? currentPreview.contacts.filter(c => c.warnings && c.warnings.length > 0)
-      : activeTab === "import" && importFilter === "fixed"
-        ? currentPreview.contacts.filter(c => c._fixed)
-        : activeTab === "import" && importFilter === "merged"
-          ? currentPreview.contacts.filter(c => c.merged)
-          : currentPreview.contacts)
+    ? (activeTab === "qrz" && qrzFilter === "excluded"
+      ? (currentPreview.excluded || [])
+      : activeTab === "import" && importFilter === "warnings"
+        ? currentPreview.contacts.filter(c => c.warnings && c.warnings.length > 0)
+        : activeTab === "import" && importFilter === "fixed"
+          ? currentPreview.contacts.filter(c => c._fixed)
+          : activeTab === "import" && importFilter === "merged"
+            ? currentPreview.contacts.filter(c => c.merged)
+            : currentPreview.contacts)
     : [];
 
   const BANDS = [
@@ -436,6 +476,38 @@
     await fetchImportPreview();
   }
 
+  async function importFromQrz() {
+    qrzImporting = true;
+    message = "";
+    try {
+      const res = await fetch("/api/qrz-sync/fetch");
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        message = data?.error || `Error: ${res.status}`;
+        messageType = "error";
+        qrzImporting = false;
+        return;
+      }
+      const data = await res.json();
+      if (data.error) {
+        message = data.error;
+        messageType = "error";
+        qrzImporting = false;
+        return;
+      }
+      // Create a synthetic File from the ADIF text and feed into the import pipeline
+      const blob = new Blob([data.adif], { type: "text/plain" });
+      importFile = new File([blob], "QRZ-logbook.adi", { type: "text/plain" });
+      importFileName = "QRZ-logbook.adi";
+      skccMarkValidated = false;
+      await fetchImportPreview();
+    } catch (e) {
+      message = `Network error: ${e.message}`;
+      messageType = "error";
+    }
+    qrzImporting = false;
+  }
+
   let suggesting = false;
 
   async function suggestTemplate() {
@@ -505,12 +577,72 @@
     }
     importing = false;
   }
+
+  async function fetchQrzSyncStatus() {
+    try {
+      const [statusRes, previewRes] = await Promise.all([
+        fetch("/api/qrz-sync/status"),
+        fetch("/api/qrz-sync/preview"),
+      ]);
+      if (statusRes.ok) qrzSyncStatus = await statusRes.json();
+      if (previewRes.ok) {
+        qrzPreview = await previewRes.json();
+        qrzSelected = new Set();
+      }
+    } catch { qrzSyncStatus = null; qrzPreview = null; }
+  }
+
+  async function excludeFromQrz(contactId) {
+    try {
+      const res = await fetch(`/api/qrz-sync/exclude/${contactId}`, { method: "POST" });
+      if (res.ok) {
+        await fetchQrzSyncStatus();
+        expandedRow = null;
+      }
+    } catch {}
+  }
+
+  async function includeInQrz(contactId) {
+    try {
+      const res = await fetch(`/api/qrz-sync/include/${contactId}`, { method: "POST" });
+      if (res.ok) {
+        await fetchQrzSyncStatus();
+        expandedRow = null;
+        if (qrzExcludedCount === 0) qrzFilter = "pending";
+      }
+    } catch {}
+  }
+
+  async function uploadToQrz(all = false) {
+    qrzSyncing = true;
+    qrzSyncResult = null;
+    try {
+      const endpoint = all ? "/api/qrz-sync/upload-all" : "/api/qrz-sync/upload";
+      const options = { method: "POST" };
+      if (!all) {
+        options.headers = { "Content-Type": "application/json" };
+        options.body = JSON.stringify({ contact_ids: [...qrzSelected] });
+      }
+      const res = await fetch(endpoint, options);
+      if (res.ok) {
+        qrzSyncResult = await res.json();
+      } else {
+        const data = await res.json().catch(() => null);
+        qrzSyncResult = { error: data?.detail || `Error: ${res.status}` };
+      }
+      await fetchQrzSyncStatus();
+    } catch (e) {
+      qrzSyncResult = { error: `Network error: ${e.message}` };
+    }
+    qrzSyncing = false;
+  }
 </script>
 
 <div class="export-import">
   <div class="tab-bar">
     <button class="tab" class:active={activeTab === "import"} on:click={() => { activeTab = "import"; message = ""; }}>Import</button>
     <button class="tab" class:active={activeTab === "export"} on:click={() => { activeTab = "export"; message = ""; }}>Export</button>
+    {#if hasQrzApiKey}<button class="tab" class:active={activeTab === "qrz"} on:click={() => { activeTab = "qrz"; message = ""; fetchQrzSyncStatus(); }}>QRZ Upload</button>{/if}
   </div>
 
   <div class="main-layout">
@@ -564,12 +696,60 @@
             </label>
           </div>
         </div>
+      {:else if activeTab === "qrz"}
+        <div class="qrz-sync-panel">
+          <h3>QRZ Logbook Upload</h3>
+          {#if qrzSyncStatus && !qrzSyncStatus.configured}
+            <p class="qrz-not-configured">QRZ Logbook API key not configured. Set it in Settings under QRZ.</p>
+          {:else if qrzSyncStatus}
+            <div class="qrz-stats">
+              <div class="stat-row"><span class="stat-label">Total contacts:</span> <span class="stat-value">{qrzSyncStatus.total}</span></div>
+              <div class="stat-row"><span class="stat-label">Synced to QRZ:</span> <span class="stat-value">{qrzSyncStatus.synced}</span></div>
+              <div class="stat-row"><span class="stat-label">Pending upload:</span> <span class="stat-value highlight">{qrzSyncStatus.pending}</span></div>
+              {#if qrzSyncStatus.excluded > 0}
+                <div class="stat-row"><span class="stat-label">Excluded:</span> <span class="stat-value">{qrzSyncStatus.excluded}</span></div>
+              {/if}
+            </div>
+            <div class="qrz-actions">
+              <button class="action-btn" on:click={() => uploadToQrz(false)} disabled={qrzSyncing || qrzSelected.size === 0}>
+                {qrzSyncing ? "Uploading..." : `Upload ${qrzSelected.size} Selected`}
+              </button>
+              <button class="action-btn secondary-btn" on:click={() => { if (confirm("Re-upload all non-excluded contacts to QRZ? This will overwrite any changes made directly on QRZ.")) uploadToQrz(true); }} disabled={qrzSyncing || qrzSyncStatus.total === 0}>
+                Re-upload All
+              </button>
+            </div>
+            {#if qrzSyncResult}
+              <div class="qrz-result" class:qrz-result-error={qrzSyncResult.error || qrzSyncResult.errors > 0}>
+                {#if qrzSyncResult.error}
+                  <p>{qrzSyncResult.error}</p>
+                {:else}
+                  <p>Uploaded {qrzSyncResult.uploaded} of {qrzSyncResult.total} contacts{#if qrzSyncResult.errors > 0}, {qrzSyncResult.errors} error{qrzSyncResult.errors !== 1 ? "s" : ""}{/if}</p>
+                  {#if qrzSyncResult.error_details && qrzSyncResult.error_details.length > 0}
+                    <ul class="qrz-errors">
+                      {#each qrzSyncResult.error_details as err}
+                        <li><strong>{err.call}</strong>: {err.reason}</li>
+                      {/each}
+                    </ul>
+                  {/if}
+                {/if}
+              </div>
+            {/if}
+          {:else}
+            <p>Loading...</p>
+          {/if}
+        </div>
       {:else}
         <p>Select an ADIF file to preview before importing.</p>
         <label class="file-label">
-          <input type="file" accept=".adi,.adif,.ADI,.ADIF" on:change={stageImportFile} disabled={importing || loadingImport} />
+          <input type="file" accept=".adi,.adif,.ADI,.ADIF" on:change={stageImportFile} disabled={importing || loadingImport || qrzImporting} />
           {loadingImport ? "Loading..." : "Choose ADIF File"}
         </label>
+        {#if hasQrzApiKey}
+          <span class="or-divider">- or -</span>
+          <button class="file-label qrz-import-btn" on:click={importFromQrz} disabled={importing || loadingImport || qrzImporting}>
+            {qrzImporting ? "Downloading from QRZ..." : "Import from QRZ"}
+          </button>
+        {/if}
         {#if importFileName}
           <p class="file-name">{importFileName}</p>
         {/if}
@@ -706,11 +886,18 @@
           {/if}
         </div>
       {/if}
+      {#if activeTab === "qrz" && qrzPreview && qrzExcludedCount > 0}
+        <div class="filter-tabs">
+          <button class="filter-tab" class:active={qrzFilter === "pending"} on:click={() => qrzFilter = "pending"}>Pending ({qrzPreview.contacts.length})</button>
+          <button class="filter-tab" class:active={qrzFilter === "excluded"} on:click={() => qrzFilter = "excluded"}>Excluded ({qrzExcludedCount})</button>
+        </div>
+      {/if}
       {#if displayContacts.length > 0}
         <div class="preview-table-wrap">
           <table class="preview-table">
             <thead>
               <tr>
+                {#if activeTab === "qrz" && qrzFilter === "pending"}<th class="col-check"><input type="checkbox" checked={qrzAllSelected} on:click|stopPropagation={toggleQrzSelectAll} title="Select all / Deselect all" /></th>{/if}
                 <th class="col-compact">UTC<span class="resize-handle" on:mousedown={e => startResize(e, 0)}></span></th>
                 <th class="col-compact">Call<span class="resize-handle" on:mousedown={e => startResize(e, 1)}></span></th>
                 <th class="col-comment">Comments<span class="resize-handle" on:mousedown={e => startResize(e, 2)}></span></th>
@@ -732,6 +919,7 @@
             <tbody>
               {#each displayContacts as c, i}
                 <tr class="clickable" class:expanded={expandedRow === i} class:has-warning={c.warnings && c.warnings.length > 0} class:has-merged={c.merged} on:click={() => toggleRow(i)}>
+                  {#if activeTab === "qrz" && qrzFilter === "pending"}<td class="check-cell" on:click|stopPropagation><input type="checkbox" checked={qrzSelected.has(c.id)} on:change={() => toggleQrzSelect(c.id)} /></td>{/if}
                   <td>{formatTimestamp(c.timestamp)}</td>
                   <td class="call">{c.call}</td>
                   <td class="truncate">{#if activeTab === "import" && c.original_comment && c.original_comment !== (c.comments || "")}<span class="comment-modified" title="Original: {c.original_comment}">* </span>{/if}{activeTab === "export" ? renderComment(c, commentTemplate, commentSeparator) : (c.comments || "")}</td>
@@ -751,7 +939,18 @@
                 </tr>
                 {#if expandedRow === i}
                   <tr class="detail-row">
-                    <td colspan="16">
+                    <td colspan={activeTab === "qrz" ? 17 : 16}>
+                      {#if activeTab === "qrz" && qrzFilter === "pending"}
+                        <div class="qrz-detail-actions">
+                          <button class="exclude-btn" on:click|stopPropagation={() => excludeFromQrz(c.id)}>Exclude from QRZ</button>
+                          <span class="hint">Permanently skip this contact for QRZ uploads</span>
+                        </div>
+                      {:else if activeTab === "qrz" && qrzFilter === "excluded"}
+                        <div class="qrz-detail-actions">
+                          <button class="include-btn" on:click|stopPropagation={() => includeInQrz(c.id)}>Eligible for QRZ</button>
+                          <span class="hint">Make this contact eligible for QRZ uploads again</span>
+                        </div>
+                      {/if}
                       {#if c.warnings && c.warnings.length > 0}
                         <div class="warning-list">
                           {#each c.warnings as w}
@@ -823,6 +1022,10 @@
         <div class="empty-preview">No file selected</div>
       {:else if activeTab === "export" && exportPreview && exportPreview.contacts.length === 0}
         <div class="empty-preview">No contacts match filters</div>
+      {:else if activeTab === "qrz" && qrzPreview && qrzFilter === "pending" && qrzPreview.contacts.length === 0}
+        <div class="empty-preview">All contacts synced to QRZ</div>
+      {:else if activeTab === "qrz" && qrzPreview && qrzFilter === "excluded" && qrzExcludedCount === 0}
+        <div class="empty-preview">No excluded contacts</div>
       {/if}
 
     </div>
@@ -839,6 +1042,13 @@
       <button class="action-btn" on:click={exportAdif} disabled={!exportPreview || exportPreview.included === 0}>
         Download ADIF
       </button>
+    {:else if activeTab === "qrz"}
+      <span class="action-summary">
+        {#if qrzSyncStatus && qrzSyncStatus.configured}
+          {qrzSelected.size} of {qrzSyncStatus.pending} selected for upload
+          {#if qrzSyncStatus.excluded > 0}({qrzSyncStatus.excluded} excluded){/if}
+        {/if}
+      </span>
     {:else}
       <span class="action-summary">
         {#if importPreview}
@@ -1693,5 +1903,127 @@
     color: var(--text-muted);
     font-style: italic;
     margin-top: 0.25rem;
+  }
+
+  /* QRZ Sync panel */
+  .qrz-sync-panel h3 {
+    margin: 0 0 1rem 0;
+  }
+
+  .qrz-not-configured {
+    color: var(--text-muted);
+  }
+
+  .qrz-stats {
+    margin-bottom: 1rem;
+  }
+
+  .stat-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 0.25rem 0;
+  }
+
+  .stat-label {
+    color: var(--text-muted);
+  }
+
+  .stat-value.highlight {
+    color: var(--accent);
+    font-weight: bold;
+  }
+
+  .qrz-actions {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+    flex-wrap: wrap;
+  }
+
+  .secondary-btn {
+    background: var(--bg-secondary, #333);
+    color: var(--text-secondary, #aaa);
+  }
+
+  .qrz-result {
+    padding: 0.75rem;
+    border-radius: 4px;
+    background: var(--bg-secondary, #1a3a1a);
+    border: 1px solid var(--accent, #4a4);
+  }
+
+  .qrz-result-error {
+    background: var(--bg-error, #3a1a1a);
+    border-color: var(--error, #a44);
+  }
+
+  .qrz-result p {
+    margin: 0;
+  }
+
+  .qrz-errors {
+    margin: 0.5rem 0 0 0;
+    padding-left: 1.5rem;
+    font-size: 0.85rem;
+  }
+
+  .qrz-errors li {
+    margin-bottom: 0.25rem;
+  }
+
+  .col-check {
+    width: 2rem;
+    text-align: center;
+  }
+
+  .check-cell {
+    text-align: center;
+  }
+
+  .qrz-detail-actions {
+    display: flex;
+    align-items: baseline;
+    gap: 0.75rem;
+    margin-bottom: 0.75rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid var(--border, #555);
+  }
+
+  .exclude-btn {
+    background: var(--bg-error, #3a1a1a);
+    color: var(--error, #e66);
+    border: 1px solid var(--error, #a44);
+    padding: 0.25rem 0.75rem;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.85rem;
+  }
+
+  .exclude-btn:hover {
+    background: var(--error, #a44);
+    color: white;
+  }
+
+  .include-btn {
+    background: var(--bg-secondary, #1a3a1a);
+    color: var(--accent, #4a4);
+    border: 1px solid var(--accent, #4a4);
+    padding: 0.25rem 0.75rem;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.85rem;
+  }
+
+  .include-btn:hover {
+    background: var(--accent, #4a4);
+    color: white;
+  }
+
+  .or-divider {
+    color: var(--text-muted);
+    font-size: 0.85rem;
+    margin: 0.5rem 0;
+    display: block;
+    text-align: center;
   }
 </style>
