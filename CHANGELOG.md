@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.2.18 — 2026-04-16
+
+- Fix macOS .pkg installer ownership: added postinstall script so the app runs correctly as the current user after install/update
+
 ## v0.2.17 — 2026-04-16
 
 - Replace macOS `.app.zip` release artifact with `.pkg` package installer
