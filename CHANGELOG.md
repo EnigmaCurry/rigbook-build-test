@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.2.17 — 2026-04-16
+
+- Replace macOS `.app.zip` release artifact with `.pkg` package installer
+
 ## v0.2.16 — 2026-04-15
 
 - Fixed auto-backup feature not starting when using picker mode.
