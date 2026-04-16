@@ -169,6 +169,16 @@ jobs:
           </plist>
           PLIST
 
+          # Create postinstall script to fix ownership
+          mkdir -p scripts
+          cat > scripts/postinstall << 'POSTINSTALL'
+          #!/bin/bash
+          APP_PATH="/Applications/Rigbook.app"
+          CURRENT_USER=$(stat -f "%Su" /dev/console)
+          chown -R "$CURRENT_USER":staff "$APP_PATH"
+          POSTINSTALL
+          chmod +x scripts/postinstall
+
           # Build .pkg installer
           mkdir -p pkg-root/Applications
           cp -R Rigbook.app pkg-root/Applications/
@@ -177,6 +187,7 @@ jobs:
             --identifier com.enigmacurry.rigbook \
             --version "${version}" \
             --install-location / \
+            --scripts scripts \
             dist/rigbook-macos-arm64.pkg
 
       - uses: actions/upload-artifact@v6
