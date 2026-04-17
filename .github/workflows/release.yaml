@@ -215,7 +215,7 @@ jobs:
           chmod +x scripts/postinstall
 
           # Build .pkg installer
-          mkdir -p pkg-root/Applications
+          mkdir -p dist pkg-root/Applications
           cp -R Rigbook.app pkg-root/Applications/
           pkgbuild \
             --root pkg-root \
