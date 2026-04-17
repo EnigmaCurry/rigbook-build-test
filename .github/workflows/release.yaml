@@ -38,6 +38,8 @@ jobs:
             target: linux-arm64
           - os: macos-latest
             target: macos-arm64
+          - os: macos-15-intel
+            target: macos-intel
           - os: windows-latest
             target: windows-amd64
 
@@ -86,14 +88,41 @@ jobs:
         if: runner.os == 'Windows'
         run: mv dist/rigbook.exe dist/rigbook-${{ matrix.target }}.exe
 
-      - name: Create macOS .pkg installer
-        if: matrix.target == 'macos-arm64'
+      - uses: actions/upload-artifact@v6
+        with:
+          name: rigbook-${{ matrix.target }}
+          path: dist/rigbook-*
+
+  macos-pkg:
+    needs: build
+    if: always() && (needs.build.result == 'success')
+    runs-on: macos-latest
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/download-artifact@v7
+        with:
+          name: rigbook-macos-arm64
+          path: binaries
+
+      - uses: actions/download-artifact@v7
+        with:
+          name: rigbook-macos-intel
+          path: binaries
+
+      - name: Create universal macOS .pkg installer
         run: |
           version=$(grep -m1 '^version' pyproject.toml | sed 's/.*"\(.*\)".*/\1/')
 
-          # Build .app bundle
+          chmod +x binaries/rigbook-macos-arm64 binaries/rigbook-macos-intel
+
+          # Build .app bundle with both binaries
           mkdir -p Rigbook.app/Contents/MacOS Rigbook.app/Contents/Resources
-          cp dist/rigbook-${{ matrix.target }} Rigbook.app/Contents/MacOS/rigbook
+          cp binaries/rigbook-macos-arm64 Rigbook.app/Contents/MacOS/rigbook-arm64
+          cp binaries/rigbook-macos-intel Rigbook.app/Contents/MacOS/rigbook-intel
 
           # Create .icns icon
           mkdir -p rigbook_icon.iconset
@@ -109,9 +138,15 @@ jobs:
           sips -z 16 16 rigbook.png --out rigbook_icon.iconset/icon_16x16.png
           iconutil -c icns rigbook_icon.iconset -o Rigbook.app/Contents/Resources/rigbook.icns
 
-          # Create launcher script
+          # Create launcher script (auto-detects architecture)
           printf '%s\n' '#!/bin/bash' \
             'DIR="$(dirname "$0")"' \
+            'ARCH=$(uname -m)' \
+            'if [ "$ARCH" = "arm64" ]; then' \
+            '    RIGBOOK="$DIR/rigbook-arm64"' \
+            'else' \
+            '    RIGBOOK="$DIR/rigbook-intel"' \
+            'fi' \
             'HOST="${RIGBOOK_HOST:-127.0.0.1}"' \
             'PORT="${RIGBOOK_PORT:-8073}"' \
             'URL="${RIGBOOK_BROWSER_URL:-}"' \
@@ -128,7 +163,7 @@ jobs:
             '    [ "$OPEN_BROWSER" = "true" ] && open "${URL}"' \
             '    exit 0' \
             'fi' \
-            '("$DIR/rigbook" --no-browser "$@" &)' \
+            '("$RIGBOOK" --no-browser "$@" &)' \
             'for i in $(seq 1 30); do' \
             '    sleep 0.5' \
             '    if curl -s -o /dev/null --connect-timeout 1 "http://${HOST}:${PORT}/api/version" 2>/dev/null; then' \
@@ -188,15 +223,15 @@ jobs:
             --version "${version}" \
             --install-location / \
             --scripts scripts \
-            dist/rigbook-macos-arm64.pkg
+            dist/rigbook-macos-universal.pkg
 
       - uses: actions/upload-artifact@v6
         with:
-          name: rigbook-${{ matrix.target }}
-          path: dist/rigbook-*
+          name: rigbook-macos-universal-pkg
+          path: dist/rigbook-macos-universal.pkg
 
   release:
-    needs: build
+    needs: [build, macos-pkg]
     if: startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
     permissions:
